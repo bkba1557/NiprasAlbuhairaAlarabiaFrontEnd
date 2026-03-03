@@ -23,11 +23,62 @@ class _CustomersScreenState extends State<CustomersScreen> {
     });
   }
 
+  void _confirmDeleteCustomer(BuildContext context, String customerId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('حذف العميل'),
+          content: const Text(
+            'هل أنت متأكد من حذف هذا العميل؟\nلا يمكن التراجع عن هذا الإجراء.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              icon: const Icon(Icons.delete, color: Colors.white),
+              label: const Text('حذف', style: TextStyle(color: Colors.white)),
+              onPressed: () async {
+                Navigator.pop(context);
+
+                final provider = Provider.of<CustomerProvider>(
+                  context,
+                  listen: false,
+                );
+
+                final success = await provider.deleteCustomer(customerId);
+
+                if (success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تم حذف العميل بنجاح'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(provider.error ?? 'فشل حذف العميل'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _loadCustomers() async {
     await Provider.of<CustomerProvider>(
       context,
       listen: false,
-    ).fetchCustomers();
+    ).fetchCustomers(fetchAll: true);
   }
 
   void _searchCustomers(String query) {
@@ -53,7 +104,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         final double horizontalPadding = isDesktop ? 24 : 16;
 
         return Scaffold(
-          appBar: AppBar(title: const Text('العملاء')),
+          appBar: AppBar(title: const Text('العملاء', style: TextStyle(color: Colors.white),)),
           floatingActionButton: FloatingActionButton(
             onPressed: () {
               Navigator.pushNamed(context, '/customer/form');
@@ -110,7 +161,6 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               itemBuilder: (context, index) {
                                 final customer =
                                     customerProvider.customers[index];
-
                                 return CustomerItem(
                                   customer: customer,
                                   onTap: () {
@@ -121,6 +171,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                           customerToEdit: customer,
                                         ),
                                       ),
+                                    );
+                                  },
+                                  onDelete: () {
+                                    _confirmDeleteCustomer(
+                                      context,
+                                      customer.id,
                                     );
                                   },
                                 );

@@ -35,13 +35,71 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     _updateDataSource();
   }
 
+  void _confirmDeleteSupplier(BuildContext context, String supplierId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('حذف المورد'),
+          content: const Text(
+            'هل أنت متأكد من حذف هذا المورد؟\nلا يمكن التراجع عن هذا الإجراء.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              icon: const Icon(Icons.delete, color: Colors.white),
+              label: const Text('حذف', style: TextStyle(color: Colors.white)),
+              onPressed: () async {
+                Navigator.pop(context);
+
+                final provider = Provider.of<SupplierProvider>(
+                  context,
+                  listen: false,
+                );
+
+                final success = await provider.deleteSupplier(supplierId);
+
+                if (success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تم حذف المورد بنجاح'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  _loadSuppliers();
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(provider.error ?? 'فشل حذف المورد'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _updateDataSource() {
     final supplierProvider = Provider.of<SupplierProvider>(
       context,
       listen: false,
     );
+
     setState(() {
-      _supplierDataSource = SupplierDataSource(supplierProvider.suppliers);
+      _supplierDataSource = SupplierDataSource(
+        supplierProvider.suppliers,
+        onDelete: (supplierId) {
+          _confirmDeleteSupplier(context, supplierId);
+        },
+      );
     });
   }
 
@@ -84,7 +142,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الموردين'),
+        title: const Text('الموردين', style: TextStyle(color: Colors.white),),
         actions: [
           IconButton(
             onPressed: _showSupplierFilters,
@@ -200,8 +258,8 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                     onRowTap: (supplier) {
                       Navigator.pushNamed(
                         context,
-                        '/supplier/details',
-                        arguments: supplier.id,
+                        AppRoutes.supplierDetails,
+                        arguments: supplier,
                       );
                     },
                   ),

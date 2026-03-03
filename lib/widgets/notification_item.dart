@@ -1,6 +1,9 @@
+﻿import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:order_tracker/utils/constants.dart';
+
 import '../models/notification_model.dart';
 
 class NotificationItem extends StatelessWidget {
@@ -8,6 +11,7 @@ class NotificationItem extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onDelete;
   final bool showActions;
+  final String? currentUserId;
 
   const NotificationItem({
     super.key,
@@ -15,72 +19,23 @@ class NotificationItem extends StatelessWidget {
     required this.onTap,
     this.onDelete,
     this.showActions = true,
+    this.currentUserId,
   });
 
-  IconData _getNotificationIcon(String type) {
-    switch (type) {
-      case 'order_created':
-        return Icons.add_circle_outline;
-      case 'order_assigned':
-        return Icons.person_add_outlined;
-      case 'order_overdue':
-        return Icons.warning_outlined;
-      case 'order_updated':
-        return Icons.update_outlined;
-      case 'system':
-        return Icons.notifications_outlined;
-      default:
-        return Icons.info_outline;
-    }
-  }
-
-  Color _getNotificationColor(String type) {
-    switch (type) {
-      case 'order_created':
-        return AppColors.successGreen;
-      case 'order_assigned':
-        return AppColors.infoBlue;
-      case 'order_overdue':
-        return AppColors.errorRed;
-      case 'order_updated':
-        return AppColors.warningOrange;
-      case 'system':
-        return AppColors.primaryBlue;
-      default:
-        return AppColors.mediumGray;
-    }
-  }
-
-  String _getNotificationTypeText(String type) {
-    switch (type) {
-      case 'order_created':
-        return 'طلب جديد';
-      case 'order_assigned':
-        return 'تعيين طلب';
-      case 'order_overdue':
-        return 'طلب متأخر';
-      case 'order_updated':
-        return 'تحديث طلب';
-      case 'system':
-        return 'نظام';
-      default:
-        return 'إشعار';
-    }
-  }
-
-  bool get isRead {
-    final currentUserRecipient = notification.recipients.firstWhere(
-      (r) =>
-          r.userId ==
-          _getCurrentUserId(), // تحتاج لدالة للحصول على ID المستخدم الحالي
-      orElse: () => NotificationRecipient(userId: '', read: true),
-    );
-    return currentUserRecipient.read;
-  }
+  bool get isRead =>
+      _NotificationUiHelper.isReadForUser(notification, currentUserId);
 
   @override
   Widget build(BuildContext context) {
     final isUnread = !isRead;
+    final typeColor = _NotificationUiHelper.getNotificationColor(notification);
+    final typeIcon = _NotificationUiHelper.getNotificationIcon(notification);
+    final typeText = _NotificationUiHelper.getNotificationTypeText(
+      notification,
+    );
+    final dataEntries = _NotificationUiHelper.visibleDataEntries(
+      notification.data,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -113,104 +68,88 @@ class NotificationItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header with type and time
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Type and title
-                    Row(
-                      children: [
-                        // Notification icon
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: _getNotificationColor(
-                              notification.type,
-                            ).withOpacity(0.1),
-                            shape: BoxShape.circle,
+                    Flexible(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: typeColor.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(typeIcon, size: 20, color: typeColor),
                           ),
-                          child: Icon(
-                            _getNotificationIcon(notification.type),
-                            size: 20,
-                            color: _getNotificationColor(notification.type),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Type badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _getNotificationColor(
-                                  notification.type,
-                                ).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                _getNotificationTypeText(notification.type),
-                                style: TextStyle(
-                                  color: _getNotificationColor(
-                                    notification.type,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
                                   ),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                                  decoration: BoxDecoration(
+                                    color: typeColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    typeText,
+                                    style: TextStyle(
+                                      color: typeColor,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  notification.title,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: isUnread
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                    color: isUnread
+                                        ? AppColors.darkGray
+                                        : AppColors.mediumGray,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            // Title
-                            Text(
-                              notification.title,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: isUnread
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
-                                color: isUnread
-                                    ? AppColors.darkGray
-                                    : AppColors.mediumGray,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
-
-                    // Time and actions
+                    const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Time
                         Text(
-                          _formatTime(notification.createdAt),
-                          style: TextStyle(
+                          _NotificationUiHelper.formatTime(
+                            notification.createdAt,
+                          ),
+                          style: const TextStyle(
                             color: AppColors.lightGray,
                             fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 8),
-
-                        // Unread indicator and actions
                         Row(
                           children: [
-                            // Unread indicator
                             if (isUnread)
                               Container(
                                 width: 8,
                                 height: 8,
                                 margin: const EdgeInsets.only(left: 8),
-                                decoration: BoxDecoration(
+                                decoration: const BoxDecoration(
                                   color: AppColors.primaryBlue,
                                   shape: BoxShape.circle,
                                 ),
                               ),
-
-                            // Delete button
                             if (showActions && onDelete != null)
                               IconButton(
                                 onPressed: onDelete,
@@ -229,22 +168,18 @@ class NotificationItem extends StatelessWidget {
                     ),
                   ],
                 ),
-
-                // Message
                 Padding(
                   padding: const EdgeInsets.only(top: 12, left: 40),
                   child: Text(
                     notification.message,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       height: 1.5,
                       color: AppColors.darkGray,
                     ),
                   ),
                 ),
-
-                // Data details (if any)
-                if (notification.data != null && notification.data!.isNotEmpty)
+                if (dataEntries.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 12, left: 40),
                     child: Container(
@@ -260,7 +195,7 @@ class NotificationItem extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'تفاصيل:',
+                            'التفاصيل:',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
@@ -268,14 +203,14 @@ class NotificationItem extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          ...notification.data!.entries.map((entry) {
+                          ...dataEntries.map((entry) {
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 4),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '• ${_formatDataKey(entry.key)}: ',
+                                    '• ${_NotificationUiHelper.formatDataKey(entry.key)}: ',
                                     style: const TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
@@ -284,34 +219,33 @@ class NotificationItem extends StatelessWidget {
                                   ),
                                   Expanded(
                                     child: Text(
-                                      _formatDataValue(entry.value),
+                                      _NotificationUiHelper.formatDataValue(
+                                        entry.value,
+                                      ),
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: AppColors.darkGray,
                                       ),
-                                      maxLines: 2,
+                                      maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),
                   ),
-
-                // Footer with sender and date
                 Padding(
                   padding: const EdgeInsets.only(top: 16, left: 40),
                   child: Row(
                     children: [
-                      // Sender
                       if (notification.createdByName != null)
                         Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.person_outline,
                               size: 14,
                               color: AppColors.lightGray,
@@ -319,20 +253,17 @@ class NotificationItem extends StatelessWidget {
                             const SizedBox(width: 4),
                             Text(
                               notification.createdByName!,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppColors.lightGray,
                                 fontSize: 12,
                               ),
                             ),
                           ],
                         ),
-
                       const Spacer(),
-
-                      // Full date
                       Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.calendar_today,
                             size: 14,
                             color: AppColors.lightGray,
@@ -342,7 +273,7 @@ class NotificationItem extends StatelessWidget {
                             DateFormat(
                               'yyyy/MM/dd',
                             ).format(notification.createdAt),
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: AppColors.lightGray,
                               fontSize: 12,
                             ),
@@ -359,55 +290,8 @@ class NotificationItem extends StatelessWidget {
       ),
     );
   }
-
-  String _formatTime(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inSeconds < 60) {
-      return 'الآن';
-    } else if (difference.inMinutes < 60) {
-      return 'منذ ${difference.inMinutes} دقيقة';
-    } else if (difference.inHours < 24) {
-      return 'منذ ${difference.inHours} ساعة';
-    } else if (difference.inDays == 1) {
-      return 'أمس';
-    } else if (difference.inDays < 7) {
-      return 'منذ ${difference.inDays} أيام';
-    } else {
-      return DateFormat('MM/dd').format(date);
-    }
-  }
-
-  String _formatDataKey(String key) {
-    final translations = {
-      'orderId': 'رقم الطلب',
-      'orderNumber': 'رقم الطلب',
-      'supplierName': 'اسم المورد',
-      'customerName': 'اسم العميل',
-      'customerId': 'رقم العميل',
-      'loadingDate': 'تاريخ التحميل',
-      'createdAt': 'تاريخ الإنشاء',
-    };
-
-    return translations[key] ?? key;
-  }
-
-  String _formatDataValue(dynamic value) {
-    if (value is DateTime) {
-      return DateFormat('yyyy/MM/dd HH:mm').format(value);
-    }
-    return value.toString();
-  }
-
-  // دالة للحصول على ID المستخدم الحالي
-  String _getCurrentUserId() {
-    // TODO: يجب استبدال هذا بمزود المصادقة الفعلي
-    return 'current_user_id';
-  }
 }
 
-// Notification Badge للاستخدام في AppBar
 class NotificationBadge extends StatelessWidget {
   final int count;
   final VoidCallback onPressed;
@@ -456,22 +340,28 @@ class NotificationBadge extends StatelessWidget {
   }
 }
 
-// Notification List Tile للاستخدام في Drawer أو ListView
 class NotificationListTile extends StatelessWidget {
   final NotificationModel notification;
   final VoidCallback onTap;
   final bool showTimeAgo;
+  final String? currentUserId;
 
   const NotificationListTile({
     super.key,
     required this.notification,
     required this.onTap,
     this.showTimeAgo = true,
+    this.currentUserId,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isUnread = !_isRead();
+    final isUnread = !_NotificationUiHelper.isReadForUser(
+      notification,
+      currentUserId,
+    );
+    final typeColor = _NotificationUiHelper.getNotificationColor(notification);
+    final typeIcon = _NotificationUiHelper.getNotificationIcon(notification);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -479,16 +369,10 @@ class NotificationListTile extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: _getNotificationColor(notification.type).withOpacity(0.1),
+          color: typeColor.withOpacity(0.1),
           shape: BoxShape.circle,
         ),
-        child: Center(
-          child: Icon(
-            _getNotificationIcon(notification.type),
-            size: 20,
-            color: _getNotificationColor(notification.type),
-          ),
-        ),
+        child: Center(child: Icon(typeIcon, size: 20, color: typeColor)),
       ),
       title: Text(
         notification.title,
@@ -511,35 +395,65 @@ class NotificationListTile extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                _formatTime(notification.createdAt),
-                style: TextStyle(color: AppColors.lightGray, fontSize: 10),
+                _NotificationUiHelper.formatTimeShort(notification.createdAt),
+                style: const TextStyle(
+                  color: AppColors.lightGray,
+                  fontSize: 10,
+                ),
               ),
             ),
         ],
       ),
       trailing: isUnread
-          ? Container(
+          ? const SizedBox(
               width: 8,
               height: 8,
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue,
-                shape: BoxShape.circle,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue,
+                  shape: BoxShape.circle,
+                ),
               ),
             )
           : null,
       onTap: onTap,
     );
   }
+}
 
-  bool _isRead() {
-    final currentUserRecipient = notification.recipients.firstWhere(
-      (r) => r.userId == _getCurrentUserId(),
-      orElse: () => NotificationRecipient(userId: '', read: true),
-    );
-    return currentUserRecipient.read;
+class _NotificationUiHelper {
+  static const Set<String> _hiddenDataKeys = {
+    'reportType',
+    'periodKey',
+    'statsCriteria',
+    'sampleOrders',
+  };
+
+  static bool isReadForUser(NotificationModel notification, String? userId) {
+    final normalized = (userId ?? '').trim();
+    if (normalized.isNotEmpty) {
+      for (final recipient in notification.recipients) {
+        if (recipient.userId == normalized) {
+          return recipient.read;
+        }
+      }
+      return true;
+    }
+
+    if (notification.recipients.length == 1) {
+      return notification.recipients.first.read;
+    }
+    return true;
   }
 
-  IconData _getNotificationIcon(String type) {
+  static String _reportType(NotificationModel notification) {
+    return notification.data?['reportType']?.toString() ?? '';
+  }
+
+  static IconData getNotificationIcon(NotificationModel notification) {
+    final type = notification.type;
+    final reportType = _reportType(notification);
+
     switch (type) {
       case 'order_created':
         return Icons.add_circle_outline;
@@ -548,52 +462,272 @@ class NotificationListTile extends StatelessWidget {
       case 'order_overdue':
         return Icons.warning_outlined;
       case 'order_updated':
-        return Icons.update_outlined;
-      case 'system':
+      case 'order_status_update':
+      case 'status_changed':
+        return reportType == 'owner_merged_order_completed'
+            ? Icons.task_alt_outlined
+            : Icons.update_outlined;
+      case 'task_assigned':
+        return Icons.task_alt;
+      case 'task_accepted':
+        return Icons.check_circle_outline;
+      case 'task_started':
+        return Icons.play_circle_outline;
+      case 'task_completed':
+        return Icons.assignment_turned_in_outlined;
+      case 'task_approved':
+        return Icons.verified_outlined;
+      case 'task_rejected':
+        return Icons.cancel_outlined;
+      case 'chat_message':
+        return Icons.chat_bubble_outline;
+      case 'task_reminder':
+      case 'loading_reminder':
+      case 'arrival_reminder':
+        return Icons.notifications_active_outlined;
+      case 'task_overdue':
+        return Icons.warning_amber_outlined;
+      case 'loading_completed':
+      case 'execution_completed':
+        return Icons.done_all_outlined;
+      case 'system_alert':
+        if (reportType == 'owner_weekly_completed_orders') {
+          return Icons.view_week_outlined;
+        }
+        if (reportType == 'owner_monthly_completed_orders') {
+          return Icons.bar_chart_outlined;
+        }
         return Icons.notifications_outlined;
       default:
         return Icons.info_outline;
     }
   }
 
-  Color _getNotificationColor(String type) {
+  static Color getNotificationColor(NotificationModel notification) {
+    final type = notification.type;
+    final reportType = _reportType(notification);
+
     switch (type) {
       case 'order_created':
+      case 'task_completed':
+      case 'task_approved':
+      case 'loading_completed':
+      case 'execution_completed':
         return AppColors.successGreen;
       case 'order_assigned':
+      case 'task_assigned':
+      case 'task_started':
+      case 'order_status_update':
         return AppColors.infoBlue;
       case 'order_overdue':
+      case 'task_rejected':
+      case 'task_overdue':
         return AppColors.errorRed;
       case 'order_updated':
+      case 'task_reminder':
+      case 'loading_reminder':
+      case 'arrival_reminder':
         return AppColors.warningOrange;
-      case 'system':
+      case 'chat_message':
+        return AppColors.infoBlue;
+      case 'status_changed':
+        return reportType == 'owner_merged_order_completed'
+            ? AppColors.successGreen
+            : AppColors.infoBlue;
+      case 'system_alert':
+        if (reportType == 'owner_monthly_completed_orders') {
+          return AppColors.primaryBlue;
+        }
+        if (reportType == 'owner_weekly_completed_orders') {
+          return AppColors.warningOrange;
+        }
         return AppColors.primaryBlue;
       default:
         return AppColors.mediumGray;
     }
   }
 
-  String _formatTime(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
+  static String getNotificationTypeText(NotificationModel notification) {
+    final type = notification.type;
+    final reportType = _reportType(notification);
 
-    if (difference.inSeconds < 60) {
-      return 'الآن';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} د';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours} س';
-    } else if (difference.inDays == 1) {
-      return 'أمس';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} أيام';
-    } else {
-      return DateFormat('MM/dd').format(date);
+    switch (type) {
+      case 'order_created':
+        return 'طلب جديد';
+      case 'order_assigned':
+        return 'تعيين طلب';
+      case 'order_overdue':
+        return 'طلب متأخر';
+      case 'order_updated':
+      case 'order_status_update':
+        return 'تحديث طلب';
+      case 'status_changed':
+        return reportType == 'owner_merged_order_completed'
+            ? 'اكتمال طلب مدمج'
+            : 'تغيير حالة';
+      case 'task_assigned':
+        return 'مهمة جديدة';
+      case 'task_accepted':
+        return 'استلام مهمة';
+      case 'task_started':
+        return 'بدء مهمة';
+      case 'task_completed':
+        return 'اكتمال مهمة';
+      case 'task_approved':
+        return 'اعتماد مهمة';
+      case 'task_rejected':
+        return 'رفض مهمة';
+      case 'task_reminder':
+        return 'تذكير مهمة';
+      case 'task_overdue':
+        return 'مهمة متأخرة';
+      case 'chat_message':
+        return 'رسالة محادثة';
+      case 'loading_reminder':
+        return 'تذكير تحميل';
+      case 'arrival_reminder':
+        return 'تذكير وصول';
+      case 'loading_completed':
+      case 'execution_completed':
+        return 'تم التنفيذ';
+      case 'system_alert':
+        if (reportType == 'owner_weekly_completed_orders') {
+          return 'ملخص أسبوعي';
+        }
+        if (reportType == 'owner_monthly_completed_orders') {
+          return 'تقرير شهري';
+        }
+        return 'تنبيه نظام';
+      default:
+        return 'إشعار';
     }
   }
 
-  String _getCurrentUserId() {
-    // TODO: يجب استبدال هذا بمزود المصادقة الفعلي
-    return 'current_user_id';
+  static List<MapEntry<String, dynamic>> visibleDataEntries(
+    Map<String, dynamic>? data,
+  ) {
+    if (data == null || data.isEmpty) {
+      return const [];
+    }
+    return data.entries
+        .where((entry) => !_hiddenDataKeys.contains(entry.key))
+        .toList();
+  }
+
+  static String formatTime(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inSeconds < 60) return 'الآن';
+    if (difference.inMinutes < 60) return 'منذ ${difference.inMinutes} دقيقة';
+    if (difference.inHours < 24) return 'منذ ${difference.inHours} ساعة';
+    if (difference.inDays == 1) return 'أمس';
+    if (difference.inDays < 7) return 'منذ ${difference.inDays} أيام';
+    return DateFormat('MM/dd').format(date);
+  }
+
+  static String formatTimeShort(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inSeconds < 60) return 'الآن';
+    if (difference.inMinutes < 60) return '${difference.inMinutes} د';
+    if (difference.inHours < 24) return '${difference.inHours} س';
+    if (difference.inDays == 1) return 'أمس';
+    if (difference.inDays < 7) return '${difference.inDays} أيام';
+    return DateFormat('MM/dd').format(date);
+  }
+
+  static String formatDataKey(String key) {
+    const translations = {
+      'orderId': 'رقم الطلب',
+      'orderNumber': 'رقم الطلب',
+      'supplierName': 'اسم المورد',
+      'customerName': 'اسم العميل',
+      'customerId': 'رقم العميل',
+      'loadingDate': 'تاريخ التحميل',
+      'createdAt': 'تاريخ الإنشاء',
+      'oldStatus': 'الحالة السابقة',
+      'newStatus': 'الحالة الجديدة',
+      'completedAt': 'تاريخ الاكتمال',
+      'completedBy': 'تم بواسطة',
+      'fuelType': 'نوع الوقود',
+      'quantity': 'الكمية',
+      'unit': 'الوحدة',
+      'totalPrice': 'إجمالي السعر',
+      'trigger': 'مصدر التحديث',
+      'reason': 'السبب',
+      'periodLabel': 'الفترة',
+      'periodStart': 'بداية الفترة',
+      'periodEnd': 'نهاية الفترة',
+      'completedOrdersCount': 'عدد الطلبات المكتملة',
+      'deltaCount': 'الفرق العددي',
+      'deltaPercent': 'نسبة التغيير',
+      'currentMonth': 'الشهر الحالي',
+      'previousMonth': 'الشهر السابق',
+      'comparison': 'المقارنة',
+      'rating': 'التقييم',
+      'score': 'الدرجة',
+      'label': 'التصنيف',
+      'description': 'الوصف',
+    };
+    return translations[key] ?? key;
+  }
+
+  static String formatDataValue(dynamic value) {
+    if (value == null) return '-';
+
+    if (value is DateTime) {
+      return DateFormat('yyyy/MM/dd HH:mm').format(value);
+    }
+
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) {
+        return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
+      }
+      return value;
+    }
+
+    if (value is bool) {
+      return value ? 'نعم' : 'لا';
+    }
+
+    if (value is num) {
+      return value.toString();
+    }
+
+    if (value is List) {
+      if (value.isEmpty) return 'لا يوجد';
+      return '${value.length} عناصر';
+    }
+
+    if (value is Map) {
+      final map = value.cast<dynamic, dynamic>();
+
+      if (map.containsKey('deltaCount') || map.containsKey('deltaPercent')) {
+        final deltaCount = map['deltaCount'];
+        final deltaPercent = map['deltaPercent'];
+        final deltaPrefix = (deltaCount is num && deltaCount > 0) ? '+' : '';
+        return 'فرق: $deltaPrefix${deltaCount ?? 0} | نسبة: ${deltaPercent ?? 0}%';
+      }
+
+      if (map.containsKey('score') && map.containsKey('label')) {
+        return '(${map['score']}) ${map['label']}';
+      }
+
+      if (map.containsKey('label') && map.containsKey('completedOrdersCount')) {
+        return '${map['label']}: ${map['completedOrdersCount']} طلب';
+      }
+
+      if (map.containsKey('orderNumber')) {
+        return map['orderNumber'].toString();
+      }
+
+      final encoded = jsonEncode(map);
+      return encoded.length > 120 ? '${encoded.substring(0, 120)}...' : encoded;
+    }
+
+    return value.toString();
   }
 }

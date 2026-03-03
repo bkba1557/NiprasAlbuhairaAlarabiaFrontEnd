@@ -1,61 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar">
+
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
+  <!-- Base URL (Flutter) -->
   <base href="$FLUTTER_BASE_HREF">
 
+  <!-- Basic Meta -->
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
 
-  <!-- iOS meta tags & icons -->
+  <!-- Title -->
+  <title>نظام نبراس لإدارة وتتبع الطلبات | شركة البحيرة العربية</title>
+
+  <!-- Meta Description -->
+  <meta name="description"
+    content="نظام نبراس من شركة البحيرة العربية لإدارة وتتبع طلبات الوقود، الإشراف على العمليات، وتحسين كفاءة التوزيع في الوقت الحقيقي.">
+
+  <meta name="robots" content="index, follow">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- PWA -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="order_tracker">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-title" content="نظام نبراس">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/favicon.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/icons/Icon-192.png">
 
-  <title>ALBUHAIRA ALARABIA</title>
-  <link rel="manifest" href="manifest.json">
-</head>
-<body>
-  <script type="module">
-    // Import the functions you need from the SDKs you need
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-analytics.js";
-    // TODO: Add SDKs for Firebase products that you want to use
-    // https://firebase.google.com/docs/web/setup#available-libraries
+  <!-- Manifest -->
+  <link rel="manifest" href="/manifest.json">
 
-    // Your web app's Firebase configuration
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-    const firebaseConfig = {
-      apiKey: "AIzaSyBrZFB8yQOESUT7q2Bm2ARtI9kQ34KrEwg",
-      authDomain: "albuhairaalarabia2026.firebaseapp.com",
-      projectId: "albuhairaalarabia2026",
-      storageBucket: "albuhairaalarabia2026.firebasestorage.app",
-      messagingSenderId: "843078322062",
-      appId: "1:843078322062:web:4986be05fb82bf12b686df",
-      measurementId: "G-87D3N9N43R"
-    };
+  <!-- Force HTML renderer -->
+  <meta name="flutter-web-renderer" content="html">
 
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
+  <script>
+    window.flutterWebRenderer = "html";
   </script>
+
+  <!-- Google Maps Map ID -->
+  <script>
+    window.GOOGLE_MAPS_MAP_ID = "91aedc28da83b4c9d9692050";
+  </script>
+
+  <!-- ✅ Google Maps JS -->
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCayUZhpM7kmI4rxeg-URtOBjk5137XLS4&v=weekly&libraries=marker&map_ids=91aedc28da83b4c9d9692050">
+    </script>
+
+</head>
+
+<body>
+
+  <!-- Firebase is initialized by flutterfire in Dart (avoid duplicate app init) -->
+
+  <!-- Firebase Messaging Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      });
+    }
+  </script>
+
+  <!-- Flutter bootstrap -->
   <script src="flutter_bootstrap.js" async></script>
+
 </body>
+
 </html>

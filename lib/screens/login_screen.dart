@@ -1,8 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:order_tracker/utils/constants.dart';
+import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui'; 
+
+import 'package:order_tracker/utils/app_routes.dart';
+import 'package:order_tracker/utils/constants.dart';
 import '../providers/auth_provider.dart';
-import '../utils/app_routes.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/gradient_button.dart';
 
@@ -17,13 +21,42 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  late VideoPlayerController _videoController;
+
   bool _rememberMe = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ===============================
+    // 🎥 إعداد فيديو الخلفية (Web + Mobile)
+    // ===============================
+    _videoController = kIsWeb
+        // 🌐 Flutter Web (لازم يكون داخل web/videos)
+        ? VideoPlayerController.network(
+            'videos/v1.mp4',
+          )
+        // 📱 Android / iOS (assets طبيعي)
+        : VideoPlayerController.asset(
+            'assets/videos/v1.mp4',
+          );
+
+    _videoController.initialize().then((_) {
+      if (!mounted) return;
+      _videoController.setLooping(true);
+      _videoController.setVolume(0); // صامت
+      _videoController.play();
+      setState(() {});
+    });
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _videoController.dispose();
     super.dispose();
   }
 
@@ -36,238 +69,250 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text.trim(),
     );
 
-    if (success && mounted) {
-      Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-    } else {
+    if (!mounted) return;
+
+    if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(authProvider.error ?? 'فشل تسجيل الدخول'),
           backgroundColor: AppColors.errorRed,
+          behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
+    }
+
+    // توجيه المستخدم حسب الدور
+    final pendingRoute = authProvider.consumePendingRoute();
+    if (pendingRoute != null && pendingRoute.trim().isNotEmpty) {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        pendingRoute,
+        (_) => false,
+      );
+      return;
+    }
+
+    final homeRoute = getHomeRouteByRole(authProvider.role);
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      homeRoute,
+      (_) => false,
+    );
+  }
+
+  String getHomeRouteByRole(String? role) {
+    switch (role) {
+      case 'station_boy':
+        return AppRoutes.sessionsList;
+      case 'maintenance':
+      case 'maintenance_car_management':
+        return AppRoutes.maintenanceDashboard;
+      case 'maintenance_station':
+        return AppRoutes.stationMaintenanceTechnician;
+      case 'employee':
+        return AppRoutes.marketingStations;
+      case 'finance_manager':
+        return AppRoutes.custodyDocuments;
+      case 'sales_manager_statiun':
+        return AppRoutes.mainHome;
+      default:
+        return AppRoutes.dashboard;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth >= 900;
-          final isTablet = constraints.maxWidth >= 600;
+      body: Stack(
+        children: [
+          // 1. الفيديو في الخلفية
+          SizedBox.expand(
+            child: _videoController.value.isInitialized
+                ? FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: _videoController.value.size.width,
+                      height: _videoController.value.size.height,
+                      child: VideoPlayer(_videoController),
+                    ),
+                  )
+                : Container(color: AppColors.primaryDarkBlue),
+          ),
 
-          final double cardWidth = isDesktop || isTablet
-              ? 420
-              : double.infinity;
-          final double padding = isDesktop ? 48 : 24;
-
-          return Container(
+          // 2. تدرج لوني فوق الفيديو
+        Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  AppColors.primaryBlue.withOpacity(0.9),
-                  AppColors.primaryDarkBlue,
+                  Colors.black.withOpacity(0.3),
+                  AppColors.primaryDarkBlue.withOpacity(0.8),
                 ],
               ),
             ),
-            child: Center(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: EdgeInsets.all(padding),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: cardWidth),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 30,
-                            spreadRadius: 5,
-                          ),
-                        ],
+          ),
+
+
+          // 3. المحتوى الأساسي
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(30),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(
+                    sigmaX: 10,
+                    sigmaY: 10,
+                  ),
+                  child: Container(
+                    width: size.width > 500 ? 450 : size.width,
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1.5,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // 🔹 Logo Image (بدون أي بوكس)
-                            Image.asset(
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Hero(
+                            tag: 'logo',
+                            child: Image.asset(
                               'assets/images/logo.png',
-                              width: 120,
-                              height: 120,
-                              fit: BoxFit.contain,
+                              height: 200,
                             ),
-
-                            const SizedBox(height: 24),
-
-                            // Title
-                            Text(
-                              AppStrings.login,
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(
-                                    color: AppColors.primaryBlue,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            AppStrings.login,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
                             ),
-                            const SizedBox(height: 8),
-
-                            Text(
-                              'سجل الدخول للوصول إلى النظام',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppColors.mediumGray),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'مرحباً بك مجدداً في النظام',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 14,
                             ),
+                          ),
+                          const SizedBox(height: 40),
 
-                            const SizedBox(height: 32),
+                          CustomTextField(
+                            controller: _emailController,
+                            labelText: AppStrings.email,
+                            prefixIcon: Icons.email_outlined,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) =>
+                                (value == null || !value.contains('@'))
+                                    ? 'بريد غير صالح'
+                                    : null,
+                          ),
 
-                            // Form
-                            Form(
-                              key: _formKey,
-                              child: Column(
+                          const SizedBox(height: 20),
+
+                          CustomTextField(
+                            controller: _passwordController,
+                            labelText: AppStrings.password,
+                            prefixIcon: Icons.lock_outline,
+                            obscureText: _obscurePassword,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: Colors.black,
+                              ),
+                              onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                            ),
+                            validator: (value) =>
+                                (value == null || value.length < 6)
+                                    ? 'كلمة المرور قصيرة'
+                                    : null,
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
                                 children: [
-                                  CustomTextField(
-                                    controller: _emailController,
-                                    labelText: AppStrings.email,
-                                    prefixIcon: Icons.email_outlined,
-                                    keyboardType: TextInputType.emailAddress,
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'يرجى إدخال البريد الإلكتروني';
-                                      }
-                                      if (!value.contains('@')) {
-                                        return 'البريد الإلكتروني غير صالح';
-                                      }
-                                      return null;
-                                    },
-                                    fieldColor: AppColors.glassBlue.withOpacity(
-                                      0.1,
+                                  SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: Checkbox(
+                                      value: _rememberMe,
+                                      side: const BorderSide(
+                                        color: Colors.white70,
+                                      ),
+                                      activeColor: AppColors.primaryBlue,
+                                      onChanged: (v) =>
+                                          setState(() => _rememberMe = v!),
                                     ),
                                   ),
-                                  const SizedBox(height: 20),
-
-                                  CustomTextField(
-                                    controller: _passwordController,
-                                    labelText: AppStrings.password,
-                                    prefixIcon: Icons.lock_outline,
-                                    obscureText: _obscurePassword,
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
-                                      ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _obscurePassword = !_obscurePassword;
-                                        });
-                                      },
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'يرجى إدخال كلمة المرور';
-                                      }
-                                      if (value.length < 6) {
-                                        return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
-                                      }
-                                      return null;
-                                    },
-                                    fieldColor: AppColors.glassBlue.withOpacity(
-                                      0.1,
-                                    ),
-                                  ),
-
-                                  const SizedBox(height: 16),
-
-                                  // Remember me
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Checkbox(
-                                            value: _rememberMe,
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _rememberMe = value ?? false;
-                                              });
-                                            },
-                                            activeColor: AppColors.primaryBlue,
-                                          ),
-                                          const Text('تذكرني'),
-                                        ],
-                                      ),
-                                      TextButton(
-                                        onPressed: () {},
-                                        child: Text(
-                                          AppStrings.forgotPassword,
-                                          style: const TextStyle(
-                                            color: AppColors.primaryBlue,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(height: 24),
-
-                                  // Login button
-                                  GradientButton(
-                                    onPressed: authProvider.isLoading
-                                        ? null
-                                        : _login,
-                                    text: authProvider.isLoading
-                                        ? AppStrings.loading
-                                        : AppStrings.login,
-                                    gradient: AppColors.accentGradient,
-                                    isLoading: authProvider.isLoading,
-                                  ),
-
-                                  const SizedBox(height: 24),
-
-                                  // Register
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(AppStrings.dontHaveAccount),
-                                      const SizedBox(width: 8),
-                                      // TextButton(
-                                      //   onPressed: () {
-                                      //     Navigator.pushNamed(
-                                      //       context,
-                                      //       AppRoutes.register,
-                                      //     );
-                                      //   },
-                                      //   child: const Text(
-                                      //     'سجل الآن',
-                                      //     style: TextStyle(
-                                      //       color: AppColors.primaryBlue,
-                                      //       fontWeight: FontWeight.bold,
-                                      //     ),
-                                      //   ),
-                                      // ),
-                                    ],
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'تذكرني',
+                                    style:
+                                        TextStyle(color: Colors.white70),
                                   ),
                                 ],
                               ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 30),
+
+                          GradientButton(
+                            onPressed:
+                                authProvider.isLoading ? null : _login,
+                            text: authProvider.isLoading
+                                ? 'جاري التحميل...'
+                                : AppStrings.login,
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primaryBlue,
+                                Colors.blue.shade300,
+                              ],
                             ),
-                          ],
-                        ),
+                            isLoading: authProvider.isLoading,
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          Text(
+                            "شركة البحيرة العربية © 2026",
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.3),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }

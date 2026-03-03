@@ -13,6 +13,7 @@ class CustomTextField extends StatelessWidget {
   final bool enabled;
   final int? maxLines;
   final Color fieldColor;
+  final String? suffixText;
 
   const CustomTextField({
     super.key,
@@ -21,6 +22,7 @@ class CustomTextField extends StatelessWidget {
     this.hintText,
     this.prefixIcon,
     this.suffixIcon,
+    this.suffixText,
     this.obscureText = false,
     this.keyboardType,
     this.validator,
@@ -28,6 +30,7 @@ class CustomTextField extends StatelessWidget {
     this.enabled = true,
     this.maxLines = 1,
     this.fieldColor = Colors.white,
+    EdgeInsets? contentPadding,  TextStyle? labelStyle,  TextAlign? textAlign,  TextStyle? textStyle, String? initialValue,
   });
 
   @override
@@ -56,6 +59,7 @@ class CustomTextField extends StatelessWidget {
               ? Icon(prefixIcon, color: Theme.of(context).primaryColor)
               : null,
           suffixIcon: suffixIcon,
+          suffixText: suffixText,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,

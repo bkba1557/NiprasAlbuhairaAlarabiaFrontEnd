@@ -37,6 +37,7 @@ class SupplierOrderFormScreen extends StatefulWidget {
 
 class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final TextEditingController _supplierOrderNumberController =
       TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
@@ -64,6 +65,8 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
 
   Supplier? _selectedSupplier;
   String? _selectedSupplierId;
+  String? _selectedSupplierName;
+
   Driver? _selectedDriver;
   String? _selectedDriverId;
   String? selectedRegion;
@@ -71,6 +74,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   String? _supplierAddress;
 
   String? _selectedArea;
+  bool get isEditMode => widget.orderToEdit != null;
 
   List<Supplier> _suppliers = [];
   List<Driver> _drivers = [];
@@ -92,7 +96,6 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   final List<String> _saudiCities = [
     'الرياض',
     'جدة',
-    'مكة المكرمة',
     'المدينة المنورة',
     'الدمام',
     'الخبر',
@@ -106,42 +109,30 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
     'الجوف',
     'الظهران',
     'القصيم',
-    'أبها',
-    'عسير',
-    'الباحة',
-    'جازان',
-    'الحدود الشمالية',
-    'الشرقية',
   ];
 
   // مناطق السعودية
   final List<String> _saudiRegions = [
     'الرياض',
-    'مكة المكرمة',
-    'المدينة المنورة',
     'القصيم',
-    'الشرقية',
-    'عسير',
-    'تبوك',
-    'حائل',
-    'الحدود الشمالية',
-    'جازان',
-    'نجران',
-    'الباحة',
     'الجوف',
+    'المدينة المنورة',
+    'جدة',
+    'المنطقة الشرقية',
   ];
 
   // حالات الطلب
-  final List<String> _statuses = [
-    'في انتظار عمل طلب جديد',
-    'تم إنشاء الطلب',
+  // ✅ حالات المورد (من الداشبورد)
+  final List<String> _supplierStatuses = [
+    'في المستودع',
+    'تم الإنشاء',
+    'في انتظار الدمج',
+    'تم دمجه مع العميل',
     'جاهز للتحميل',
-    'قيد التحميل',
     'تم التحميل',
-    'تم الوصول',
+    'في الطريق',
+    'تم التسليم',
     'ملغى',
-    'تأخير في الوصول',
-    'ملغي - تأخر التحميل',
   ];
 
   // للملاحظات
@@ -160,11 +151,15 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.orderToEdit != null) {
+
+    if (isEditMode) {
       _initializeFormWithOrder();
     }
-    // بدء التحقق الدوري من حالة الطلب
-    _startStatusCheckTimer();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadSuppliers();
+      await _loadDrivers();
+    });
   }
 
   @override
@@ -173,6 +168,29 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
     _loadingCancelTimer?.cancel();
     _statusCheckTimer?.cancel();
     super.dispose();
+  }
+
+  PreferredSizeWidget _buildDesktopAppBar() {
+    return AppBar(
+      elevation: 0,
+      backgroundColor: Colors.white,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new),
+        tooltip: 'رجوع',
+        color: AppColors.primaryBlue,
+        onPressed: () {
+          Navigator.pop(context);
+        },
+      ),
+      title: Text(
+        widget.orderToEdit != null ? 'تعديل طلب المورد' : 'طلب مورد جديد',
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: AppColors.primaryBlue,
+        ),
+      ),
+      centerTitle: true,
+    );
   }
 
   void _startStatusCheckTimer() {
@@ -355,6 +373,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
     _supplierOrderNumberController.text = order.supplierOrderNumber ?? '';
     _quantityController.text = order.quantity?.toString() ?? '';
     _notesController.text = order.notes ?? '';
+
     _loadingTimeController.text = order.loadingTime ?? '08:00';
     _arrivalTimeController.text = order.arrivalTime ?? '10:00';
 
@@ -363,12 +382,29 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
         order.loadingDate ?? DateTime.now().add(const Duration(days: 1));
     _arrivalDate =
         order.arrivalDate ?? DateTime.now().add(const Duration(days: 1));
-    _status = order.status;
+
+    _status = _supplierStatuses.contains(order.status)
+        ? order.status
+        : _supplierStatuses.first;
+
     _fuelType = order.fuelType ?? 'ديزل';
     _unit = order.unit ?? 'لتر';
-    _companyLogoPath = order.companyLogo;
-    _selectedRegion = order.area;
-    _selectedCity = order.city;
+
+    // ✅ المنطقة
+    if (_saudiRegions.contains(order.area)) {
+      _selectedRegion = order.area;
+    } else {
+      _selectedRegion = null;
+    }
+
+    // ✅ المدينة (مربوطة بالمنطقة)
+    if (_selectedRegion != null &&
+        saudiCities[_selectedRegion!] != null &&
+        saudiCities[_selectedRegion!]!.contains(order.city)) {
+      _selectedCity = order.city;
+    } else {
+      _selectedCity = null;
+    }
   }
 
   Future<void> _loadSuppliers() async {
@@ -530,23 +566,11 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // ✅ لازم مورد
-    if (_selectedSupplierId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('يرجى اختيار المورد'),
-          backgroundColor: AppColors.errorRed,
-        ),
-      );
-      return;
-    }
-
-    // ✅ لازم منطقة + مدينة (بدون عنوان)
-    // 🔴 تحقق من المدينة والمنطقة قبل الإرسال
-    if (_selectedRegion == null || _selectedCity == null) {
+    // ✅ مورد مطلوب فقط في حالة الإنشاء
+    if (!isEditMode && _selectedSupplierId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('يرجى اختيار المنطقة والمدينة'),
+          content: Text('يرجى اختيار المورد'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -592,9 +616,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
         int.parse(loadingParts[1]),
       );
 
-      // ❗ حسب منطقك الحالي: التحميل لازم يكون بعد الوصول
-      if (loadingDateTime.isBefore(arrivalDateTime) ||
-          loadingDateTime.isAtSameMomentAs(arrivalDateTime)) {
+      if (!loadingDateTime.isAfter(arrivalDateTime)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('وقت التحميل يجب أن يكون بعد وقت الوصول'),
@@ -616,72 +638,73 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    // ✅ المورد المحدد
-    final supplier = _suppliers.firstWhere(
-      (s) => s.id == _selectedSupplierId,
-      orElse: () => Supplier.empty(),
-    );
-
-    // ✅ (اختياري) Debug سريع
-    debugPrint('REGION => $_selectedRegion');
-    debugPrint('CITY   => $_selectedCity');
+    // ✅ المورد: من الطلب الأصلي في التعديل – من القائمة في الإنشاء
+    final Supplier supplier = isEditMode
+        ? widget.orderToEdit!.supplier!
+        : _suppliers.firstWhere((s) => s.id == _selectedSupplierId);
 
     final order = Order(
       id: widget.orderToEdit?.id ?? '',
       orderDate: _orderDate,
 
-      supplierName: supplier.name,
-      requestType: 'مورد',
-      orderNumber: widget.orderToEdit?.orderNumber ?? '',
-      supplierOrderNumber: _supplierOrderNumberController.text.trim().isNotEmpty
-          ? _supplierOrderNumberController.text.trim()
-          : null,
-
-      loadingDate: _loadingDate,
-      loadingTime: _loadingTimeController.text,
-      arrivalDate: _arrivalDate,
-      arrivalTime: _arrivalTimeController.text,
-      status: _status,
-
       supplierId: supplier.id,
-      isSupplierOrder: true,
+      supplierName: supplier.name,
+      supplierCompany: supplier.company,
       supplierContactPerson: supplier.contactPerson,
       supplierPhone: supplier.phone,
 
-      // ✅ هنا الصح
-      area: _selectedRegion,
-      city: _selectedCity,
-      address: null,
+      requestType: null,
+      orderNumber: widget.orderToEdit?.orderNumber ?? '',
+      supplierOrderNumber: _supplierOrderNumberController.text.trim().isNotEmpty
+          ? _supplierOrderNumberController.text.trim()
+          : widget.orderToEdit?.supplierOrderNumber,
 
-      supplierCompany: supplier.company,
+      // ⏱ المواعيد
+      arrivalDate: _arrivalDate,
+      arrivalTime: _arrivalTimeController.text,
+      loadingDate: _loadingDate,
+      loadingTime: _loadingTimeController.text,
 
+      // 📍 الموقع (ثابت في التعديل)
+      area: isEditMode ? widget.orderToEdit!.area : _selectedRegion,
+      city: isEditMode ? widget.orderToEdit!.city : _selectedCity,
+      address: widget.orderToEdit?.address,
+
+      // 🚚 السائق (مسموح تعديله)
       driverId: _selectedDriverId,
       driverName: _selectedDriver?.name,
       driverPhone: _selectedDriver?.phone,
       vehicleNumber: _selectedDriver?.vehicleNumber,
 
+      // ⛽ الوقود (مسموح تعديله)
       fuelType: _fuelType,
       quantity: _quantityController.text.trim().isNotEmpty
           ? double.tryParse(_quantityController.text.trim())
-          : null,
+          : widget.orderToEdit?.quantity,
       unit: _unit,
+
+      // 📝 الحالة والملاحظات
+      status: _status,
       notes: _notesController.text.trim().isNotEmpty
           ? _notesController.text.trim()
-          : null,
+          : widget.orderToEdit?.notes,
 
+      attachments: widget.orderToEdit?.attachments ?? [],
       companyLogo: _companyLogoPath,
-      attachments: [],
 
       createdById: authProvider.user?.id ?? '',
       createdByName: authProvider.user?.name,
 
       customer: null,
-      createdAt: DateTime.now(),
+      createdAt: widget.orderToEdit?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
+
+      orderSource: widget.orderToEdit?.orderSource ?? '',
+      mergeStatus: widget.orderToEdit?.mergeStatus ?? '',
     );
 
     bool success;
-    if (widget.orderToEdit != null) {
+    if (isEditMode) {
       success = await orderProvider.updateOrderFull(
         widget.orderToEdit!.id,
         order,
@@ -702,7 +725,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.orderToEdit != null
+            isEditMode
                 ? 'تم تحديث طلب المورد بنجاح'
                 : 'تم إنشاء طلب المورد بنجاح',
           ),
@@ -710,13 +733,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
         ),
       );
 
-      if (widget.orderToEdit == null) {
-        setState(() {
-          _status = 'تم إنشاء الطلب';
-        });
-      }
-
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 400));
       Navigator.pop(context, true);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -784,13 +801,13 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
 
     return Scaffold(
       appBar: _isDesktop
-          ? null
+          ? _buildDesktopAppBar()
           : AppBar(
               title: Text(
                 widget.orderToEdit != null
                     ? 'تعديل طلب المورد'
                     : 'طلب مورد جديد',
-                style: TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.white),
               ),
               centerTitle: true,
             ),
@@ -846,289 +863,190 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
     OrderProvider orderProvider,
     double screenWidth,
   ) {
-    return FutureBuilder(
-      future: Future.wait([_loadSuppliers(), _loadDrivers()]),
-      builder: (context, snapshot) {
-        return Scaffold(
-          body: Form(
-            key: _formKey,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Sidebar for desktop
-                Container(
-                  width: 280,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      right: BorderSide(color: Colors.grey.shade300, width: 1),
-                    ),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        // Header
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryBlue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+    return Scaffold(
+      body: Form(
+        key: _formKey,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sidebar
+            Container(
+              width: 280,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  right: BorderSide(color: Colors.grey.shade300, width: 1),
+                ),
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            widget.orderToEdit != null
+                                ? 'تعديل طلب المورد'
+                                : 'طلب مورد جديد',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryBlue,
+                            ),
                           ),
-                          child: Column(
-                            children: [
-                              Text(
-                                widget.orderToEdit != null
-                                    ? 'تعديل طلب المورد'
-                                    : 'طلب مورد جديد',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primaryBlue,
-                                ),
+                          const SizedBox(height: 8),
+                          if (widget.orderToEdit != null)
+                            Text(
+                              widget.orderToEdit!.orderNumber,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: AppColors.mediumGray,
                               ),
-                              const SizedBox(height: 8),
-                              if (widget.orderToEdit != null)
-                                Text(
-                                  widget.orderToEdit!.orderNumber,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: AppColors.mediumGray,
-                                  ),
-                                ),
-                            ],
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    _buildDesktopNavItem(
+                      icon: Icons.business,
+                      title: 'اختيار المورد',
+                      isSelected: true,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDesktopNavItem(
+                      icon: Icons.location_on,
+                      title: 'موقع المورد',
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDesktopNavItem(
+                      icon: Icons.directions_car,
+                      title: 'اختيار السائق',
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDesktopNavItem(
+                      icon: Icons.info_outline,
+                      title: 'معلومات الطلب',
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDesktopNavItem(
+                      icon: Icons.access_time,
+                      title: 'المواعيد',
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDesktopNavItem(
+                      icon: Icons.local_gas_station,
+                      title: 'معلومات الوقود',
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDesktopNavItem(
+                      icon: Icons.note_outlined,
+                      title: 'الحالة والملاحظات',
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDesktopNavItem(
+                      icon: Icons.attach_file,
+                      title: 'المرفقات',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Main content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top bar
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          widget.orderToEdit != null
+                              ? 'تعديل طلب المورد'
+                              : 'طلب مورد جديد',
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryBlue,
                           ),
                         ),
-                        const SizedBox(height: 20),
-
-                        // Navigation
-                        Column(
-                          children: [
-                            _buildDesktopNavItem(
-                              icon: Icons.business,
-                              title: 'اختيار المورد',
-                              isSelected: true,
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDesktopNavItem(
-                              icon: Icons.location_on,
-                              title: 'موقع المورد',
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDesktopNavItem(
-                              icon: Icons.directions_car,
-                              title: 'اختيار السائق',
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDesktopNavItem(
-                              icon: Icons.info_outline,
-                              title: 'معلومات الطلب',
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDesktopNavItem(
-                              icon: Icons.access_time,
-                              title: 'المواعيد',
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDesktopNavItem(
-                              icon: Icons.local_gas_station,
-                              title: 'معلومات الوقود',
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDesktopNavItem(
-                              icon: Icons.note_outlined,
-                              title: 'الحالة والملاحظات',
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDesktopNavItem(
-                              icon: Icons.attach_file,
-                              title: 'المرفقات',
-                            ),
-                          ],
+                        ElevatedButton.icon(
+                          onPressed: orderProvider.isLoading
+                              ? null
+                              : _submitForm,
+                          icon: orderProvider.isLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined),
+                          label: Text(
+                            orderProvider.isLoading
+                                ? 'جاري الحفظ...'
+                                : (widget.orderToEdit != null
+                                      ? 'تحديث الطلب'
+                                      : 'حفظ الطلب'),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ),
+                    const SizedBox(height: 32),
 
-                // Main content for desktop
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Top bar
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              widget.orderToEdit != null
-                                  ? 'تعديل طلب المورد'
-                                  : 'طلب مورد جديد',
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryBlue,
-                              ),
-                            ),
-                            // Save button
-                            ElevatedButton.icon(
-                              onPressed: orderProvider.isLoading
-                                  ? null
-                                  : _submitForm,
-                              icon: orderProvider.isLoading
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : const Icon(Icons.save_outlined),
-                              label: Text(
-                                orderProvider.isLoading
-                                    ? 'جاري الحفظ...'
-                                    : (widget.orderToEdit != null
-                                          ? 'تحديث الطلب'
-                                          : 'حفظ الطلب'),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryBlue,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Two column layout for desktop
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Left column
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  _buildSupplierCardDesktop(context),
-                                  const SizedBox(height: 24),
-                                  _buildLocationCardDesktop(context),
-                                  const SizedBox(height: 24),
-                                  _buildDriverCardDesktop(context),
-                                  const SizedBox(height: 24),
-                                  _buildAttachmentsCardDesktop(context),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 32),
-
-                            // Right column
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  _buildBasicInfoCardDesktop(context),
-                                  const SizedBox(height: 24),
-                                  _buildTimesCardDesktop(context),
-                                  const SizedBox(height: 24),
-                                  _buildFuelInfoCardDesktop(context),
-                                  const SizedBox(height: 24),
-                                  _buildStatusNotesCardDesktop(context),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 40),
-
-                        // Bottom actions for desktop
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                        Expanded(
+                          child: Column(
                             children: [
-                              OutlinedButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.mediumGray,
-                                  side: BorderSide(color: AppColors.mediumGray),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 32,
-                                    vertical: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: const Text('إلغاء'),
-                              ),
-                              const SizedBox(width: 16),
-                              ElevatedButton.icon(
-                                onPressed: orderProvider.isLoading
-                                    ? null
-                                    : _submitForm,
-                                icon: orderProvider.isLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                Colors.white,
-                                              ),
-                                        ),
-                                      )
-                                    : const Icon(Icons.check_circle_outline),
-                                label: Text(
-                                  orderProvider.isLoading
-                                      ? 'جاري الحفظ...'
-                                      : (widget.orderToEdit != null
-                                            ? 'تحديث'
-                                            : 'إنشاء'),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primaryBlue,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 32,
-                                    vertical: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
+                              _buildSupplierCardDesktop(context),
+                              const SizedBox(height: 24),
+                              _buildLocationCardDesktop(context),
+                              const SizedBox(height: 24),
+                              _buildDriverCardDesktop(context),
+                              const SizedBox(height: 24),
+                              _buildAttachmentsCardDesktop(context),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(width: 32),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _buildBasicInfoCardDesktop(context),
+                              const SizedBox(height: 24),
+                              _buildTimesCardDesktop(context),
+                              const SizedBox(height: 24),
+                              _buildFuelInfoCardDesktop(context),
+                              const SizedBox(height: 24),
+                              _buildStatusNotesCardDesktop(context),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 
@@ -1136,6 +1054,8 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   // مكونات الجوال
   // ============================================
   Widget _buildSupplierCardMobile(BuildContext context) {
+    final bool enabled = !isEditMode; // ❌ يغلق في التعديل
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1149,57 +1069,51 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
+
             _buildFieldWithIcon(
               label: 'المورد',
               icon: Icons.business,
               color: AppColors.primaryBlue,
-              child: DropdownButtonFormField<String>(
-                value: _selectedSupplierId,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                ),
-                hint: const Text('اختر المورد'),
-                items: _suppliers.map((Supplier supplier) {
-                  return DropdownMenuItem<String>(
-                    value: supplier.id,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(supplier.name),
-                        Text(
-                          supplier.company,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
+              enabled: enabled,
+              child: IgnorePointer(
+                ignoring: !enabled,
+                child: DropdownButtonFormField<String>(
+                  value: _selectedSupplierId,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  );
-                }).toList(),
-                onChanged: (String? value) {
-                  setState(() {
-                    _selectedSupplierId = value;
-                    if (value != null) {
+                  ),
+                  hint: const Text('اختر المورد'),
+                  items: _suppliers.map((supplier) {
+                    return DropdownMenuItem<String>(
+                      value: supplier.id,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(supplier.name),
+                          Text(
+                            supplier.company,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (!enabled) return;
+                    setState(() {
+                      _selectedSupplierId = value;
                       _selectedSupplier = _suppliers.firstWhere(
                         (s) => s.id == value,
                       );
-                    }
-                  });
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'يرجى اختيار المورد';
-                  }
-                  return null;
-                },
+                    });
+                  },
+                ),
               ),
             ),
           ],
@@ -1209,6 +1123,8 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   }
 
   Widget _buildLocationCardMobile(BuildContext context) {
+    final bool enabled = !isEditMode; // 🔒 يقفل في التعديل
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1222,36 +1138,29 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            // المنطقة
+
             _buildFieldWithIcon(
               label: 'المنطقة',
               icon: Icons.location_on,
               color: AppColors.secondaryTeal,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.secondaryTeal.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.lightGray),
-                ),
+              enabled: enabled,
+              child: IgnorePointer(
+                ignoring: !enabled,
                 child: DropdownButton<String>(
-                  value: _selectedRegion,
+                  value: _saudiRegions.contains(_selectedRegion)
+                      ? _selectedRegion
+                      : null, // 👈 مهم جدًا
+
                   isExpanded: true,
                   underline: const SizedBox(),
                   hint: const Text('اختر المنطقة'),
-                  items: saudiCities.keys
-                      .map(
-                        (region) => DropdownMenuItem<String>(
-                          value: region,
-                          child: Text(region),
-                        ),
-                      )
-                      .toList(),
+                  items: _saudiRegions.map((region) {
+                    return DropdownMenuItem(value: region, child: Text(region));
+                  }).toList(),
                   onChanged: (value) {
                     setState(() {
                       _selectedRegion = value;
-                      _selectedCity =
-                          null; // ✅ إعادة تعيين المدينة عند تغيير المنطقة
+                      _selectedCity = null; // 👈 مهم
                     });
                   },
                 ),
@@ -1259,20 +1168,24 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
             ),
 
             const SizedBox(height: 16),
-            // المدينة
+
             _buildFieldWithIcon(
               label: 'المدينة',
               icon: Icons.location_city,
               color: AppColors.secondaryTeal,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.secondaryTeal.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.lightGray),
-                ),
+              enabled: enabled,
+              child: IgnorePointer(
+                ignoring: !enabled,
                 child: DropdownButton<String>(
-                  value: _selectedCity,
+                  value:
+                      (_selectedRegion != null &&
+                          saudiCities[_selectedRegion]?.contains(
+                                _selectedCity,
+                              ) ==
+                              true)
+                      ? _selectedCity
+                      : null,
+
                   isExpanded: true,
                   underline: const SizedBox(),
                   hint: Text(
@@ -1280,23 +1193,25 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                         ? 'اختر المنطقة أولاً'
                         : 'اختر المدينة',
                   ),
-                  items: _selectedRegion == null
-                      ? []
-                      : saudiCities[_selectedRegion]!
+                  items:
+                      (_selectedRegion != null &&
+                          saudiCities.containsKey(_selectedRegion))
+                      ? saudiCities[_selectedRegion]!
                             .map(
                               (city) => DropdownMenuItem<String>(
                                 value: city,
                                 child: Text(city),
                               ),
                             )
-                            .toList(),
-                  onChanged: _selectedRegion == null
-                      ? null
-                      : (value) {
+                            .toList()
+                      : const [],
+                  onChanged: enabled
+                      ? (value) {
                           setState(() {
-                            _selectedCity = value; // ✅ صح
+                            _selectedCity = value;
                           });
-                        },
+                        }
+                      : null,
                 ),
               ),
             ),
@@ -1320,10 +1235,12 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
+
             _buildFieldWithIcon(
               label: 'السائق',
               icon: Icons.directions_car,
               color: AppColors.infoBlue,
+              enabled: true, // ✅ مسموح
               child: DropdownButtonFormField<String>(
                 value: _selectedDriverId,
                 isExpanded: true,
@@ -1331,105 +1248,56 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
                 ),
                 hint: const Text('اختر السائق'),
-                items: _drivers.map((Driver driver) {
+                items: _drivers.map((driver) {
                   return DropdownMenuItem<String>(
                     value: driver.id,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(driver.name),
-                        Text(
-                          '${driver.phone} - ${driver.vehicleNumber ?? "لا يوجد"}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: Text(driver.name),
                   );
                 }).toList(),
-                onChanged: (String? value) {
+                onChanged: (value) {
                   setState(() {
                     _selectedDriverId = value;
-                    if (value != null) {
-                      _selectedDriver = _drivers.firstWhere(
-                        (d) => d.id == value,
-                      );
-                    }
+                    _selectedDriver = _drivers.firstWhere((d) => d.id == value);
                   });
                 },
               ),
             ),
-            if (_selectedDriver != null)
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.infoBlue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.infoBlue.withOpacity(0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.person, color: AppColors.infoBlue, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedDriver!.name,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.infoBlue,
-                            ),
-                          ),
-                          Text(
-                            'هاتف: ${_selectedDriver!.phone}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.mediumGray,
-                            ),
-                          ),
-                          if (_selectedDriver!.vehicleNumber != null)
-                            Text(
-                              'رقم المركبة: ${_selectedDriver!.vehicleNumber}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.mediumGray,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _selectedDriverId = null;
-                          _selectedDriver = null;
-                        });
-                      },
-                      icon: const Icon(Icons.clear, color: Colors.red),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildSupplierNameView() {
+    if (!isEditMode || _selectedSupplier == null) return const SizedBox();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.lightGray),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.business, color: AppColors.primaryBlue),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _selectedSupplier!.name,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBasicInfoCardMobile(BuildContext context) {
+    final bool enabled = !isEditMode; // ❌ يغلق في التعديل
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1443,16 +1311,22 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            // رقم طلب المورد
+
+            // =========================
+            // رقم طلب المورد (مغلق)
+            // =========================
             _buildFieldWithIcon(
               label: 'رقم طلب المورد',
               icon: Icons.confirmation_number,
               color: AppColors.secondaryTeal,
+              enabled: enabled,
               child: CustomTextField(
                 controller: _supplierOrderNumberController,
-                labelText: 'أدخل رقم طلب المورد',
+                labelText: 'رقم طلب المورد',
                 prefixIcon: Icons.numbers,
+                enabled: enabled,
                 validator: (value) {
+                  if (!enabled) return null; // ✅ لا يتحقق في التعديل
                   if (value == null || value.isEmpty) {
                     return 'يرجى إدخال رقم طلب المورد';
                   }
@@ -1460,30 +1334,37 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                 },
               ),
             ),
+
             const SizedBox(height: 16),
-            // تاريخ الطلب
+
+            // =========================
+            // تاريخ الطلب (مغلق)
+            // =========================
             _buildFieldWithIcon(
               label: 'تاريخ الطلب',
               icon: Icons.calendar_today,
               color: AppColors.successGreen,
-              child: InkWell(
-                onTap: () => _pickDate(context, 'order'),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.successGreen.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.lightGray),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        DateFormat('yyyy/MM/dd').format(_orderDate),
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const Icon(Icons.calendar_today, size: 18),
-                    ],
+              enabled: enabled,
+              child: IgnorePointer(
+                ignoring: !enabled,
+                child: InkWell(
+                  onTap: enabled ? () => _pickDate(context, 'order') : null,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: enabled
+                          ? AppColors.successGreen.withOpacity(0.05)
+                          : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.lightGray),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(DateFormat('yyyy/MM/dd').format(_orderDate)),
+                        const Icon(Icons.calendar_today, size: 18),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1508,7 +1389,10 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            // تاريخ ووقت الوصول
+
+            // ======================
+            // الوصول
+            // ======================
             Row(
               children: [
                 Expanded(
@@ -1516,26 +1400,10 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                     label: 'تاريخ الوصول',
                     icon: Icons.date_range,
                     color: AppColors.infoBlue,
+                    enabled: true, // ✅ مسموح
                     child: InkWell(
                       onTap: () => _pickDate(context, 'arrival'),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.infoBlue.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.lightGray),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              DateFormat('yyyy/MM/dd').format(_arrivalDate),
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            const Icon(Icons.calendar_today, size: 18),
-                          ],
-                        ),
-                      ),
+                      child: _dateBox(_arrivalDate),
                     ),
                   ),
                 ),
@@ -1545,33 +1413,21 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                     label: 'وقت الوصول',
                     icon: Icons.access_time,
                     color: AppColors.infoBlue,
-                    child: InkWell(
-                      onTap: () => _pickTime(context, 'arrival'),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.infoBlue.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.lightGray),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _arrivalTimeController.text,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            const Icon(Icons.access_time, size: 18),
-                          ],
-                        ),
-                      ),
+                    enabled: true, // ✅ مسموح
+                    child: _timeBox(
+                      _arrivalTimeController.text,
+                      () => _pickTime(context, 'arrival'),
                     ),
                   ),
                 ),
               ],
             ),
+
             const SizedBox(height: 16),
-            // تاريخ ووقت التحميل
+
+            // ======================
+            // التحميل
+            // ======================
             Row(
               children: [
                 Expanded(
@@ -1579,26 +1435,10 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                     label: 'تاريخ التحميل',
                     icon: Icons.date_range,
                     color: AppColors.warningOrange,
+                    enabled: true, // ✅ مسموح
                     child: InkWell(
                       onTap: () => _pickDate(context, 'loading'),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.warningOrange.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.lightGray),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              DateFormat('yyyy/MM/dd').format(_loadingDate),
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            const Icon(Icons.calendar_today, size: 18),
-                          ],
-                        ),
-                      ),
+                      child: _dateBox(_loadingDate),
                     ),
                   ),
                 ),
@@ -1608,26 +1448,10 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                     label: 'وقت التحميل',
                     icon: Icons.access_time,
                     color: AppColors.warningOrange,
-                    child: InkWell(
-                      onTap: () => _pickTime(context, 'loading'),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.warningOrange.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.lightGray),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _loadingTimeController.text,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            const Icon(Icons.access_time, size: 18),
-                          ],
-                        ),
-                      ),
+                    enabled: true, // ✅ مسموح
+                    child: _timeBox(
+                      _loadingTimeController.text,
+                      () => _pickTime(context, 'loading'),
                     ),
                   ),
                 ),
@@ -1638,6 +1462,39 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
       ),
     );
   }
+
+  // Helpers
+  Widget _dateBox(DateTime date) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.lightGray),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(DateFormat('yyyy/MM/dd').format(date)),
+        const Icon(Icons.calendar_today, size: 18),
+      ],
+    ),
+  );
+
+  Widget _timeBox(String time, VoidCallback onTap) => InkWell(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.lightGray),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [Text(time), const Icon(Icons.access_time, size: 18)],
+      ),
+    ),
+  );
 
   Widget _buildFuelInfoCardMobile(BuildContext context) {
     return Card(
@@ -1653,11 +1510,15 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            // نوع الوقود
+
+            // =========================
+            // نوع الوقود (مسموح في التعديل)
+            // =========================
             _buildFieldWithIcon(
               label: 'نوع الوقود',
               icon: Icons.local_gas_station,
               color: AppColors.warningOrange,
+              enabled: true, // ✅ مسموح دائمًا
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
@@ -1683,13 +1544,19 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 16),
-            // الكمية
+
+            // =========================
+            // الكمية (مسموح في التعديل)
+            // =========================
             _buildFieldWithIcon(
               label: 'الكمية (لتر)',
               icon: Icons.scale,
               color: AppColors.warningOrange,
+              enabled: true, // ✅ مسموح دائمًا
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CustomTextField(
                     controller: _quantityController,
@@ -1707,6 +1574,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
+
                   // الكميات المقترحة
                   Text(
                     'كميات مقترحة:',
@@ -1771,28 +1639,43 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                   border: Border.all(color: AppColors.lightGray),
                 ),
                 child: DropdownButton<String>(
-                  value: _status,
+                  value: _supplierStatuses.contains(_status) ? _status : null,
                   isExpanded: true,
                   underline: const SizedBox(),
-                  items: _statuses.map((String value) {
+                  items: _supplierStatuses.map((String value) {
                     Color statusColor;
                     switch (value) {
-                      case 'في انتظار عمل طلب جديد':
-                        statusColor = Colors.orange;
+                      case 'في المستودع':
+                        statusColor = Colors.grey;
                         break;
-                      case 'تم إنشاء الطلب':
+                      case 'تم الإنشاء':
                         statusColor = AppColors.infoBlue;
                         break;
-                      case 'ملغي - تأخر التحميل':
+                      case 'في انتظار الدمج':
+                        statusColor = Colors.orange;
+                        break;
+                      case 'تم دمجه مع العميل':
+                        statusColor = Colors.purple;
+                        break;
+                      case 'جاهز للتحميل':
+                        statusColor = AppColors.successGreen;
+                        break;
+                      case 'تم التحميل':
+                        statusColor = AppColors.successGreen;
+                        break;
+                      case 'في الطريق':
+                        statusColor = Colors.indigo;
+                        break;
+                      case 'تم التسليم':
+                        statusColor = Colors.teal;
+                        break;
                       case 'ملغى':
                         statusColor = AppColors.errorRed;
-                        break;
-                      case 'تأخير في الوصول':
-                        statusColor = Colors.orange;
                         break;
                       default:
                         statusColor = AppColors.mediumGray;
                     }
+
                     return DropdownMenuItem<String>(
                       value: value,
                       child: Row(
@@ -2061,70 +1944,72 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'اختيار المورد',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primaryBlue,
               ),
             ),
             const SizedBox(height: 20),
+
             _buildFieldWithIcon(
               label: 'المورد',
               icon: Icons.business,
               color: AppColors.primaryBlue,
-              child: DropdownButtonFormField<String>(
-                value: _selectedSupplierId,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                ),
-                hint: const Text('اختر المورد'),
-                items: _suppliers.map((Supplier supplier) {
-                  return DropdownMenuItem<String>(
-                    value: supplier.id,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          supplier.name,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        Text(
-                          supplier.company,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+
+              // 🔥 هنا القرار
+              child: isEditMode
+                  ? Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade400),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.lock, size: 18, color: Colors.grey),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _selectedSupplier?.name ??
+                                  widget.orderToEdit!.supplierName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                    )
+                  // 🟢 إنشاء فقط
+                  : DropdownButtonFormField<String>(
+                      value: _selectedSupplierId,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ],
+                      ),
+                      hint: const Text('اختر المورد'),
+                      items: _suppliers.map((supplier) {
+                        return DropdownMenuItem<String>(
+                          value: supplier.id,
+                          child: Text(supplier.name),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedSupplierId = value;
+                          _selectedSupplier = _suppliers.firstWhere(
+                            (s) => s.id == value,
+                          );
+                        });
+                      },
                     ),
-                  );
-                }).toList(),
-                onChanged: (String? value) {
-                  setState(() {
-                    _selectedSupplierId = value;
-                    if (value != null) {
-                      _selectedSupplier = _suppliers.firstWhere(
-                        (s) => s.id == value,
-                      );
-                    }
-                  });
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'يرجى اختيار المورد';
-                  }
-                  return null;
-                },
-              ),
             ),
           ],
         ),
@@ -2181,7 +2066,6 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                           setState(() {
                             _selectedRegion = value;
 
-                            // 🔥 مهم جدًا: إعادة تعيين المدينة عند تغيير المنطقة
                             _selectedCity = null;
                           });
                         },
@@ -2376,6 +2260,8 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   }
 
   Widget _buildBasicInfoCardDesktop(BuildContext context) {
+    final bool enabled = !isEditMode;
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -2384,57 +2270,66 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'معلومات الطلب',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primaryBlue,
               ),
             ),
             const SizedBox(height: 20),
+
             // رقم طلب المورد
             _buildFieldWithIcon(
               label: 'رقم طلب المورد',
               icon: Icons.confirmation_number,
               color: AppColors.secondaryTeal,
-              child: CustomTextField(
+              enabled: enabled,
+              child: TextFormField(
                 controller: _supplierOrderNumberController,
-                labelText: '',
-                prefixIcon: null,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'يرجى إدخال رقم طلب المورد';
-                  }
-                  return null;
-                },
-                fieldColor: AppColors.secondaryTeal.withOpacity(0.05),
+                enabled: enabled,
+                decoration: InputDecoration(
+                  filled: !enabled,
+                  fillColor: Colors.grey.shade200,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ),
+
             const SizedBox(height: 20),
+
             // تاريخ الطلب
             _buildFieldWithIcon(
               label: 'تاريخ الطلب',
               icon: Icons.calendar_today,
               color: AppColors.successGreen,
-              child: InkWell(
-                onTap: () => _pickDate(context, 'order'),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.successGreen.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        DateFormat('yyyy/MM/dd').format(_orderDate),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      const Icon(Icons.calendar_today, size: 20),
-                    ],
+              enabled: enabled,
+              child: IgnorePointer(
+                ignoring: !enabled,
+                child: InkWell(
+                  onTap: enabled ? () => _pickDate(context, 'order') : null,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: enabled
+                          ? AppColors.successGreen.withOpacity(0.05)
+                          : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          DateFormat('yyyy/MM/dd').format(_orderDate),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        const Icon(Icons.calendar_today),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -2736,28 +2631,43 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                   border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: DropdownButton<String>(
-                  value: _status,
+                  value: _supplierStatuses.contains(_status) ? _status : null,
                   isExpanded: true,
                   underline: const SizedBox(),
-                  items: _statuses.map((String value) {
+                  items: _supplierStatuses.map((String value) {
                     Color statusColor;
                     switch (value) {
-                      case 'في انتظار عمل طلب جديد':
-                        statusColor = Colors.orange;
+                      case 'في المستودع':
+                        statusColor = Colors.grey;
                         break;
-                      case 'تم إنشاء الطلب':
+                      case 'تم الإنشاء':
                         statusColor = AppColors.infoBlue;
                         break;
-                      case 'ملغي - تأخر التحميل':
+                      case 'في انتظار الدمج':
+                        statusColor = Colors.orange;
+                        break;
+                      case 'تم دمجه مع العميل':
+                        statusColor = Colors.purple;
+                        break;
+                      case 'جاهز للتحميل':
+                        statusColor = AppColors.successGreen;
+                        break;
+                      case 'تم التحميل':
+                        statusColor = AppColors.successGreen;
+                        break;
+                      case 'في الطريق':
+                        statusColor = Colors.indigo;
+                        break;
+                      case 'تم التسليم':
+                        statusColor = Colors.teal;
+                        break;
                       case 'ملغى':
                         statusColor = AppColors.errorRed;
-                        break;
-                      case 'تأخير في الوصول':
-                        statusColor = Colors.orange;
                         break;
                       default:
                         statusColor = AppColors.mediumGray;
                     }
+
                     return DropdownMenuItem<String>(
                       value: value,
                       child: Row(

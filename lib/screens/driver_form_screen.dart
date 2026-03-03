@@ -28,6 +28,9 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
       TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
+  Driver? _driverToEdit;
+  bool _didLoadArgs = false;
+
   String _vehicleType = 'شاحنة كبيرة';
   String _status = 'نشط';
   DateTime? _licenseExpiryDate;
@@ -45,14 +48,28 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.driverToEdit != null) {
-      _initializeFormWithDriver();
+    _driverToEdit = widget.driverToEdit;
+    if (_driverToEdit != null) {
+      _initializeFormWithDriver(_driverToEdit!);
     }
   }
 
-  void _initializeFormWithDriver() {
-    final driver = widget.driverToEdit!;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoadArgs) return;
+    _didLoadArgs = true;
 
+    if (_driverToEdit != null) return;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Driver) {
+      _driverToEdit = args;
+      _initializeFormWithDriver(args);
+    }
+  }
+
+  void _initializeFormWithDriver(Driver driver) {
     _nameController.text = driver.name;
     _licenseNumberController.text = driver.licenseNumber;
     _phoneController.text = driver.phone;
@@ -120,9 +137,9 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
     };
 
     bool success;
-    if (widget.driverToEdit != null) {
+    if (_driverToEdit != null) {
       success = await driverProvider.updateDriver(
-        widget.driverToEdit!.id,
+        _driverToEdit!.id,
         driverData,
       );
     } else {
@@ -133,7 +150,7 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.driverToEdit != null
+            _driverToEdit != null
                 ? 'تم تحديث بيانات السائق بنجاح'
                 : 'تم إنشاء السائق بنجاح',
           ),
@@ -142,9 +159,7 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
       );
       Navigator.pop(
         context,
-        widget.driverToEdit != null
-            ? widget.driverToEdit
-            : Driver.fromJson(driverData),
+        _driverToEdit != null ? _driverToEdit : Driver.fromJson(driverData),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,11 +186,14 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
   @override
   Widget build(BuildContext context) {
     final driverProvider = Provider.of<DriverProvider>(context);
-    final isEditing = widget.driverToEdit != null;
+    final isEditing = _driverToEdit != null;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'تعديل السائق' : 'سائق جديد'),
+        title: Text(
+          isEditing ? 'تعديل السائق' : 'سائق جديد',
+          style: TextStyle(color: Colors.white),
+        ),
         centerTitle: !_isWideScreen,
       ),
       body: SafeArea(
@@ -410,13 +428,17 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
   }
 
   Widget _buildWideLayout(DriverProvider driverProvider, bool isEditing) {
-    return Column(
-      children: [
-        // صف أول: المعلومات الأساسية
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 16.0;
+        final cardWidth = (constraints.maxWidth - spacing) / 2;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
           children: [
-            Expanded(
+            SizedBox(
+              width: cardWidth,
               child: Card(
                 elevation: 4,
                 child: Padding(
@@ -482,10 +504,8 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
-
-            // معلومات المركبة
-            Expanded(
+            SizedBox(
+              width: cardWidth,
               child: Card(
                 elevation: 4,
                 child: Padding(
@@ -526,15 +546,8 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
                 ),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // صف ثاني: الحالة والاتصال والملاحظات
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
+            SizedBox(
+              width: cardWidth,
               child: Card(
                 elevation: 4,
                 child: Padding(
@@ -577,10 +590,8 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
-
-            // الملاحظات
-            Expanded(
+            SizedBox(
+              width: cardWidth,
               child: Card(
                 elevation: 4,
                 child: Padding(
@@ -606,8 +617,8 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
               ),
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 

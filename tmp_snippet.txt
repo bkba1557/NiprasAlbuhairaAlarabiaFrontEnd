@@ -1,0 +1,64 @@
+_getColumnValue(DailyInventory inventory, String column) {
+    final salesColumn = _tableColumns.length > 6 ? _tableColumns[6] : '????????';
+    final calculatedColumn = _tableColumns.length > 7 ? _tableColumns[7] : '?????? ???????';
+    final differenceColumn = _tableColumns.length > 9 ? _tableColumns[9] : '?????';
+
+    final liveSales = _liveSalesByKey[_inventoryKey(
+      inventory.stationId,
+      inventory.fuelType,
+      inventory.inventoryDate,
+    )] ?? inventory.totalSales;
+
+    final calculatedLive =
+        inventory.previousBalance + inventory.receivedQuantity - liveSales;
+
+    if (column == salesColumn) {
+      return '${liveSales.toStringAsFixed(2)} ???';
+    }
+    if (column == calculatedColumn) {
+      return '${calculatedLive.toStringAsFixed(2)} ???';
+    }
+    if (column == differenceColumn) {
+      if (inventory.actualBalance != null) {
+        final diff = inventory.actualBalance! - calculatedLive;
+        final percentage = inventory.differencePercentage != null
+            ? ' (${inventory.differencePercentage!.toStringAsFixed(1)}%)'
+            : '';
+        return '${diff.toStringAsFixed(2)} ???$percentage';
+      }
+      return '---';
+    }
+
+    switch (column) {
+      case '???????':
+        return DateFormat('yyyy/MM/dd').format(inventory.inventoryDate);
+      case '??????':
+        return inventory.stationName;
+      case '??? ??????':
+        return inventory.fuelType;
+      case '??????':
+        return inventory.status;
+      case '?????? ?????????':
+        return '${inventory.previousBalance.toStringAsFixed(2)} ???';
+      case '????????':
+        return '${inventory.receivedQuantity.toStringAsFixed(2)} ???';
+      case '?????? ??????':
+        return inventory.actualBalance != null
+            ? '${inventory.actualBalance!.toStringAsFixed(2)} ???'
+            : '---';
+      case '?????????':
+        return '${inventory.totalRevenue.toStringAsFixed(2)} ????';
+      case '?????????':
+        return '${inventory.totalExpenses.toStringAsFixed(2)} ????';
+      case '???? ?????':
+        return inventory.netRevenue != null
+            ? '${inventory.netRevenue!.toStringAsFixed(2)} ????'
+            : '---';
+      case '?????????':
+        return '';
+      default:
+        return '';
+    }
+  }
+
+Color 

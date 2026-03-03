@@ -4,10 +4,12 @@ import 'package:order_tracker/utils/constants.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
 class SupplierDataSource extends DataGridSource {
-  SupplierDataSource(List<Supplier> suppliers) {
+  SupplierDataSource(List<Supplier> suppliers, {this.onDelete}) {
     _suppliers = suppliers;
     _buildDataGridRows();
   }
+
+  final void Function(String supplierId)? onDelete;
 
   List<DataGridRow> dataGridRows = [];
   List<Supplier> _suppliers = [];
@@ -31,6 +33,7 @@ class SupplierDataSource extends DataGridSource {
             columnName: 'statusRating',
             value: _buildStatusRatingCell(supplier),
           ),
+          DataGridCell<String>(columnName: 'actions', value: supplier.id),
         ],
       );
     }).toList();
@@ -85,16 +88,38 @@ class SupplierDataSource extends DataGridSource {
   DataGridRowAdapter buildRow(DataGridRow row) {
     return DataGridRowAdapter(
       cells: row.getCells().map<Widget>((dataGridCell) {
+        if (dataGridCell.columnName == 'statusRating') {
+          return Container(
+            padding: const EdgeInsets.all(12),
+            alignment: Alignment.centerRight,
+            child: dataGridCell.value,
+          );
+        }
+
+        if (dataGridCell.columnName == 'actions') {
+          return Center(
+            child: IconButton(
+              tooltip: 'حذف المورد',
+              icon: const Icon(
+                Icons.delete_outline,
+                color: AppColors.errorRed,
+                size: 20,
+              ),
+              onPressed: onDelete != null
+                  ? () => onDelete!(dataGridCell.value)
+                  : null,
+            ),
+          );
+        }
+
         return Container(
           padding: const EdgeInsets.all(12),
           alignment: Alignment.centerRight,
-          child: dataGridCell.columnName == 'statusRating'
-              ? dataGridCell.value
-              : Text(
-                  dataGridCell.value.toString(),
-                  style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
-                  textAlign: TextAlign.right,
-                ),
+          child: Text(
+            dataGridCell.value.toString(),
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
+            textAlign: TextAlign.right,
+          ),
         );
       }).toList(),
     );
@@ -109,98 +134,21 @@ class SupplierDataGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return SfDataGrid(
       source: dataSource,
       columns: [
+        _buildColumn('name', 'اسم المورد', screenWidth * 0.16),
+        _buildColumn('company', 'الشركة', screenWidth * 0.16),
+        _buildColumn('contactPerson', 'جهة الاتصال', screenWidth * 0.14),
+        _buildColumn('phone', 'الهاتف', screenWidth * 0.12),
+        _buildColumn('supplierType', 'نوع المورد', screenWidth * 0.12),
+        _buildColumn('statusRating', 'الحالة / التقييم', screenWidth * 0.16),
         GridColumn(
-          columnName: 'name',
-          width: MediaQuery.of(context).size.width * 0.18,
-          label: Container(
-            padding: const EdgeInsets.all(12),
-            alignment: Alignment.centerRight,
-            child: const Text(
-              'اسم المورد',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
-        ),
-        GridColumn(
-          columnName: 'company',
-          width: MediaQuery.of(context).size.width * 0.18,
-          label: Container(
-            padding: const EdgeInsets.all(12),
-            alignment: Alignment.centerRight,
-            child: const Text(
-              'الشركة',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
-        ),
-        GridColumn(
-          columnName: 'contactPerson',
-          width: MediaQuery.of(context).size.width * 0.15,
-          label: Container(
-            padding: const EdgeInsets.all(12),
-            alignment: Alignment.centerRight,
-            child: const Text(
-              'جهة الاتصال',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
-        ),
-        GridColumn(
-          columnName: 'phone',
-          width: MediaQuery.of(context).size.width * 0.12,
-          label: Container(
-            padding: const EdgeInsets.all(12),
-            alignment: Alignment.centerRight,
-            child: const Text(
-              'الهاتف',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
-        ),
-        GridColumn(
-          columnName: 'supplierType',
-          width: MediaQuery.of(context).size.width * 0.12,
-          label: Container(
-            padding: const EdgeInsets.all(12),
-            alignment: Alignment.centerRight,
-            child: const Text(
-              'نوع المورد',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
-        ),
-        GridColumn(
-          columnName: 'statusRating',
-          width: MediaQuery.of(context).size.width * 0.15,
-          label: Container(
-            padding: const EdgeInsets.all(12),
-            alignment: Alignment.centerRight,
-            child: const Text(
-              'الحالة / التقييم',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
+          columnName: 'actions',
+          width: 70,
+          label: const Center(child: Icon(Icons.more_vert)),
         ),
       ],
       gridLinesVisibility: GridLinesVisibility.both,
@@ -209,13 +157,40 @@ class SupplierDataGrid extends StatelessWidget {
       allowFiltering: true,
       selectionMode: SelectionMode.single,
       onCellTap: (details) {
-        if (details.rowColumnIndex.rowIndex > 0 && onRowTap != null) {
+        // تجاهل الضغط على الهيدر
+        if (details.rowColumnIndex.rowIndex <= 0) return;
+
+        // تجاهل عمود الإجراءات
+        final columnIndex = details.rowColumnIndex.columnIndex;
+        if (columnIndex == dataSource.rows.first.getCells().length - 1) {
+          return;
+        }
+
+        if (onRowTap != null) {
           final supplierIndex = details.rowColumnIndex.rowIndex - 1;
           if (supplierIndex < dataSource._suppliers.length) {
             onRowTap!(dataSource._suppliers[supplierIndex]);
           }
         }
       },
+    );
+  }
+
+  GridColumn _buildColumn(String name, String title, double width) {
+    return GridColumn(
+      columnName: name,
+      width: width,
+      label: Container(
+        padding: const EdgeInsets.all(12),
+        alignment: Alignment.centerRight,
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cairo',
+          ),
+        ),
+      ),
     );
   }
 }

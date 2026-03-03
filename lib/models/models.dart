@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:order_tracker/models/customer_model.dart';
 import 'package:order_tracker/utils/constants.dart';
 
 class User {
@@ -11,6 +9,11 @@ class User {
   final String company;
   final String? phone;
   final DateTime? createdAt;
+  final String? stationId;
+  final String? stationName;
+  final String? stationCode;
+  final bool isBlocked;
+  final List<String> permissions;
 
   User({
     required this.id,
@@ -20,9 +23,25 @@ class User {
     required this.company,
     this.phone,
     this.createdAt,
+    this.stationId,
+    this.stationName,
+    this.stationCode,
+    this.isBlocked = false,
+    this.permissions = const [],
   });
 
+  // =========================
+  // ✅ FIXED fromJson (MongoDB Safe)
+  // =========================
   factory User.fromJson(Map<String, dynamic> json) {
+    // 🔐 stationId قد يكون String أو ObjectId
+    String? parsedStationId;
+    if (json['stationId'] is Map) {
+      parsedStationId = json['stationId']['_id'] ?? json['stationId']['\$oid'];
+    } else if (json['stationId'] is String) {
+      parsedStationId = json['stationId'];
+    }
+
     return User(
       id: json['_id'] ?? json['id'] ?? '',
       name: json['name'] ?? '',
@@ -31,11 +50,23 @@ class User {
       company: json['company'] ?? '',
       phone: json['phone'],
       createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'])
+          ? DateTime.tryParse(json['createdAt'].toString())
           : null,
+      stationId: parsedStationId,
+      stationName: json['stationName'],
+      stationCode: json['stationCode'],
+      isBlocked: json['isBlocked'] ?? false,
+      permissions:
+          (json['permissions'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
     );
   }
 
+  // =========================
+  // toJson
+  // =========================
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -45,7 +76,48 @@ class User {
       'company': company,
       'phone': phone,
       'createdAt': createdAt?.toIso8601String(),
+      'stationId': stationId,
+      'stationName': stationName,
+      'stationCode': stationCode,
+      'isBlocked': isBlocked,
+      'permissions': permissions,
     };
+  }
+}
+
+extension UserPermissionHelpers on User {
+  bool hasPermission(String key) {
+    if (role == 'owner' || role == 'admin') {
+      return true;
+    }
+
+    if (permissions.contains(key)) {
+      return true;
+    }
+
+    if (key.startsWith('orders_') && permissions.contains('orders_manage')) {
+      return true;
+    }
+
+    if (key.startsWith('customers_') &&
+        permissions.contains('customers_manage')) {
+      return true;
+    }
+
+    if (key.startsWith('drivers_') && permissions.contains('drivers_manage')) {
+      return true;
+    }
+
+    if (key.startsWith('suppliers_') &&
+        permissions.contains('suppliers_manage')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool hasAnyPermission(Iterable<String> keys) {
+    return keys.any(hasPermission);
   }
 }
 
@@ -173,7 +245,6 @@ class OrderTimer {
     return Icons.schedule;
   }
 }
-
 
 class Attachment {
   final String id;

@@ -24,16 +24,26 @@ class NotificationModel {
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
+    final dynamic recipientsRaw = json['recipients'];
+    final recipientsList = recipientsRaw is List ? recipientsRaw : const [];
+
+    DateTime parseDate(dynamic value, {DateTime? fallback}) {
+      if (value is DateTime) return value;
+      final parsed = DateTime.tryParse(value?.toString() ?? '');
+      return parsed ?? fallback ?? DateTime.now();
+    }
+
     return NotificationModel(
-      id: json['_id'] ?? json['id'],
-      type: json['type'],
-      title: json['title'],
-      message: json['message'],
+      id: (json['_id'] ?? json['id'] ?? '').toString(),
+      type: (json['type'] ?? 'system_alert').toString(),
+      title: (json['title'] ?? '').toString(),
+      message: (json['message'] ?? '').toString(),
       data: json['data'] != null
           ? Map<String, dynamic>.from(json['data'])
           : null,
-      recipients: (json['recipients'] as List<dynamic>)
+      recipients: recipientsList
           .map((e) => NotificationRecipient.fromJson(e))
+          .where((recipient) => recipient.userId.isNotEmpty)
           .toList(),
       createdById: json['createdBy'] is String
           ? json['createdBy']
@@ -41,8 +51,11 @@ class NotificationModel {
       createdByName: json['createdBy'] is Map
           ? json['createdBy']['name']
           : null,
-      createdAt: DateTime.parse(json['createdAt']),
-      expiresAt: DateTime.parse(json['expiresAt']),
+      createdAt: parseDate(json['createdAt']),
+      expiresAt: parseDate(
+        json['expiresAt'],
+        fallback: DateTime.now().add(const Duration(days: 7)),
+      ),
     );
   }
 
@@ -120,10 +133,13 @@ class NotificationRecipient {
   });
 
   factory NotificationRecipient.fromJson(Map<String, dynamic> json) {
+    final dynamic userRaw = json['user'];
+    final userId = userRaw is String ? userRaw : userRaw?['_id']?.toString();
+
     return NotificationRecipient(
-      userId: json['user'] is String ? json['user'] : json['user']?['_id'],
+      userId: (userId ?? '').toString(),
       read: json['read'] ?? false,
-      readAt: json['readAt'] != null ? DateTime.parse(json['readAt']) : null,
+      readAt: DateTime.tryParse(json['readAt']?.toString() ?? ''),
     );
   }
 }

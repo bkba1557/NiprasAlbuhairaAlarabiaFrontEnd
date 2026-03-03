@@ -39,10 +39,20 @@ class NotificationProvider with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _notifications = (data['notifications'] as List)
+        final fetched = (data['notifications'] as List)
             .map((e) => NotificationModel.fromJson(e))
             .toList();
-        _unreadCount = data['unreadCount'] ?? 0;
+        if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+          _notifications = fetched
+              .where(
+                (n) => n.getRecipientForUser(_currentUserId!) != null,
+              )
+              .toList();
+          _calculateUnreadCount();
+        } else {
+          _notifications = fetched;
+          _unreadCount = data['unreadCount'] ?? 0;
+        }
         _currentPage = data['pagination']['page'];
         _totalPages = data['pagination']['pages'];
         _isLoading = false;
@@ -56,6 +66,8 @@ class NotificationProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  
 
   Future<bool> markAsRead(String notificationId) async {
     try {

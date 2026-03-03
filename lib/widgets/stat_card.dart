@@ -16,6 +16,9 @@ class StatCard extends StatelessWidget {
     required this.color,
     this.gradient,
     this.isDesktop = false,
+    String? subtitle,
+    bool? isLargeScreen,
+    bool? isWeb,
   });
 
   @override
@@ -29,9 +32,10 @@ class StatCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -56,7 +60,7 @@ class StatCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               Text(
                 title,
                 style: const TextStyle(

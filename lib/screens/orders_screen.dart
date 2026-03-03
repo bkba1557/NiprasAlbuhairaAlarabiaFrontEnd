@@ -30,9 +30,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
     if (query.isEmpty) return orders;
 
     return orders.where((order) {
-      return order.orderNumber.contains(query) ||
-          order.supplierName.contains(query) ||
-          order.driverName?.contains(query) == true;
+      final orderNumber = order.orderNumber;
+      final supplierName = order.supplierName;
+      final driverName = order.driverName;
+
+      return orderNumber.contains(query) ||
+          (supplierName != null && supplierName.contains(query)) ||
+          (driverName != null && driverName.contains(query));
     }).toList();
   }
 
@@ -50,6 +54,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
+  /// ✅ هنا التعديل المهم
   Widget _buildOrdersTab(List<Order> orders) {
     final filtered = _applySearch(orders);
 
@@ -69,15 +74,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
       );
     }
 
-    return OrderDataGrid(
-      dataSource: OrderDataSource(filtered),
-      onRowTap: (order) {
-        Navigator.pushNamed(
-          context,
-          AppRoutes.orderDetails,
-          arguments: order.id,
-        );
-      },
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SizedBox(
+            width: constraints.maxWidth, // 👈 عرض التاب بالكامل
+            child: OrderDataGrid(
+              dataSource: OrderDataSource(filtered),
+              onRowTap: (order) {
+                Navigator.pushNamed(
+                  context,
+                  AppRoutes.orderDetails,
+                  arguments: order.id,
+                );
+              },
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -89,17 +104,19 @@ class _OrdersScreenState extends State<OrdersScreen> {
       length: 4,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: Theme.of(context).primaryColor, // أو أي لون
-          iconTheme: const IconThemeData(color: Colors.white), // أيقونات أبيض
+          iconTheme: const IconThemeData(color: Colors.white),
           titleTextStyle: const TextStyle(
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
-          title: const Text(AppStrings.orders),
+          title: const Text(
+            AppStrings.orders,
+            style: TextStyle(fontFamily: "Cairo"),
+          ),
           bottom: const TabBar(
-            labelColor: Colors.white, // النص المحدد
-            unselectedLabelColor: Colors.white70, // النص غير المحدد
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
             tabs: [
               Tab(text: 'الكل'),
               Tab(text: 'طلبات العملاء'),
@@ -148,24 +165,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : TabBarView(
                       children: [
-                        // الكل
                         _buildOrdersTab(orderProvider.orders),
 
-                        // ✅ طلبات العملاء
                         _buildOrdersTab(
                           orderProvider.orders
                               .where((o) => o.orderNumber.startsWith('CUS-'))
                               .toList(),
                         ),
 
-                        // ✅ طلبات الموردين
                         _buildOrdersTab(
                           orderProvider.orders
                               .where((o) => o.orderNumber.startsWith('SUP-'))
                               .toList(),
                         ),
 
-                        // ✅ الطلبات المدمجة فقط
                         _buildOrdersTab(
                           orderProvider.orders
                               .where((o) => o.orderNumber.startsWith('MIX-'))

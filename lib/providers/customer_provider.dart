@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/customer_model.dart';
@@ -20,34 +21,75 @@ class CustomerProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> fetchCustomers({int page = 1, String? search}) async {
+  Future<void> fetchCustomers({
+    int page = 1,
+    String? search,
+    bool fetchAll = false,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      String url = '${ApiEndpoints.baseUrl}/customers?page=$page';
-      if (search != null && search.isNotEmpty) {
-        url += '&search=$search';
-      }
+      if (fetchAll) {
+        final List<Customer> allCustomers = [];
+        int currentPage = page;
+        int totalPages = 1;
 
-      final response = await http.get(
-        Uri.parse(url),
-        headers: ApiService.headers,
-      );
+        while (currentPage <= totalPages) {
+          String url = '${ApiEndpoints.baseUrl}/customers?page=$currentPage';
+          if (search != null && search.isNotEmpty) {
+            url += '&search=$search';
+          }
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        _customers = (data['customers'] as List)
-            .map((e) => Customer.fromJson(e))
-            .toList();
-        _currentPage = data['pagination']['page'];
-        _totalPages = data['pagination']['pages'];
-        _isLoading = false;
-        notifyListeners();
+          final response = await http.get(
+            Uri.parse(url),
+            headers: ApiService.headers,
+          );
+
+          if (response.statusCode != 200) {
+            throw Exception('Failed to fetch customers.');
+          }
+
+          final data = json.decode(response.body);
+          final pageCustomers = (data['customers'] as List)
+              .map((e) => Customer.fromJson(e))
+              .toList();
+          allCustomers.addAll(pageCustomers);
+
+          totalPages = data['pagination']?['pages'] ?? totalPages;
+          currentPage++;
+        }
+
+        _customers = allCustomers;
+        _currentPage = page;
+        _totalPages = totalPages;
       } else {
-        throw Exception('فشل في جلب العملاء');
+        String url = '${ApiEndpoints.baseUrl}/customers?page=$page';
+        if (search != null && search.isNotEmpty) {
+          url += '&search=$search';
+        }
+
+        final response = await http.get(
+          Uri.parse(url),
+          headers: ApiService.headers,
+        );
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          _customers = (data['customers'] as List)
+              .map((e) => Customer.fromJson(e))
+              .toList();
+          _currentPage = data['pagination']['page'];
+          _totalPages = data['pagination']['pages'];
+        } else {
+          throw Exception('Failed to fetch customers.');
+        }
       }
+
+      _filteredCustomers = _customers;
+      _isLoading = false;
+      notifyListeners();
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
@@ -69,7 +111,7 @@ class CustomerProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> createCustomer(Map<String, dynamic> customerData) async {
+  Future<Customer?> createCustomer(Map<String, dynamic> customerData) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -89,17 +131,61 @@ class CustomerProvider with ChangeNotifier {
         _customers.insert(0, newCustomer);
         _isLoading = false;
         notifyListeners();
-        return true;
+        return newCustomer;
       } else {
         final errorData = json.decode(response.body);
         _error = errorData['error'] ?? 'فشل إنشاء العميل';
         _isLoading = false;
         notifyListeners();
-        return false;
+        return null;
       }
     } catch (e) {
       _error = 'حدث خطأ في الاتصال بالسيرفر';
       _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> uploadCustomerDocuments(
+    String customerId,
+    List<CustomerDocumentUpload> documents,
+  ) async {
+    if (documents.isEmpty) return true;
+
+    final uri = Uri.parse(
+      '${ApiEndpoints.baseUrl}${ApiEndpoints.customerDocuments(customerId)}',
+    );
+    final request = http.MultipartRequest('POST', uri);
+    request.headers.addAll(ApiService.headers);
+
+    for (final document in documents) {
+      if (!document.file.existsSync()) continue;
+
+      final multipartFile = await http.MultipartFile.fromPath(
+        document.docType,
+        document.file.path,
+        filename: document.fileName,
+      );
+      request.files.add(multipartFile);
+    }
+
+    try {
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      final responseBody = response.body.isNotEmpty
+          ? json.decode(response.body) as Map<String, dynamic>?
+          : null;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return true;
+      }
+
+      _error = responseBody?['error'] ?? 'فشل رفع المستندات';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = e.toString();
       notifyListeners();
       return false;
     }
@@ -177,6 +263,45 @@ class CustomerProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> deleteCustomer(String id) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.delete(
+        Uri.parse('${ApiEndpoints.baseUrl}/customers/$id'),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        // إزالة العميل من القائمة
+        _customers.removeWhere((c) => c.id == id);
+        _filteredCustomers.removeWhere((c) => c.id == id);
+
+        // لو العميل المحذوف هو المختار حاليًا
+        if (_selectedCustomer?.id == id) {
+          _selectedCustomer = null;
+        }
+
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        final data = json.decode(response.body);
+        _error = data['error'] ?? 'فشل حذف العميل';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<List<Customer>> searchCustomersAutoComplete(String query) async {
     try {
       final response = await http.get(
@@ -203,4 +328,16 @@ class CustomerProvider with ChangeNotifier {
     _selectedCustomer = null;
     notifyListeners();
   }
+}
+
+class CustomerDocumentUpload {
+  final String docType;
+  final String fileName;
+  final File file;
+
+  CustomerDocumentUpload({
+    required this.docType,
+    required this.fileName,
+    required this.file,
+  });
 }

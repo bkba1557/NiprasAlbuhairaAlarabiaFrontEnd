@@ -1120,7 +1120,7 @@ class _UserReportScreenState extends State<UserReportScreen> {
         return AppColors.primaryBlue;
       case 'manager':
         return AppColors.secondaryTeal;
-      case 'employee':
+      case 'maintenance':
         return AppColors.successGreen;
       case 'viewer':
         return AppColors.warningOrange;
@@ -1137,8 +1137,8 @@ class _UserReportScreenState extends State<UserReportScreen> {
         return 'مدير';
       case 'manager':
         return 'مشرف';
-      case 'employee':
-        return 'موظف';
+      case 'maintenance':
+        return 'فني صيانة';
       case 'viewer':
         return 'مشاهد';
       case 'supervisor':

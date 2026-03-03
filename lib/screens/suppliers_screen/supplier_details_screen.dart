@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:order_tracker/models/supplier_model.dart';
 import 'package:order_tracker/providers/supplier_provider.dart';
+import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/widgets/attachment_item.dart';
 import 'package:provider/provider.dart';
@@ -8,8 +9,13 @@ import 'package:intl/intl.dart';
 
 class SupplierDetailsScreen extends StatefulWidget {
   final String supplierId;
+  final Supplier? supplier;
 
-  const SupplierDetailsScreen({super.key, required this.supplierId});
+  const SupplierDetailsScreen({
+    super.key,
+    required this.supplierId,
+    this.supplier,
+  });
 
   @override
   State<SupplierDetailsScreen> createState() => _SupplierDetailsScreenState();
@@ -17,6 +23,8 @@ class SupplierDetailsScreen extends StatefulWidget {
 
 class _SupplierDetailsScreenState extends State<SupplierDetailsScreen> {
   int _selectedTab = 0;
+  String get _effectiveSupplierId =>
+      widget.supplier?.id ?? widget.supplierId;
 
   @override
   void initState() {
@@ -27,16 +35,19 @@ class _SupplierDetailsScreenState extends State<SupplierDetailsScreen> {
   }
 
   Future<void> _loadSupplierDetails() async {
+    if (_effectiveSupplierId.isEmpty) {
+      return;
+    }
     await Provider.of<SupplierProvider>(
       context,
       listen: false,
-    ).fetchSupplierById(widget.supplierId);
+    ).fetchSupplierById(_effectiveSupplierId);
   }
 
   @override
   Widget build(BuildContext context) {
     final supplierProvider = Provider.of<SupplierProvider>(context);
-    final supplier = supplierProvider.selectedSupplier;
+    final supplier = supplierProvider.selectedSupplier ?? widget.supplier;
 
     if (supplierProvider.isLoading && supplier == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -59,7 +70,7 @@ class _SupplierDetailsScreenState extends State<SupplierDetailsScreen> {
               onPressed: () {
                 Navigator.pushNamed(
                   context,
-                  '/supplier/form',
+                  AppRoutes.supplierForm,
                   arguments: supplier,
                 );
               },

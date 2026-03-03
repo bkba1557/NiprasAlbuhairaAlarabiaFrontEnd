@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:order_tracker/models/models.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/notification_provider.dart';
+import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:provider/provider.dart';
 
@@ -12,11 +14,27 @@ class MainDrawer extends StatelessWidget {
     final authProvider = Provider.of<AuthProvider>(context);
     final notificationProvider = Provider.of<NotificationProvider>(context);
     final user = authProvider.user;
+    bool hasPermission(String key) => user?.hasPermission(key) ?? false;
+    final hasOrderCreation =
+        user?.hasAnyPermission([
+          'orders_create_customer',
+          'orders_create_supplier',
+        ]) ??
+        false;
+    final canAccessStationMaintenance = [
+      'owner',
+      'admin',
+      'manager',
+      'supervisor',
+      'maintenance',
+      'maintenance_car_management',
+      'maintenance_technician',
+      'Maintenance_Technician',
+    ].contains(user?.role);
 
     return Drawer(
       child: Column(
         children: [
-          // Drawer Header
           Container(
             height: 200,
             decoration: BoxDecoration(gradient: AppColors.primaryGradient),
@@ -58,11 +76,20 @@ class MainDrawer extends StatelessWidget {
               ],
             ),
           ),
-          // Drawer Items
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
+                ListTile(
+                  leading: const Icon(Icons.warehouse_outlined),
+                  title: const Text('المخزون'),
+                  onTap: () {
+                    Navigator.popAndPushNamed(
+                      context,
+                      AppRoutes.inventoryDashboard,
+                    );
+                  },
+                ),
                 ListTile(
                   leading: const Icon(Icons.dashboard_outlined),
                   title: const Text('لوحة التحكم'),
@@ -70,54 +97,87 @@ class MainDrawer extends StatelessWidget {
                     Navigator.popAndPushNamed(context, '/dashboard');
                   },
                 ),
-
-                ListTile(
-                  leading: const Icon(Icons.inventory_2_outlined),
-                  title: const Text('الطلبات'),
-                  trailing: Badge.count(
-                    count: 0, // TODO: Add notification count
-                    textColor: Colors.white,
-                    backgroundColor: AppColors.primaryBlue,
+                if (hasPermission('orders_view'))
+                  ListTile(
+                    leading: const Icon(Icons.inventory_2_outlined),
+                    title: const Text('الطلبات'),
+                    trailing: Badge.count(
+                      count: 0,
+                      textColor: Colors.white,
+                      backgroundColor: AppColors.primaryBlue,
+                    ),
+                    onTap: () {
+                      Navigator.popAndPushNamed(context, '/orders');
+                    },
                   ),
-                  onTap: () {
-                    Navigator.popAndPushNamed(context, '/orders');
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.people_outline),
-                  title: const Text('العملاء'),
-                  onTap: () {
-                    Navigator.popAndPushNamed(context, '/customers');
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.group_outlined),
-                  title: const Text('الموردين'),
-                  onTap: () {
-                    Navigator.popAndPushNamed(context, '/suppliers');
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.directions_car_outlined),
-                  title: const Text('السائقين'),
-                  onTap: () {
-                    Navigator.popAndPushNamed(context, '/drivers');
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.add_circle_outline),
-                  title: const Text('طلب جديد'),
-                  onTap: () {
-                    Navigator.popAndPushNamed(context, '/order/form');
-                  },
-                ),
+                if (hasPermission('customers_view'))
+                  ListTile(
+                    leading: const Icon(Icons.people_outline),
+                    title: const Text('العملاء'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(context, '/customers');
+                    },
+                  ),
+                if (hasPermission('suppliers_view'))
+                  ListTile(
+                    leading: const Icon(Icons.group_outlined),
+                    title: const Text('الموردين'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(context, '/suppliers');
+                    },
+                  ),
+                if (hasPermission('drivers_view'))
+                  ListTile(
+                    leading: const Icon(Icons.directions_car_outlined),
+                    title: const Text('السائقين'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(context, '/drivers');
+                    },
+                  ),
+                if (hasOrderCreation)
+                  ListTile(
+                    leading: const Icon(Icons.add_circle_outline),
+                    title: const Text('طلب جديد'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(context, '/order/form');
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.history_outlined),
-                  title: const Text('سجل الحركات'),
+                  title: const Text('الأنشطة'),
                   onTap: () {
                     Navigator.popAndPushNamed(context, '/activities');
                   },
                 ),
+                ListTile(
+                  leading: const Icon(Icons.task_alt),
+                  title: const Text('المهام'),
+                  onTap: () {
+                    Navigator.popAndPushNamed(context, AppRoutes.tasks);
+                  },
+                ),
+                if (canAccessStationMaintenance)
+                  ListTile(
+                    leading: const Icon(Icons.home_repair_service_outlined),
+                    title: const Text('تطوير وصيانة المحطات'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(
+                        context,
+                        AppRoutes.stationMaintenanceDashboard,
+                      );
+                    },
+                  ),
+                if (user?.role == 'owner' || user?.role == 'admin')
+                  ListTile(
+                    leading: const Icon(Icons.description_outlined),
+                    title: const Text('إدارة العقود'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(
+                        context,
+                        AppRoutes.contractsManagement,
+                      );
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.notifications_outlined),
                   title: const Text('الإشعارات'),
@@ -140,24 +200,25 @@ class MainDrawer extends StatelessWidget {
                     Navigator.popAndPushNamed(context, '/profile');
                   },
                 ),
-                ListTile(
-                  leading: const Icon(Icons.settings_outlined),
-                  title: const Text('الإعدادات'),
-                  onTap: () {
-                    Navigator.popAndPushNamed(context, '/settings');
-                  },
-                ),
+                if (hasPermission('settings_access'))
+                  ListTile(
+                    leading: const Icon(Icons.settings_outlined),
+                    title: const Text('الإعدادات'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(context, '/settings');
+                    },
+                  ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.help_outline),
-                  title: const Text('المساعدة'),
+                  title: const Text('مساعدة'),
                   onTap: () {
                     // TODO: Help page
                   },
                 ),
                 ListTile(
                   leading: const Icon(Icons.info_outline),
-                  title: const Text('حول التطبيق'),
+                  title: const Text('حول'),
                   onTap: () {
                     // TODO: About page
                   },
@@ -166,15 +227,15 @@ class MainDrawer extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.logout, color: Colors.red),
                   title: const Text(
-                    'تسجيل الخروج',
+                    'تسجيل خروج',
                     style: TextStyle(color: Colors.red),
                   ),
                   onTap: () {
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('تسجيل الخروج'),
-                        content: const Text('هل أنت متأكد من تسجيل الخروج؟'),
+                        title: const Text('تأكيد الخروج'),
+                        content: const Text('هل تريد تسجيل الخروج فعلاً؟'),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
@@ -186,14 +247,14 @@ class MainDrawer extends StatelessWidget {
                               await authProvider.logout();
                               Navigator.pushNamedAndRemoveUntil(
                                 context,
-                                '/login',
+                                AppRoutes.front,
                                 (route) => false,
                               );
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
                             ),
-                            child: const Text('تسجيل الخروج'),
+                            child: const Text('تسجيل خروج'),
                           ),
                         ],
                       ),

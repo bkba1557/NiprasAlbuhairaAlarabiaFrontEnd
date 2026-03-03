@@ -50,7 +50,7 @@ class DriverItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with actions
+              // ================= Header =================
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,7 +68,7 @@ class DriverItem extends StatelessWidget {
                                 color: Colors.blue.withOpacity(0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(
+                              child: const Icon(
                                 Icons.directions_car,
                                 size: 20,
                                 color: Colors.blue,
@@ -96,7 +96,7 @@ class DriverItem extends StatelessWidget {
                             children: [
                               Row(
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     Icons.card_membership,
                                     size: 16,
                                     color: Colors.grey,
@@ -104,7 +104,7 @@ class DriverItem extends StatelessWidget {
                                   const SizedBox(width: 8),
                                   Text(
                                     driver.licenseNumber,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: Colors.grey,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -115,7 +115,7 @@ class DriverItem extends StatelessWidget {
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Row(
                                   children: [
-                                    Icon(
+                                    const Icon(
                                       Icons.phone,
                                       size: 16,
                                       color: Colors.grey,
@@ -123,7 +123,9 @@ class DriverItem extends StatelessWidget {
                                     const SizedBox(width: 8),
                                     Text(
                                       driver.phone,
-                                      style: TextStyle(color: Colors.grey),
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -135,37 +137,56 @@ class DriverItem extends StatelessWidget {
                     ),
                   ),
 
-                  // Status and actions
+                  // ================= Status + Actions =================
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      // Status badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(
-                            driver.status,
-                          ).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: _getStatusColor(driver.status),
+                      Row(
+                        children: [
+                          // Status badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getStatusColor(
+                                driver.status,
+                              ).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: _getStatusColor(driver.status),
+                              ),
+                            ),
+                            child: Text(
+                              driver.status,
+                              style: TextStyle(
+                                color: _getStatusColor(driver.status),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          driver.status,
-                          style: TextStyle(
-                            color: _getStatusColor(driver.status),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+
+                          // 🗑 Delete button
+                          if (onDelete != null) ...[
+                            const SizedBox(width: 6),
+                            IconButton(
+                              tooltip: 'حذف السائق',
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                                size: 20,
+                              ),
+                              onPressed: onDelete,
+                            ),
+                          ],
+                        ],
                       ),
+
                       const SizedBox(height: 8),
 
-                      // Vehicle info
+                      // Vehicle number
                       if (driver.vehicleNumber != null &&
                           driver.vehicleNumber!.isNotEmpty)
                         Container(
@@ -179,7 +200,7 @@ class DriverItem extends StatelessWidget {
                           ),
                           child: Text(
                             driver.vehicleNumber!,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.blue,
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
@@ -191,7 +212,7 @@ class DriverItem extends StatelessWidget {
                 ],
               ),
 
-              // Additional info
+              // ================= Additional info =================
               Padding(
                 padding: const EdgeInsets.only(top: 16, left: 40),
                 child: Column(
@@ -202,11 +223,15 @@ class DriverItem extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Row(
                           children: [
-                            Icon(Icons.category, size: 16, color: Colors.grey),
+                            const Icon(
+                              Icons.category,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               driver.vehicleType,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 13,
                               ),
@@ -220,7 +245,7 @@ class DriverItem extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.calendar_today,
                               size: 16,
                               color: Colors.grey,
@@ -263,12 +288,16 @@ class DriverItem extends StatelessWidget {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.note, size: 16, color: Colors.grey),
+                            const Icon(
+                              Icons.note,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 driver.notes!,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: Colors.grey,
                                   fontSize: 13,
                                 ),
@@ -283,22 +312,29 @@ class DriverItem extends StatelessWidget {
                 ),
               ),
 
-              // Footer with creation info
+              // ================= Footer =================
               Padding(
                 padding: const EdgeInsets.only(top: 16, left: 40),
                 child: Row(
                   children: [
-                    Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                    const Icon(
+                      Icons.calendar_today,
+                      size: 14,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'تم الإنشاء: ${DateFormat('yyyy/MM/dd').format(driver.createdAt)}',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                     const Spacer(),
                     if (driver.createdByName != null)
                       Text(
                         'بواسطة: ${driver.createdByName!}',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
                       ),
                   ],
                 ),

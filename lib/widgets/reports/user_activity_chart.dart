@@ -160,7 +160,7 @@ class UserActivityChart extends StatelessWidget {
         return AppColors.primaryBlue;
       case 'manager':
         return AppColors.secondaryTeal;
-      case 'employee':
+      case 'maintenance':
         return AppColors.successGreen;
       case 'viewer':
         return AppColors.warningOrange;

@@ -6,6 +6,8 @@ import 'package:order_tracker/models/models.dart';
 import 'package:order_tracker/models/order_model.dart';
 import 'package:order_tracker/utils/api_service.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:order_tracker/providers/auth_provider.dart';
+import 'package:provider/provider.dart';
 
 class OrderProvider with ChangeNotifier {
   List<Order> _orders = [];
@@ -20,6 +22,13 @@ class OrderProvider with ChangeNotifier {
   int _totalOrders = 0;
   Map<String, Order> _ordersCache = {};
 
+  Map<String, String> _multipartHeaders() {
+    final headers = Map<String, String>.from(ApiService.headers);
+    headers.remove('Content-Type');
+    headers['Accept'] = 'application/json';
+    return headers;
+  }
+
   List<Order> get orders =>
       _filteredOrders.isNotEmpty ? _filteredOrders : _orders;
   Order? get selectedOrder => _selectedOrder;
@@ -31,6 +40,9 @@ class OrderProvider with ChangeNotifier {
   int get totalPages => _totalPages;
   int get totalOrders => _totalOrders;
 
+  // ============================================
+  // 📋 جلب الطلبات مع تحسين الدمج
+  // ============================================
   Future<void> fetchOrders({
     int page = 1,
     Map<String, dynamic>? filters,
@@ -52,6 +64,11 @@ class OrderProvider with ChangeNotifier {
             url += '&$key=$value';
           }
         });
+      }
+
+      // 🔥 إضافة تصفية خاصة للدمج
+      if (filters?['forMerge'] == true) {
+        url += '&mergeStatus=منفصل';
       }
 
       final response = await http.get(
@@ -117,7 +134,8 @@ class OrderProvider with ChangeNotifier {
       if (_filters['supplierName'] != null &&
           _filters['supplierName'].isNotEmpty) {
         matches =
-            matches && order.supplierName.contains(_filters['supplierName']);
+            matches &&
+            (order.supplierName?.contains(_filters['supplierName']) ?? false);
       }
 
       if (_filters['orderNumber'] != null &&
@@ -152,10 +170,26 @@ class OrderProvider with ChangeNotifier {
         matches = matches && order.requestType == _filters['requestType'];
       }
 
+      // 🔥 فلترة خاصة للدمج
+      if (_filters['forMerge'] == true) {
+        // طلبات المورد (منفصلة أو تم التحميل) وطلبات العميل (منفصلة)
+        matches =
+            matches &&
+            (order.mergeStatus == 'منفصل') &&
+            ((order.orderSource == 'مورد' &&
+                    (order.status == 'تم التحميل' ||
+                        order.status == 'جاهز للتحميل')) ||
+                (order.orderSource == 'عميل' &&
+                    order.status == 'في انتظار التخصيص'));
+      }
+
       return matches;
     }).toList();
   }
 
+  // ============================================
+  // 📄 جلب طلب محدد
+  // ============================================
   Future<void> fetchOrderById(String id, {bool silent = false}) async {
     // التحقق من الكاش أولاً
     if (_ordersCache.containsKey(id)) {
@@ -216,6 +250,9 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
+  // ============================================
+  // ✏️ إنشاء طلب جديد
+  // ============================================
   Future<bool> createOrder(
     Order order,
     List<String>? attachmentPaths,
@@ -232,21 +269,27 @@ class OrderProvider with ChangeNotifier {
         Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.orders}'),
       );
 
+      // =========================
       // Headers
+      // =========================
       request.headers.addAll(ApiService.headers);
 
       // =========================
       // الحقول الأساسية
       // =========================
-
-      // 🔴 **الحل: لا ترسل supplier إذا كان فارغاً أو لطلب عميل**
-      if (order.supplierId != null && order.supplierId!.isNotEmpty) {
+      if (order.supplierId?.isNotEmpty == true) {
         request.fields['supplier'] = order.supplierId!;
       }
 
-      request.fields['supplierName'] = order.supplierName;
-      request.fields['requestType'] = order.requestType;
+      if (order.supplierName.isNotEmpty) {
+        request.fields['supplierName'] = order.supplierName;
+      }
 
+      if (order.requestType != null) {
+        request.fields['requestType'] = order.requestType!;
+      }
+
+      request.fields['orderSource'] = order.orderSource;
       request.fields['orderDate'] = order.orderDate.toIso8601String();
       request.fields['loadingDate'] = order.loadingDate.toIso8601String();
       request.fields['loadingTime'] = order.loadingTime;
@@ -254,37 +297,31 @@ class OrderProvider with ChangeNotifier {
       request.fields['arrivalTime'] = order.arrivalTime;
 
       // =========================
-      // 📍 موقع الطلب (الحل هنا 🔥)
+      // 📍 الموقع
       // =========================
-
-      // 🟢 **المدينة والمنطقة** - مطلوبة من الباك إند
       request.fields['city'] = order.city ?? 'غير محدد';
       request.fields['area'] = order.area ?? 'غير محدد';
-
-      // 🟢 **العنوان** - لا يمكن أن يكون null
-      if (order.address != null && order.address!.isNotEmpty) {
-        request.fields['address'] = order.address!;
-      } else {
-        // عنوان افتراضي
-        request.fields['address'] = '${order.city ?? ''} - ${order.area ?? ''}';
-      }
+      request.fields['address'] = order.address?.isNotEmpty == true
+          ? order.address!
+          : '${order.city ?? ''} - ${order.area ?? ''}';
 
       // =========================
-      // رقم طلب المورد (اختياري)
+      // 🔢 رقم طلب المورد (فريد)
       // =========================
       if (order.supplierOrderNumber?.isNotEmpty == true) {
-        request.fields['supplierOrderNumber'] = order.supplierOrderNumber!;
+        request.fields['supplierOrderNumber'] = order.supplierOrderNumber!
+            .trim();
       }
 
       // =========================
-      // العميل (اختياري)
+      // 👤 العميل
       // =========================
       if (customerId?.isNotEmpty == true) {
         request.fields['customer'] = customerId!;
       }
 
       // =========================
-      // السائق (اختياري)
+      // 🚚 السائق
       // =========================
       if (driverId?.isNotEmpty == true) {
         request.fields['driver'] = driverId!;
@@ -303,7 +340,7 @@ class OrderProvider with ChangeNotifier {
       }
 
       // =========================
-      // معلومات الوقود (اختياري)
+      // ⛽ الوقود
       // =========================
       if (order.fuelType?.isNotEmpty == true) {
         request.fields['fuelType'] = order.fuelType!;
@@ -318,14 +355,14 @@ class OrderProvider with ChangeNotifier {
       }
 
       // =========================
-      // ملاحظات (اختياري)
+      // 📝 ملاحظات
       // =========================
       if (order.notes?.isNotEmpty == true) {
         request.fields['notes'] = order.notes!;
       }
 
       // =========================
-      // لوجو الشركة (اختياري)
+      // 🖼️ لوجو الشركة
       // =========================
       if (order.companyLogo?.isNotEmpty == true) {
         try {
@@ -341,7 +378,7 @@ class OrderProvider with ChangeNotifier {
       }
 
       // =========================
-      // المرفقات (اختياري)
+      // 📎 المرفقات
       // =========================
       if (attachmentPaths?.isNotEmpty == true) {
         for (final path in attachmentPaths!) {
@@ -356,56 +393,56 @@ class OrderProvider with ChangeNotifier {
       }
 
       // =========================
-      // DEBUG - للتحقق من البيانات
-      // =========================
-      debugPrint('🔴 DEBUG CREATE ORDER:');
-      debugPrint('📍 CITY => ${request.fields['city']}');
-      debugPrint('📍 AREA => ${request.fields['area']}');
-      debugPrint('📍 ADDRESS => ${request.fields['address']}');
-      debugPrint('🚚 SUPPLIER => ${request.fields['supplier'] ?? "NULL"}');
-      debugPrint('👤 CUSTOMER => ${request.fields['customer'] ?? "NULL"}');
-      debugPrint('📋 REQUEST TYPE => ${order.requestType}');
-
-      // =========================
-      // إرسال الطلب
+      // 🚀 إرسال الطلب
       // =========================
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
+      // =========================
+      // ✅ Success
+      // =========================
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
         final newOrder = Order.fromJson(data['order'] ?? data);
 
-        // إضافة الطلب الجديد للقائمة
         _orders.insert(0, newOrder);
         _ordersCache[newOrder.id] = newOrder;
 
         _isLoading = false;
         notifyListeners();
         return true;
-      } else {
-        final errorData = json.decode(response.body);
-        _error = errorData['error'] ?? 'فشل إنشاء الطلب';
-
-        // عرض الخطأ بالتفصيل
-        debugPrint('❌ ERROR CREATING ORDER:');
-        debugPrint('Status Code: ${response.statusCode}');
-        debugPrint('Response: ${response.body}');
-
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
-    } catch (e) {
-      _error = 'خطأ في الاتصال بالسيرفر: ${e.toString()}';
+
+      // =========================
+      // ❌ Error handling
+      // =========================
+      final errorData = json.decode(response.body);
+
+      if (errorData['error'] != null &&
+          errorData['error'].toString().contains('رقم طلب المورد')) {
+        _error = '❌ رقم طلب المورد مستخدم مسبقًا';
+      } else {
+        _error =
+            errorData['error'] ?? errorData['message'] ?? 'فشل إنشاء الطلب';
+      }
+
+      debugPrint('❌ ERROR CREATING ORDER');
+      debugPrint('Status: ${response.statusCode}');
+      debugPrint('Body: ${response.body}');
+
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e, s) {
       debugPrint('❌ EXCEPTION IN CREATE ORDER: $e');
+      debugPrintStack(stackTrace: s);
+      _error = 'خطأ في الاتصال بالسيرفر';
       _isLoading = false;
       notifyListeners();
       return false;
     }
   }
 
-  // تحديث الطلب مع الحقول المسموح بها فقط (للمستخدمين العاديين)
   Future<bool> updateOrderLimited(
     String id,
     Map<String, dynamic> updates,
@@ -416,49 +453,91 @@ class OrderProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      var request = http.MultipartRequest(
-        'PUT',
-        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.orderById(id)}'),
-      );
-
-      // Add headers
-      request.headers.addAll(ApiService.headers);
-
-      // إضافة الحقول المسموح بها فقط (كما في الباك إند)
-      // الحقول المسموح بها للمستخدمين العاديين
+      // ✅ الحقول المسموح بها (أضفنا customer + location اختياري)
       final allowedUpdates = [
+        'customer',
+        'driver',
         'driverName',
         'driverPhone',
         'vehicleNumber',
         'notes',
+        'supplierNotes',
+        'customerNotes',
+        'internalNotes',
         'actualArrivalTime',
         'loadingDuration',
         'delayReason',
-        'customer',
-        'driver', // حقل السائق الجديد
-        'status', // حالة الطلب
+        'quantity',
+        'unit',
+        'fuelType',
+        'productType',
+        'unitPrice',
+        'totalPrice',
+        'orderDate',
+        'paymentMethod',
+        'paymentStatus',
+        'city',
+        'area',
+        'address',
+        'loadingDate',
+        'loadingTime',
+        'arrivalDate',
+        'arrivalTime',
+        'status',
+        'mergeStatus',
+        'requestType',
+        'driverEarnings',
+        'distance',
+        'deliveryDuration',
       ];
 
+      final filteredUpdates = <String, dynamic>{};
       updates.forEach((key, value) {
-        if (allowedUpdates.contains(key) &&
-            value != null &&
-            value.toString().isNotEmpty) {
-          request.fields[key] = value.toString();
-        }
+        if (!allowedUpdates.contains(key)) return;
+        if (value == null) return;
+        if (value.toString().isEmpty) return;
+        filteredUpdates[key] = value;
       });
 
-      // Add new attachments
-      if (newAttachmentPaths != null && newAttachmentPaths.isNotEmpty) {
-        for (var path in newAttachmentPaths) {
-          request.files.add(
-            await http.MultipartFile.fromPath('attachments', path),
-          );
+      final hasAttachments =
+          newAttachmentPaths != null && newAttachmentPaths.isNotEmpty;
+
+      http.Response response;
+      if (hasAttachments) {
+        final request = http.MultipartRequest(
+          'PUT',
+          Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.orderById(id)}'),
+        );
+
+        request.headers.addAll(_multipartHeaders());
+
+        filteredUpdates.forEach((key, value) {
+          request.fields[key] = value.toString();
+        });
+
+        for (final path in newAttachmentPaths!) {
+          try {
+            request.files.add(
+              await http.MultipartFile.fromPath('attachments', path),
+            );
+          } catch (e) {
+            debugPrint('⚠️ Error adding attachment $path: $e');
+          }
         }
+
+        final streamedResponse = await request.send();
+        response = await http.Response.fromStream(streamedResponse);
+      } else {
+        response = await http.put(
+          Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.orderById(id)}'),
+          headers: ApiService.headers,
+          body: json.encode(filteredUpdates),
+        );
       }
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
+      // =========================
+      // ✅ Success
+      // =========================
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
@@ -477,7 +556,7 @@ class OrderProvider with ChangeNotifier {
           _orders[index] = updatedOrder;
         }
 
-        // Update selected order if it's the same
+        // Update selected order
         if (_selectedOrder?.id == id) {
           _selectedOrder = updatedOrder;
         }
@@ -485,7 +564,7 @@ class OrderProvider with ChangeNotifier {
         // Update cache
         _ordersCache[id] = updatedOrder;
 
-        // تحديث filteredOrders إذا كانت موجودة
+        // Update filteredOrders if exists
         if (_filteredOrders.isNotEmpty) {
           final filteredIndex = _filteredOrders.indexWhere((o) => o.id == id);
           if (filteredIndex != -1) {
@@ -496,16 +575,23 @@ class OrderProvider with ChangeNotifier {
         _isLoading = false;
         notifyListeners();
         return true;
-      } else {
-        final errorData = json.decode(response.body);
-        _error =
-            errorData['error'] ??
-            errorData['message'] ??
-            'فشل تحديث الطلب - الرجاء التحقق من البيانات';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
+
+      // =========================
+      // ❌ Error
+      // =========================
+      final errorData = json.decode(response.body);
+      _error =
+          errorData['error'] ??
+          errorData['message'] ??
+          'فشل تحديث الطلب - الرجاء التحقق من البيانات';
+
+      debugPrint('❌ UPDATE LIMITED FAILED: ${response.statusCode}');
+      debugPrint('❌ BODY: ${response.body}');
+
+      _isLoading = false;
+      notifyListeners();
+      return false;
     } catch (e) {
       _error = 'حدث خطأ في الاتصال بالسيرفر: ${e.toString()}';
       _isLoading = false;
@@ -514,47 +600,85 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
+  // ============================================
+  // 🔗 دمج الطلبات
+  // ============================================
   Future<bool> mergeOrders({
-    required String sourceOrderId,
-    required String targetOrderId,
+    required String supplierOrderId,
+    required String customerOrderId,
+    String? mergedOrderNumber,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final url = Uri.parse('${ApiEndpoints.baseUrl}/orders/merge');
+      final url = Uri.parse(
+        '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}/merge',
+      );
 
       final response = await http.post(
         url,
         headers: ApiService.headers,
         body: jsonEncode({
-          'sourceOrderId': sourceOrderId,
-          'targetOrderId': targetOrderId,
+          'supplierOrderId': supplierOrderId,
+          'customerOrderId': customerOrderId,
+          if (mergedOrderNumber != null) 'mergedOrderNumber': mergedOrderNumber,
         }),
       );
 
-      if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        // تحديث طلب المورد
+        final supplierIndex = _orders.indexWhere(
+          (o) => o.id == supplierOrderId,
+        );
+        if (supplierIndex != -1) {
+          _orders[supplierIndex] = _orders[supplierIndex].copyWith(
+            status: 'تم دمجه مع العميل',
+            mergeStatus: 'مدمج',
+            mergedAt: DateTime.now(),
+          );
+          _ordersCache[supplierOrderId] = _orders[supplierIndex];
+        }
+
+        // تحديث طلب العميل
+        final customerIndex = _orders.indexWhere(
+          (o) => o.id == customerOrderId,
+        );
+        if (customerIndex != -1) {
+          _orders[customerIndex] = _orders[customerIndex].copyWith(
+            status: 'تم دمجه مع المورد',
+            mergeStatus: 'مدمج',
+            mergedAt: DateTime.now(),
+          );
+          _ordersCache[customerOrderId] = _orders[customerIndex];
+        }
+
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        final data = jsonDecode(response.body);
         _error = data['message'] ?? 'فشل في دمج الطلبات';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
     } catch (e) {
-      _error = 'حدث خطأ في الاتصال: ${e.toString()}';
-      _isLoading = false;
-      notifyListeners();
-      return false;
+      _error = 'خطأ في الاتصال بالسيرفر: $e';
     }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 
-  // تحديث حالة الطلب فقط (للإداريين)
-  Future<bool> updateOrderStatus(String id, String status) async {
+  // ============================================
+  // 🔄 تحديث حالة الطلب فقط
+  // ============================================
+  Future<bool> updateOrderStatus(
+    String id,
+    String status, {
+    String? reason,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -565,7 +689,7 @@ class OrderProvider with ChangeNotifier {
           '${ApiEndpoints.baseUrl}${ApiEndpoints.orderById(id)}/status',
         ),
         headers: ApiService.headers,
-        body: json.encode({'status': status}),
+        body: json.encode({'status': status, 'reason': reason}),
       );
 
       if (response.statusCode == 200) {
@@ -623,7 +747,9 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // تحديث الطلب بالكامل (للإداريين فقط)
+  // ============================================
+  // ✏️ تحديث الطلب بالكامل (للإداريين فقط)
+  // ============================================
   Future<bool> updateOrderFull(
     String id,
     Order order,
@@ -641,18 +767,20 @@ class OrderProvider with ChangeNotifier {
         Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.orderById(id)}'),
       );
 
-      // Add headers
-      request.headers.addAll(ApiService.headers);
+      request.headers.addAll(_multipartHeaders());
 
-      // إضافة جميع الحقول
+      // 🔥 الحقول المسموح بها للإداريين فقط
       request.fields['supplierName'] = order.supplierName;
-      request.fields['requestType'] = order.requestType;
+      if (order.requestType != null && order.requestType!.isNotEmpty) {
+        request.fields['requestType'] = order.requestType!;
+      }
       request.fields['orderDate'] = order.orderDate.toIso8601String();
       request.fields['loadingDate'] = order.loadingDate.toIso8601String();
       request.fields['loadingTime'] = order.loadingTime ?? '08:00';
       request.fields['arrivalDate'] = order.arrivalDate.toIso8601String();
       request.fields['arrivalTime'] = order.arrivalTime ?? '10:00';
       request.fields['status'] = order.status;
+      request.fields['orderSource'] = order.orderSource; // 🔥
 
       if (order.supplierOrderNumber != null &&
           order.supplierOrderNumber!.isNotEmpty) {
@@ -667,7 +795,7 @@ class OrderProvider with ChangeNotifier {
         request.fields['driver'] = driverId;
       }
 
-      // معلومات السائق والمركبة (للتوافق مع الحقول القديمة)
+      // معلومات السائق والمركبة
       if (order.driverName != null && order.driverName!.isNotEmpty) {
         request.fields['driverName'] = order.driverName!;
       }
@@ -773,6 +901,9 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
+  // ============================================
+  // 🗑️ حذف الطلب
+  // ============================================
   Future<bool> deleteOrder(String id) async {
     _isLoading = true;
     _error = null;
@@ -814,6 +945,9 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
+  // ============================================
+  // 📎 حذف مرفق
+  // ============================================
   Future<bool> deleteAttachment(String orderId, String attachmentId) async {
     try {
       final response = await http.delete(
@@ -848,6 +982,9 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
+  // ============================================
+  // 📋 جلب النشاطات
+  // ============================================
   Future<void> fetchActivities({String? orderId, bool silent = false}) async {
     if (!silent) {
       _isLoading = true;
@@ -892,7 +1029,9 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // وظائف إضافية
+  // ============================================
+  // ⚡ وظائف سريعة
+  // ============================================
 
   // جلب طلبات اليوم
   Future<List<Order>> fetchTodayOrders() async {
@@ -952,6 +1091,66 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
+  // جلب طلبات المورد للدمج (حتى لو كانت تم التحميل)
+  Future<List<Order>> fetchSupplierOrdersForMerge() async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}/for-merge/supplier',
+        ),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        List<dynamic> ordersData = [];
+        if (data is List) {
+          ordersData = data;
+        } else if (data['orders'] is List) {
+          ordersData = data['orders'];
+        } else if (data['data'] is List) {
+          ordersData = data['data'];
+        }
+
+        return ordersData.map((e) => Order.fromJson(e)).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // جلب طلبات العميل للدمج
+  Future<List<Order>> fetchCustomerOrdersForMerge() async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}/for-merge/customer',
+        ),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        List<dynamic> ordersData = [];
+        if (data is List) {
+          ordersData = data;
+        } else if (data['orders'] is List) {
+          ordersData = data['orders'];
+        } else if (data['data'] is List) {
+          ordersData = data['data'];
+        }
+
+        return ordersData.map((e) => Order.fromJson(e)).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   // إحصائيات الطلبات حسب الحالة
   Future<Map<String, int>> fetchStatusStats() async {
     try {
@@ -987,95 +1186,40 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  Future<List<OrderTimer>> getOrdersWithTimers({
-    Map<String, dynamic>? filters,
-  }) async {
-    try {
-      String url = '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}/with-timers';
-
-      if (filters != null) {
-        filters.forEach((key, value) {
-          if (value != null && value.toString().isNotEmpty) {
-            url += '${url.contains('?') ? '&' : '?'}$key=$value';
-          }
-        });
-      }
-
-      final response = await http.get(
-        Uri.parse(url),
-        headers: ApiService.headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final ordersData = data['orders'] as List<dynamic>;
-
-        return ordersData.map((orderJson) {
-          return OrderTimer(
-            orderId: orderJson['_id'],
-            arrivalDateTime: DateTime.parse(orderJson['arrivalDateTime']),
-            loadingDateTime: DateTime.parse(orderJson['loadingDateTime']),
-            orderNumber: orderJson['orderNumber'],
-            supplierName: orderJson['supplierName'],
-            customerName: orderJson['customer']?['name'],
-            driverName: orderJson['driverName'],
-            status: orderJson['status'],
-          );
-        }).toList();
-      }
-      return [];
-    } catch (e) {
-      print('Error fetching orders with timers: $e');
-      return [];
-    }
-  }
-
-  Future<List<OrderTimer>> getUpcomingOrders() async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-          '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}/upcoming/orders',
-        ),
-        headers: ApiService.headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as List<dynamic>;
-
-        return data.map((orderJson) {
-          return OrderTimer(
-            orderId: orderJson['_id'],
-            arrivalDateTime: DateTime.parse(orderJson['arrivalDateTime']),
-            loadingDateTime: DateTime.parse(orderJson['loadingDateTime']),
-            orderNumber: orderJson['orderNumber'],
-            supplierName: orderJson['supplierName'],
-            customerName: orderJson['customer']?['name'],
-            driverName: orderJson['driverName'],
-            status: orderJson['status'],
-          );
-        }).toList();
-      }
-      return [];
-    } catch (e) {
-      print('Error fetching upcoming orders: $e');
-      return [];
-    }
-  }
-
   Future<void> markOrderAsCompleted(String orderId) async {
     try {
+      final index = _orders.indexWhere((o) => o.id == orderId);
+      if (index == -1) return;
+
+      final oldOrder = _orders[index];
+
       // =========================
-      // 1️⃣ تحديث السيرفر
+      // 🧠 تحديد الحالة الصحيحة
+      // =========================
+      final bool isMergedOrder = oldOrder.orderSource == 'مدمج';
+
+      final String newStatus = isMergedOrder ? 'تم التنفيذ' : 'تم التحميل';
+
+      final Map<String, dynamic> body = {'status': newStatus};
+
+      // وقت التحميل فقط للطلبات غير المدمجة
+      if (!isMergedOrder) {
+        body['loadingCompletedAt'] = DateTime.now().toIso8601String();
+      }
+
+      // =========================
+      // 🌐 استدعاء API
       // =========================
       final response = await http.patch(
         Uri.parse(
           '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}/$orderId/status',
         ),
-        headers: {...ApiService.headers, 'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'status': 'تم التحميل',
-          'loadingCompletedAt': DateTime.now().toIso8601String(),
-        }),
+        headers: {
+          ...ApiService.headers,
+          'Content-Type': 'application/json',
+          'x-system-auto': 'true', // ⭐ مهم للباك
+        },
+        body: jsonEncode(body),
       );
 
       if (response.statusCode != 200) {
@@ -1087,51 +1231,21 @@ class OrderProvider with ChangeNotifier {
       }
 
       // =========================
-      // 2️⃣ تحديث محلي (Immutable)
+      // 🧾 تحديث الطلب محليًا
       // =========================
-      final index = _orders.indexWhere((o) => o.id == orderId);
-      if (index == -1) return;
-
-      final oldOrder = _orders[index];
-
-      _orders[index] = Order(
-        id: oldOrder.id,
-        orderDate: oldOrder.orderDate,
-        supplierName: oldOrder.supplierName,
-        requestType: oldOrder.requestType,
-        orderNumber: oldOrder.orderNumber,
-        supplierOrderNumber: oldOrder.supplierOrderNumber,
-        loadingDate: oldOrder.loadingDate,
-        loadingTime: oldOrder.loadingTime,
-        arrivalDate: oldOrder.arrivalDate,
-        arrivalTime: oldOrder.arrivalTime,
-        status: 'تم التحميل', // ✅
-        driverId: oldOrder.driverId,
-        driverName: oldOrder.driverName,
-        driverPhone: oldOrder.driverPhone,
-        vehicleNumber: oldOrder.vehicleNumber,
-        fuelType: oldOrder.fuelType,
-        quantity: oldOrder.quantity,
-        unit: oldOrder.unit,
-        notes: oldOrder.notes,
-        companyLogo: oldOrder.companyLogo,
-        attachments: oldOrder.attachments,
-        createdById: oldOrder.createdById,
-        createdByName: oldOrder.createdByName,
-        customer: oldOrder.customer,
-        notificationSentAt: oldOrder.notificationSentAt,
-        arrivalNotificationSentAt: oldOrder.arrivalNotificationSentAt,
-        loadingCompletedAt: DateTime.now(), // ✅
-        actualArrivalTime: oldOrder.actualArrivalTime,
-        loadingDuration: oldOrder.loadingDuration,
-        delayReason: oldOrder.delayReason,
-        createdAt: oldOrder.createdAt,
+      _orders[index] = oldOrder.copyWith(
+        status: newStatus,
+        loadingCompletedAt: isMergedOrder
+            ? oldOrder.loadingCompletedAt
+            : DateTime.now(),
         updatedAt: DateTime.now(),
+        mergeStatus: isMergedOrder ? 'مكتمل' : oldOrder.mergeStatus,
       );
 
       notifyListeners();
-    } catch (e) {
+    } catch (e, s) {
       debugPrint('❌ Auto complete order failed: $e');
+      debugPrintStack(stackTrace: s);
     }
   }
 
@@ -1173,21 +1287,19 @@ class OrderProvider with ChangeNotifier {
     return null;
   }
 
-  // تحديث طلب محلياً (للاستخدام المؤقت)
+  // تحديث طلب محلياً
   void updateOrderLocally(Order order) {
     final index = _orders.indexWhere((o) => o.id == order.id);
     if (index != -1) {
       _orders[index] = order;
     }
 
-    // تحديث الكاش
     _ordersCache[order.id] = order;
 
     if (_selectedOrder?.id == order.id) {
       _selectedOrder = order;
     }
 
-    // تحديث الفلاتر
     if (_filteredOrders.isNotEmpty) {
       final filteredIndex = _filteredOrders.indexWhere((o) => o.id == order.id);
       if (filteredIndex != -1) {
@@ -1230,7 +1342,6 @@ class OrderProvider with ChangeNotifier {
     _ordersCache.clear();
   }
 
-  // طريقة لتحميل طلب معين إذا لم يكن في الكاش
   Future<Order?> loadOrder(String id, {bool silent = false}) async {
     final cachedOrder = getOrderById(id);
     if (cachedOrder != null) {
@@ -1239,5 +1350,70 @@ class OrderProvider with ChangeNotifier {
 
     await fetchOrderById(id, silent: silent);
     return _selectedOrder;
+  }
+
+  // 🔥 جلب الطلبات القابلة للدمج
+  Future<List<Order>> getOrdersForMerge({String? type}) async {
+    try {
+      String url = '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}/for-merge';
+      if (type != null) {
+        url += '?type=$type';
+      }
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        List<dynamic> ordersData = [];
+        if (data['orders'] is List) {
+          ordersData = data['orders'];
+        } else if (data['data'] is List) {
+          ordersData = data['data'];
+        }
+
+        return ordersData.map((e) => Order.fromJson(e)).toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error fetching orders for merge: $e');
+      return [];
+    }
+  }
+
+  // ============================================
+  // فك دمج الطلبات
+  // ============================================
+  Future<bool> unmergeOrder(String id) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.post(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderById(id)}/unmerge',
+        ),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode == 200) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      final data = json.decode(response.body);
+      _error = data['error'] ?? data['message'] ?? 'فشل فك الدمج';
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 }

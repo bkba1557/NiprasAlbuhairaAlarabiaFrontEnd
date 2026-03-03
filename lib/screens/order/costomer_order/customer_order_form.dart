@@ -41,6 +41,8 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _customerSearchController =
       TextEditingController();
+  final TextEditingController _customerFilterController =
+      TextEditingController();
 
   DateTime _orderDate = DateTime.now();
   DateTime _arrivalDate = DateTime.now().add(const Duration(days: 1));
@@ -66,6 +68,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   Driver? _selectedDriver;
   String? _selectedDriverId;
   List<Driver> _drivers = [];
+  bool get _isEditMode => widget.orderToEdit != null;
 
   // الكميات المقترحة
   final List<String> _suggestedQuantities = [
@@ -84,9 +87,10 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   final List<String> _fuelTypes = ['بنزين 91', 'بنزين 95', 'ديزل', 'كيروسين'];
 
   // حالات الطلب
+  // حالات الطلب
   final List<String> _statuses = [
-    'في انتظار إنشاء طلب العميل',
-    'تم إنشاء الطلب',
+    'في انتظار التخصيص',
+    'تم دمجه مع المورد',
     'جاهز للتسليم',
     'قيد التسليم',
     'تم التسليم',
@@ -109,16 +113,46 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   @override
   void initState() {
     super.initState();
+    _initEditMode();
+  }
 
-    _loadCustomers();
-    _loadDrivers(); // تحميل السائقين عند بدء التشغيل
+  Future<void> _initEditMode() async {
+    await _loadCustomers();
+    await _loadDrivers();
 
     if (widget.orderToEdit != null) {
       _initializeFormWithOrder();
     }
   }
 
+  PreferredSizeWidget _buildDesktopAppBar() {
+    return AppBar(
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new),
+        tooltip: 'رجوع',
+        color: AppColors.primaryBlue,
+        onPressed: () {
+          Navigator.pop(context);
+        },
+      ),
+      title: Text(
+        widget.orderToEdit != null ? 'تعديل طلب العميل' : 'طلب عميل جديد',
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: AppColors.primaryBlue,
+        ),
+      ),
+      centerTitle: true,
+    );
+  }
+
   void _showCustomerPicker() {
+    setState(() {
+      _filteredCustomers = _allCustomers;
+      _customerFilterController.clear();
+    });
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -145,12 +179,30 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
               const Divider(),
 
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: TextField(
+                  controller: _customerFilterController,
+                  onChanged: _filterCustomers,
+                  decoration: InputDecoration(
+                    hintText: 'بحث عن عميل...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+
               // القائمة
               Expanded(
                 child: ListView.builder(
-                  itemCount: _allCustomers.length,
+                  itemCount: _filteredCustomers.length,
                   itemBuilder: (context, index) {
-                    final customer = _allCustomers[index];
+                    final customer = _filteredCustomers[index];
 
                     return ListTile(
                       leading: CircleAvatar(
@@ -159,12 +211,38 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                         ),
                       ),
                       title: Text(customer.name),
-                      subtitle: Text('كود: ${customer.code}'),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('كود: ${customer.code}'),
+                          if (customer.city != null || customer.area != null)
+                            Text(
+                              '${customer.city ?? ''} ${customer.area ?? ''}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.mediumGray,
+                              ),
+                            ),
+                        ],
+                      ),
                       onTap: () {
                         setState(() {
                           _selectedCustomer = customer;
                           _selectedCustomerId = customer.id;
                           _customerSearchController.text = customer.name;
+
+                          // ✅ تعبئة الموقع تلقائيًا من عنوان العميل
+                          if (customer.area != null &&
+                              customer.area!.isNotEmpty &&
+                              customer.city != null &&
+                              customer.city!.isNotEmpty) {
+                            _selectedRegion = customer.area;
+                            _selectedCity = customer.city;
+                          } else {
+                            // ❗ لو العميل ما عندوش عنوان
+                            _selectedRegion = null;
+                            _selectedCity = null;
+                          }
                         });
 
                         Navigator.pop(context);
@@ -185,45 +263,49 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
     _quantityController.text = order.quantity?.toString() ?? '';
     _notesController.text = order.notes ?? '';
+
     _orderDate = order.orderDate;
     _arrivalDate =
         order.arrivalDate ?? DateTime.now().add(const Duration(days: 1));
-    _status = order.status;
-    _fuelType = order.fuelType ?? 'ديزل';
+
+    // ✅ حماية حالة الطلب
+    _status = _statuses.contains(order.status) ? order.status : _statuses.first;
+
+    _fuelType = _fuelTypes.contains(order.fuelType) ? order.fuelType! : 'ديزل';
+
     _unit = order.unit ?? 'لتر';
     _companyLogoPath = order.companyLogo;
+
     _selectedCustomer = order.customer;
     _selectedCustomerId = order.customer?.id;
 
-    // ✅ تحميل نوع العملية (شراء / نقل)
-    _purchaseType = order.requestType.isNotEmpty ? order.requestType : 'شراء';
+    // ✅ حماية نوع العملية
+    _purchaseType = _purchaseTypes.contains(order.requestType)
+        ? order.requestType!
+        : 'شراء';
 
     // الموقع
-    _selectedCity = order.city;
     _selectedRegion = order.area;
+    _selectedCity = order.city;
 
-    // ✅ تحميل بيانات السائق إذا كان نوع العملية "نقل"
+    // ✅ السائق (مع حماية)
     _selectedDriverId = order.driverId;
-    _selectedDriver = order.driverName != null
-        ? Driver(
-            id: order.driverId ?? '',
-            name: order.driverName!,
-            phone: order.driverPhone ?? '',
-            vehicleNumber: order.vehicleNumber,
-            isActive: true,
-            licenseNumber: '',
-            vehicleType: '',
-            status: '',
-            createdById: '',
-            createdByName: '',
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          )
-        : null;
+    _selectedDriver = null;
+
+    if (_purchaseType == 'نقل' && order.driverId != null) {
+      final exists = _drivers.any((d) => d.id == order.driverId);
+      if (exists) {
+        _selectedDriver = _drivers.firstWhere((d) => d.id == order.driverId);
+      } else {
+        _selectedDriverId = null;
+      }
+    }
 
     if (_selectedCustomer != null) {
       _customerSearchController.text = _selectedCustomer!.name;
     }
+
+    setState(() {});
   }
 
   Future<void> _loadCustomers() async {
@@ -233,7 +315,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
         listen: false,
       );
 
-      await customerProvider.fetchCustomers();
+      await customerProvider.fetchCustomers(fetchAll: true);
 
       final activeCustomers = customerProvider.customers
           .where((c) => c.isActive)
@@ -246,6 +328,24 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     } catch (e) {
       debugPrint('Error loading customers: $e');
     }
+  }
+
+  void _filterCustomers(String query) {
+    final value = query.trim().toLowerCase();
+    setState(() {
+      if (value.isEmpty) {
+        _filteredCustomers = _allCustomers;
+      } else {
+        _filteredCustomers = _allCustomers.where((customer) {
+          final name = customer.name.toLowerCase();
+          final code = customer.code.toLowerCase();
+          final phone = customer.phone?.toLowerCase() ?? '';
+          return name.contains(value) ||
+              code.contains(value) ||
+              phone.contains(value);
+        }).toList();
+      }
+    });
   }
 
   Future<void> _loadDrivers() async {
@@ -309,165 +409,165 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     }
   }
 
-  void _showRegionPicker(BuildContext context) {
-    final regions = saudiCities.keys.toList();
+  // void _showRegionPicker(BuildContext context) {
+  //   final regions = saudiCities.keys.toList();
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SizedBox(
-          height: MediaQuery.of(context).size.height * 0.5,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'اختر المنطقة',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryBlue,
-                  ),
-                ),
-              ),
-              const Divider(),
+  //   showModalBottomSheet(
+  //     context: context,
+  //     isScrollControlled: true,
+  //     shape: const RoundedRectangleBorder(
+  //       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  //     ),
+  //     builder: (context) {
+  //       return SizedBox(
+  //         height: MediaQuery.of(context).size.height * 0.5,
+  //         child: Column(
+  //           children: [
+  //             Padding(
+  //               padding: const EdgeInsets.all(16),
+  //               child: Text(
+  //                 'اختر المنطقة',
+  //                 style: TextStyle(
+  //                   fontSize: 18,
+  //                   fontWeight: FontWeight.bold,
+  //                   color: AppColors.primaryBlue,
+  //                 ),
+  //               ),
+  //             ),
+  //             const Divider(),
 
-              // حقل البحث
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'ابحث عن منطقة...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    // يمكن إضافة وظيفة البحث هنا إذا لزم
-                  },
-                ),
-              ),
+  //             // حقل البحث
+  //             Padding(
+  //               padding: const EdgeInsets.all(16),
+  //               child: TextField(
+  //                 decoration: InputDecoration(
+  //                   hintText: 'ابحث عن منطقة...',
+  //                   prefixIcon: const Icon(Icons.search),
+  //                   border: OutlineInputBorder(
+  //                     borderRadius: BorderRadius.circular(12),
+  //                   ),
+  //                 ),
+  //                 onChanged: (value) {
+  //                   // يمكن إضافة وظيفة البحث هنا إذا لزم
+  //                 },
+  //               ),
+  //             ),
 
-              // قائمة المناطق
-              Expanded(
-                child: ListView.builder(
-                  itemCount: regions.length,
-                  itemBuilder: (context, index) {
-                    final region = regions[index];
-                    return ListTile(
-                      leading: Icon(
-                        Icons.location_on,
-                        color: _selectedRegion == region
-                            ? AppColors.primaryBlue
-                            : AppColors.mediumGray,
-                      ),
-                      title: Text(region),
-                      trailing: _selectedRegion == region
-                          ? Icon(Icons.check, color: AppColors.primaryBlue)
-                          : null,
-                      onTap: () {
-                        setState(() {
-                          _selectedRegion = region;
-                          _selectedCity =
-                              null; // إعادة تعيين المدينة عند تغيير المنطقة
-                        });
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  //             // قائمة المناطق
+  //             Expanded(
+  //               child: ListView.builder(
+  //                 itemCount: regions.length,
+  //                 itemBuilder: (context, index) {
+  //                   final region = regions[index];
+  //                   return ListTile(
+  //                     leading: Icon(
+  //                       Icons.location_on,
+  //                       color: _selectedRegion == region
+  //                           ? AppColors.primaryBlue
+  //                           : AppColors.mediumGray,
+  //                     ),
+  //                     title: Text(region),
+  //                     trailing: _selectedRegion == region
+  //                         ? Icon(Icons.check, color: AppColors.primaryBlue)
+  //                         : null,
+  //                     onTap: () {
+  //                       setState(() {
+  //                         _selectedRegion = region;
+  //                         _selectedCity =
+  //                             null; // إعادة تعيين المدينة عند تغيير المنطقة
+  //                       });
+  //                       Navigator.pop(context);
+  //                     },
+  //                   );
+  //                 },
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
 
-  void _showCityPicker(BuildContext context) {
-    if (_selectedRegion == null) return;
+  // void _showCityPicker(BuildContext context) {
+  //   if (_selectedRegion == null) return;
 
-    final cities = saudiCities[_selectedRegion] ?? [];
+  //   final cities = saudiCities[_selectedRegion] ?? [];
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SizedBox(
-          height: MediaQuery.of(context).size.height * 0.5,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'اختر المدينة',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryBlue,
-                  ),
-                ),
-              ),
-              const Divider(),
+  //   showModalBottomSheet(
+  //     context: context,
+  //     isScrollControlled: true,
+  //     shape: const RoundedRectangleBorder(
+  //       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  //     ),
+  //     builder: (context) {
+  //       return SizedBox(
+  //         height: MediaQuery.of(context).size.height * 0.5,
+  //         child: Column(
+  //           children: [
+  //             Padding(
+  //               padding: const EdgeInsets.all(16),
+  //               child: Text(
+  //                 'اختر المدينة',
+  //                 style: TextStyle(
+  //                   fontSize: 18,
+  //                   fontWeight: FontWeight.bold,
+  //                   color: AppColors.primaryBlue,
+  //                 ),
+  //               ),
+  //             ),
+  //             const Divider(),
 
-              // حقل البحث
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'ابحث عن مدينة...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    // يمكن إضافة وظيفة البحث هنا
-                  },
-                ),
-              ),
+  //             // حقل البحث
+  //             Padding(
+  //               padding: const EdgeInsets.all(16),
+  //               child: TextField(
+  //                 decoration: InputDecoration(
+  //                   hintText: 'ابحث عن مدينة...',
+  //                   prefixIcon: const Icon(Icons.search),
+  //                   border: OutlineInputBorder(
+  //                     borderRadius: BorderRadius.circular(12),
+  //                   ),
+  //                 ),
+  //                 onChanged: (value) {
+  //                   // يمكن إضافة وظيفة البحث هنا
+  //                 },
+  //               ),
+  //             ),
 
-              // قائمة المدن
-              Expanded(
-                child: ListView.builder(
-                  itemCount: cities.length,
-                  itemBuilder: (context, index) {
-                    final city = cities[index];
-                    return ListTile(
-                      leading: Icon(
-                        Icons.location_city,
-                        color: _selectedCity == city
-                            ? AppColors.primaryBlue
-                            : AppColors.mediumGray,
-                      ),
-                      title: Text(city),
-                      trailing: _selectedCity == city
-                          ? Icon(Icons.check, color: AppColors.primaryBlue)
-                          : null,
-                      onTap: () {
-                        setState(() {
-                          _selectedCity = city;
-                        });
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  //             // قائمة المدن
+  //             Expanded(
+  //               child: ListView.builder(
+  //                 itemCount: cities.length,
+  //                 itemBuilder: (context, index) {
+  //                   final city = cities[index];
+  //                   return ListTile(
+  //                     leading: Icon(
+  //                       Icons.location_city,
+  //                       color: _selectedCity == city
+  //                           ? AppColors.primaryBlue
+  //                           : AppColors.mediumGray,
+  //                     ),
+  //                     title: Text(city),
+  //                     trailing: _selectedCity == city
+  //                         ? Icon(Icons.check, color: AppColors.primaryBlue)
+  //                         : null,
+  //                     onTap: () {
+  //                       setState(() {
+  //                         _selectedCity = city;
+  //                       });
+  //                       Navigator.pop(context);
+  //                     },
+  //                   );
+  //                 },
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
 
   Future<void> _pickAttachments() async {
     final result = await FilePicker.platform.pickFiles(
@@ -489,10 +589,12 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     });
   }
 
-  Future<void> _submitForm() async {
+Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // التحقق من اختيار العميل
+    // ===============================
+    // ✅ التحقق من اختيار العميل فقط
+    // ===============================
     if (_selectedCustomer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -503,18 +605,28 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
       return;
     }
 
-    // التحقق من المنطقة والمدينة
-    if (_selectedRegion == null || _selectedCity == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يرجى اختيار المنطقة والمدينة'),
-          backgroundColor: AppColors.errorRed,
-        ),
-      );
-      return;
-    }
+    // ===============================
+    // ✅ تحديد الموقع بدون أي شرط إجباري
+    // ===============================
+    final String? finalArea = _selectedCustomer!.area?.isNotEmpty == true
+        ? _selectedCustomer!.area
+        : _selectedRegion;
 
-    // ✅ التحقق من اختيار السائق إذا كان النوع "نقل"
+    final String? finalCity = _selectedCustomer!.city?.isNotEmpty == true
+        ? _selectedCustomer!.city
+        : _selectedCity;
+
+    final String customerAddress =
+        _selectedCustomer!.address?.isNotEmpty == true
+        ? _selectedCustomer!.address!
+        : [
+            if (finalCity != null) finalCity,
+            if (finalArea != null) finalArea,
+          ].join(' - ');
+
+    // ===============================
+    // ✅ التحقق من السائق فقط لو "نقل"
+    // ===============================
     if (_purchaseType == 'نقل' && _selectedDriverId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -528,25 +640,14 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    // إنشاء عنوان العميل (إجباري)
-    String customerAddress;
-    if (_selectedCustomer?.address != null &&
-        _selectedCustomer!.address!.isNotEmpty) {
-      customerAddress = _selectedCustomer!.address!;
-    } else {
-      customerAddress = '$_selectedCity - $_selectedRegion';
-    }
-
-    // إنشاء كائن الطلب
+    // ===============================
+    // ✅ إنشاء الطلب (الموقع اختياري)
+    // ===============================
     final order = Order(
       id: widget.orderToEdit?.id ?? '',
       orderDate: _orderDate,
 
-      // =========================
-      // نوع الطلب (شراء / نقل)
-      // =========================
       requestType: _purchaseType,
-
       supplierName: 'طلب عميل',
       orderNumber: widget.orderToEdit?.orderNumber ?? '',
       supplierOrderNumber: null,
@@ -558,19 +659,12 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
       status: _status,
 
-      // بيانات الموقع (مهمة – لا ترسل null)
-      area: _selectedRegion,
-      city: _selectedCity,
-      address: customerAddress,
+      // 📍 الموقع (بدون إجبار)
+      area: finalArea,
+      city: finalCity,
+      address: customerAddress.isNotEmpty ? customerAddress : null,
 
-      // بيانات المورد (غير مستخدمة هنا)
-      supplierId: null,
-      isSupplierOrder: false,
-      supplierContactPerson: null,
-      supplierPhone: null,
-      supplierCompany: null,
-
-      // ✅ بيانات السائق (تظهر فقط إذا كان النوع "نقل")
+      // 🚚 السائق
       driverId: _purchaseType == 'نقل' ? _selectedDriverId : null,
       driverName: _purchaseType == 'نقل' ? _selectedDriver?.name : null,
       driverPhone: _purchaseType == 'نقل' ? _selectedDriver?.phone : null,
@@ -578,14 +672,14 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
           ? _selectedDriver?.vehicleNumber
           : null,
 
-      // بيانات الوقود
+      // ⛽ الوقود
       fuelType: _fuelType,
       quantity: _quantityController.text.trim().isNotEmpty
           ? double.tryParse(_quantityController.text.trim())
           : null,
       unit: _unit,
 
-      // ملاحظات
+      // 📝 ملاحظات
       notes: _notesController.text.trim().isNotEmpty
           ? _notesController.text.trim()
           : null,
@@ -593,36 +687,30 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
       companyLogo: _companyLogoPath,
       attachments: [],
 
-      // بيانات الإنشاء
       createdById: authProvider.user?.id ?? '',
       createdByName: authProvider.user?.name,
       customer: _selectedCustomer,
 
-      // الحقول الزمنية
-      notificationSentAt: null,
-      arrivalNotificationSentAt: null,
-      loadingCompletedAt: null,
-      actualArrivalTime: null,
-      loadingDuration: null,
-      delayReason: null,
-
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
+      orderSource: '',
+      mergeStatus: '',
     );
 
-    bool success;
+    bool success = false;
 
+    // ===============================
+    // ✅ تحديث أو إنشاء
+    // ===============================
     if (widget.orderToEdit != null) {
-      // تحديث طلب
-      success = await orderProvider.updateOrderFull(
+      final updates = order.toJson();
+
+      success = await orderProvider.updateOrderLimited(
         widget.orderToEdit!.id,
-        order,
+        updates,
         _newAttachmentPaths,
-        _selectedCustomerId,
-        _purchaseType == 'نقل' ? _selectedDriverId : null,
       );
     } else {
-      // إنشاء طلب جديد
       success = await orderProvider.createOrder(
         order,
         _newAttachmentPaths,
@@ -631,6 +719,9 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
       );
     }
 
+    // ===============================
+    // ✅ النتيجة
+    // ===============================
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -643,19 +734,12 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
         ),
       );
 
-      // تحديث الحالة للطلب الجديد فقط
-      if (widget.orderToEdit == null) {
-        setState(() {
-          _status = 'تم إنشاء الطلب';
-        });
-      }
-
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 300));
       Navigator.pop(context, true);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(orderProvider.error ?? 'حدث خطأ أثناء حفظ طلب العميل'),
+          content: Text(orderProvider.error ?? 'حدث خطأ أثناء حفظ الطلب'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -692,7 +776,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     );
   }
 
-  Widget _buildLocationField({
+Widget _buildLocationField({
     required String label,
     required String? value,
     required IconData icon,
@@ -741,7 +825,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    value ?? 'اختر $label',
+                    value ?? 'غير متوفر',
                     style: TextStyle(
                       fontSize: isDesktop ? 16 : 14,
                       color: value == null
@@ -766,6 +850,8 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
       ),
     );
   }
+
+
 
   String _formatFileSize(String path) {
     try {
@@ -807,7 +893,13 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
               icon: Icons.directions_car,
               color: AppColors.infoBlue,
               child: DropdownButtonFormField<String>(
-                value: _selectedDriverId,
+                value:
+                    (_purchaseType == 'نقل' &&
+                        _selectedDriverId != null &&
+                        _drivers.any((d) => d.id == _selectedDriverId))
+                    ? _selectedDriverId
+                    : null,
+
                 isExpanded: true,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
@@ -819,13 +911,18 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   ),
                 ),
                 hint: const Text('اختر السائق'),
+
                 items: _drivers.map((Driver driver) {
                   return DropdownMenuItem<String>(
                     value: driver.id,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(driver.name),
+                        Text(
+                          driver.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         Text(
                           '${driver.phone} - ${driver.vehicleNumber ?? "لا يوجد"}',
                           style: TextStyle(
@@ -837,16 +934,21 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                     ),
                   );
                 }).toList(),
-                onChanged: (String? value) {
-                  setState(() {
-                    _selectedDriverId = value;
-                    if (value != null) {
-                      _selectedDriver = _drivers.firstWhere(
-                        (d) => d.id == value,
-                      );
-                    }
-                  });
-                },
+
+                onChanged: _purchaseType == 'نقل'
+                    ? (String? value) {
+                        setState(() {
+                          _selectedDriverId = value;
+                          _selectedDriver = value == null
+                              ? null
+                              : _drivers.firstWhere(
+                                  (d) => d.id == value,
+                                  orElse: () => _drivers.first,
+                                );
+                        });
+                      }
+                    : null,
+
                 validator: _purchaseType == 'نقل'
                     ? (value) {
                         if (value == null) {
@@ -944,7 +1046,13 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
               icon: Icons.directions_car,
               color: AppColors.infoBlue,
               child: DropdownButtonFormField<String>(
-                value: _selectedDriverId,
+                value:
+                    (_purchaseType == 'نقل' &&
+                        _selectedDriverId != null &&
+                        _drivers.any((d) => d.id == _selectedDriverId))
+                    ? _selectedDriverId
+                    : null,
+
                 isExpanded: true,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
@@ -956,13 +1064,21 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   ),
                 ),
                 hint: const Text('اختر السائق'),
+
                 items: _drivers.map((Driver driver) {
                   return DropdownMenuItem<String>(
                     value: driver.id,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(driver.name, style: const TextStyle(fontSize: 16)),
+                        Text(
+                          driver.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         Text(
                           '${driver.phone} - ${driver.vehicleNumber ?? "لا يوجد"}',
                           style: TextStyle(
@@ -974,16 +1090,21 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                     ),
                   );
                 }).toList(),
-                onChanged: (String? value) {
-                  setState(() {
-                    _selectedDriverId = value;
-                    if (value != null) {
-                      _selectedDriver = _drivers.firstWhere(
-                        (d) => d.id == value,
-                      );
-                    }
-                  });
-                },
+
+                onChanged: _purchaseType == 'نقل'
+                    ? (String? value) {
+                        setState(() {
+                          _selectedDriverId = value;
+                          _selectedDriver = value == null
+                              ? null
+                              : _drivers.firstWhere(
+                                  (d) => d.id == value,
+                                  orElse: () => _drivers.first,
+                                );
+                        });
+                      }
+                    : null,
+
                 validator: _purchaseType == 'نقل'
                     ? (value) {
                         if (value == null) {
@@ -1071,13 +1192,13 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
     return Scaffold(
       appBar: _isDesktop
-          ? null
+          ? _buildDesktopAppBar()
           : AppBar(
               title: Text(
                 widget.orderToEdit != null
                     ? 'تعديل طلب العميل'
                     : 'طلب عميل جديد',
-                style: TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.white),
               ),
               centerTitle: true,
             ),
@@ -1186,6 +1307,8 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                       _buildLocationCardDesktop(context),
                       const SizedBox(height: 24),
                     ],
+                    _buildCustomerAddressPreview(),
+                    const SizedBox(height: 12),
 
                     _buildOrderInfoCardDesktop(context),
                     const SizedBox(height: 24),
@@ -1308,6 +1431,8 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                               _selectedCustomer = null;
                               _selectedCustomerId = null;
                               _customerSearchController.clear();
+                              _customerFilterController.clear();
+                              _filteredCustomers = _allCustomers;
                             });
                           },
                           icon: const Icon(Icons.clear, color: Colors.red),
@@ -1319,43 +1444,67 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
               ),
 
             // قائمة العملاء للاختيار
-            if (_selectedCustomer == null)
+            if (_selectedCustomer != null)
               Container(
-                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.primaryBlue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
-                      blurRadius: 5,
-                      offset: const Offset(0, 3),
+                  border: Border.all(color: AppColors.primaryBlue),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: AppColors.primaryBlue.withOpacity(
+                            0.2,
+                          ),
+                          child: Text(
+                            _selectedCustomer!.name
+                                .substring(0, 1)
+                                .toUpperCase(),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedCustomer!.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'كود: ${_selectedCustomer!.code}',
+                                style: TextStyle(
+                                  color: AppColors.mediumGray,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        /// ✅ زر تغيير العميل (يظهر فقط في التعديل)
+                        if (_isEditMode)
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedCustomer = null;
+                                _selectedCustomerId = null;
+                                _filteredCustomers = _allCustomers;
+                              });
+                            },
+                            child: const Text('تغيير'),
+                          ),
+                      ],
                     ),
                   ],
-                ),
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _filteredCustomers.length,
-                  itemBuilder: (context, index) {
-                    final customer = _filteredCustomers[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Text(
-                          customer.name.substring(0, 1).toUpperCase(),
-                        ),
-                      ),
-                      title: Text(customer.name),
-                      subtitle: Text('كود: ${customer.code}'),
-                      onTap: () {
-                        setState(() {
-                          _selectedCustomer = customer;
-                          _selectedCustomerId = customer.id;
-                          _customerSearchController.text = customer.name;
-                        });
-                      },
-                    );
-                  },
                 ),
               ),
           ],
@@ -1391,11 +1540,16 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   border: Border.all(color: AppColors.lightGray),
                 ),
                 child: DropdownButton<String>(
-                  value: _purchaseType,
+                  value: _purchaseTypes.contains(_purchaseType)
+                      ? _purchaseType
+                      : null,
+
                   isExpanded: true,
                   underline: const SizedBox(),
-                  items: _purchaseTypes.map((type) {
-                    return DropdownMenuItem(
+                  hint: const Text('اختر نوع العملية'),
+
+                  items: _purchaseTypes.map((String type) {
+                    return DropdownMenuItem<String>(
                       value: type,
                       child: Row(
                         children: [
@@ -1412,10 +1566,14 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                       ),
                     );
                   }).toList(),
-                  onChanged: (value) {
+
+                  onChanged: (String? value) {
+                    if (value == null) return;
+
                     setState(() {
-                      _purchaseType = value!;
-                      // ✅ عند تغيير النوع إلى "شراء"، إزالة اختيار السائق
+                      _purchaseType = value;
+
+                      // ✅ عند التحويل إلى "شراء" يتم تصفير السائق بالكامل
                       if (_purchaseType == 'شراء') {
                         _selectedDriverId = null;
                         _selectedDriver = null;
@@ -1462,16 +1620,39 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: DropdownButton<String>(
-                  value: _purchaseType,
+                  value: _purchaseTypes.contains(_purchaseType)
+                      ? _purchaseType
+                      : _purchaseTypes.first,
+
                   isExpanded: true,
                   underline: const SizedBox(),
-                  items: _purchaseTypes.map((type) {
-                    return DropdownMenuItem(value: type, child: Text(type));
+
+                  items: _purchaseTypes.map((String type) {
+                    return DropdownMenuItem<String>(
+                      value: type,
+                      child: Row(
+                        children: [
+                          Icon(
+                            type == 'شراء'
+                                ? Icons.shopping_cart
+                                : Icons.local_shipping,
+                            size: 18,
+                            color: AppColors.primaryBlue,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(type),
+                        ],
+                      ),
+                    );
                   }).toList(),
-                  onChanged: (value) {
+
+                  onChanged: (String? value) {
+                    if (value == null) return;
+
                     setState(() {
-                      _purchaseType = value!;
-                      // ✅ عند تغيير النوع إلى "شراء"، إزالة اختيار السائق
+                      _purchaseType = value;
+
+                      // ✅ عند التحويل إلى "شراء" نحذف السائق نهائيًا
                       if (_purchaseType == 'شراء') {
                         _selectedDriverId = null;
                         _selectedDriver = null;
@@ -1490,6 +1671,27 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   Widget _buildLocationCardMobile(BuildContext context) {
     if (_selectedCustomer == null) return const SizedBox();
 
+    final customer = _selectedCustomer!;
+
+    // 🔹 تكوين العنوان التفصيلي
+    final List<String> locationParts = [];
+
+    if (customer.city?.isNotEmpty == true) {
+      locationParts.add(customer.city!);
+    }
+
+    if (customer.area?.isNotEmpty == true) {
+      locationParts.add(customer.area!);
+    }
+
+    if (customer.address?.isNotEmpty == true) {
+      locationParts.add(customer.address!);
+    }
+
+    final String fullAddress = locationParts.isNotEmpty
+        ? locationParts.join(' - ')
+        : 'لا يوجد عنوان مسجل للعميل';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1504,30 +1706,77 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
             ),
             const SizedBox(height: 16),
 
-            // المنطقة
-            _buildLocationField(
-              label: 'المنطقة',
-              value: _selectedRegion,
-              icon: Icons.location_on,
-              onTap: () => _showRegionPicker(context),
-              disabled: false,
-              isDesktop: false,
+            // 📍 العنوان التفصيلي (عرض فقط)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.secondaryTeal.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.secondaryTeal.withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    color: AppColors.secondaryTeal,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      fullAddress,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
 
-            // المدينة
-            _buildLocationField(
-              label: 'المدينة',
-              value: _selectedCity,
-              icon: Icons.location_city,
-              onTap: _selectedRegion != null
-                  ? () => _showCityPicker(context)
-                  : null,
-              disabled: _selectedRegion == null,
-              isDesktop: false,
+            const SizedBox(height: 8),
+
+            // 🛈 توضيح صغير
+            Text(
+              'العنوان مأخوذ تلقائيًا من ملف العميل',
+              style: TextStyle(fontSize: 12, color: AppColors.mediumGray),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCustomerAddressPreview() {
+    if (_selectedCustomer == null) return const SizedBox();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundGray,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.lightGray),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.home, color: AppColors.mediumGray),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _selectedCustomer!.address?.isNotEmpty == true
+                  ? _selectedCustomer!.address!
+                  : 'لا يوجد عنوان مسجل للعميل',
+              style: TextStyle(fontSize: 14, color: AppColors.mediumGray),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1608,18 +1857,24 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   border: Border.all(color: AppColors.lightGray),
                 ),
                 child: DropdownButton<String>(
-                  value: _fuelType,
+                  value: _fuelTypes.contains(_fuelType) ? _fuelType : null,
+
                   isExpanded: true,
                   underline: const SizedBox(),
-                  items: _fuelTypes.map((String value) {
+
+                  hint: const Text('اختر نوع الوقود'),
+
+                  items: _fuelTypes.map((String fuel) {
                     return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
+                      value: fuel,
+                      child: Text(fuel),
                     );
                   }).toList(),
-                  onChanged: (value) {
+
+                  onChanged: (String? value) {
+                    if (value == null) return;
                     setState(() {
-                      _fuelType = value!;
+                      _fuelType = value;
                     });
                   },
                 ),
@@ -1769,16 +2024,22 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   border: Border.all(color: AppColors.lightGray),
                 ),
                 child: DropdownButton<String>(
-                  value: _status,
+                  value: (_status != null && _statuses.contains(_status))
+                      ? _status
+                      : null,
+
                   isExpanded: true,
                   underline: const SizedBox(),
+                  hint: const Text('اختر حالة الطلب'),
+
                   items: _statuses.map((String value) {
                     Color statusColor;
+
                     switch (value) {
-                      case 'في انتظار إنشاء طلب العميل':
+                      case 'في انتظار التخصيص':
                         statusColor = Colors.orange;
                         break;
-                      case 'تم إنشاء الطلب':
+                      case 'تم دمجه مع المورد':
                         statusColor = AppColors.infoBlue;
                         break;
                       case 'ملغى':
@@ -1787,6 +2048,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                       default:
                         statusColor = AppColors.mediumGray;
                     }
+
                     return DropdownMenuItem<String>(
                       value: value,
                       child: Row(
@@ -1805,9 +2067,12 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                       ),
                     );
                   }).toList(),
-                  onChanged: (value) {
+
+                  onChanged: (String? value) {
+                    if (value == null) return;
+
                     setState(() {
-                      _status = value!;
+                      _status = value;
                     });
                   },
                 ),
@@ -2102,6 +2367,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                           _selectedCustomer = null;
                           _selectedCustomerId = null;
                           _customerSearchController.clear();
+                          _customerFilterController.clear();
 
                           // 🔑 المهم جدًا
                           _filteredCustomers = _allCustomers;
@@ -2133,28 +2399,48 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   ],
                 ),
                 constraints: const BoxConstraints(maxHeight: 300),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _filteredCustomers.length,
-                  itemBuilder: (context, index) {
-                    final customer = _filteredCustomers[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Text(
-                          customer.name.substring(0, 1).toUpperCase(),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: TextField(
+                        controller: _customerFilterController,
+                        onChanged: _filterCustomers,
+                        decoration: InputDecoration(
+                          hintText: 'Search customers...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
-                      title: Text(customer.name),
-                      subtitle: Text('كود: ${customer.code}'),
-                      onTap: () {
-                        setState(() {
-                          _selectedCustomer = customer;
-                          _selectedCustomerId = customer.id;
-                          _customerSearchController.text = customer.name;
-                        });
-                      },
-                    );
-                  },
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _filteredCustomers.length,
+                        itemBuilder: (context, index) {
+                          final customer = _filteredCustomers[index];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              child: Text(
+                                customer.name.substring(0, 1).toUpperCase(),
+                              ),
+                            ),
+                            title: Text(customer.name),
+                            subtitle: Text('U?U^O_: ${customer.code}'),
+                            onTap: () {
+                              setState(() {
+                                _selectedCustomer = customer;
+                                _selectedCustomerId = customer.id;
+                                _customerSearchController.text = customer.name;
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
           ],
@@ -2165,6 +2451,26 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
   Widget _buildLocationCardDesktop(BuildContext context) {
     if (_selectedCustomer == null) return const SizedBox();
+
+    final customer = _selectedCustomer!;
+
+    final List<String> locationParts = [];
+
+    if (customer.city?.isNotEmpty == true) {
+      locationParts.add(customer.city!);
+    }
+
+    if (customer.area?.isNotEmpty == true) {
+      locationParts.add(customer.area!);
+    }
+
+    if (customer.address?.isNotEmpty == true) {
+      locationParts.add(customer.address!);
+    }
+
+    final String fullAddress = locationParts.isNotEmpty
+        ? locationParts.join(' - ')
+        : 'لا يوجد عنوان مسجل للعميل';
 
     return Card(
       elevation: 2,
@@ -2184,32 +2490,43 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
             ),
             const SizedBox(height: 20),
 
-            Row(
-              children: [
-                Expanded(
-                  child: _buildLocationField(
-                    label: 'المنطقة',
-                    value: _selectedRegion,
-                    icon: Icons.location_on,
-                    onTap: () => _showRegionPicker(context),
-                    disabled: false,
-                    isDesktop: true,
-                  ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.secondaryTeal.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.secondaryTeal.withOpacity(0.3),
                 ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: _buildLocationField(
-                    label: 'المدينة',
-                    value: _selectedCity,
-                    icon: Icons.location_city,
-                    onTap: _selectedRegion != null
-                        ? () => _showCityPicker(context)
-                        : null,
-                    disabled: _selectedRegion == null,
-                    isDesktop: true,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    color: AppColors.secondaryTeal,
+                    size: 24,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      fullAddress,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        height: 1.6,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 10),
+            Text(
+              'العنوان مأخوذ تلقائيًا من ملف العميل',
+              style: TextStyle(fontSize: 13, color: AppColors.mediumGray),
             ),
           ],
         ),
@@ -2301,18 +2618,24 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: DropdownButton<String>(
-                  value: _fuelType,
+                  value: _fuelTypes.contains(_fuelType) ? _fuelType : null,
+
                   isExpanded: true,
                   underline: const SizedBox(),
+
+                  hint: const Text('اختر نوع الوقود'),
+
                   items: _fuelTypes.map((String value) {
                     return DropdownMenuItem<String>(
                       value: value,
                       child: Text(value),
                     );
                   }).toList(),
-                  onChanged: (value) {
+
+                  onChanged: (String? value) {
+                    if (value == null) return;
                     setState(() {
-                      _fuelType = value!;
+                      _fuelType = value;
                     });
                   },
                 ),
@@ -2470,16 +2793,20 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                   border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: DropdownButton<String>(
-                  value: _status,
+                  value: _statuses.contains(_status) ? _status : null,
+
                   isExpanded: true,
                   underline: const SizedBox(),
+
+                  hint: const Text('اختر حالة الطلب'),
+
                   items: _statuses.map((String value) {
                     Color statusColor;
                     switch (value) {
-                      case 'في انتظار إنشاء طلب العميل':
+                      case 'في انتظار التخصيص':
                         statusColor = Colors.orange;
                         break;
-                      case 'تم إنشاء الطلب':
+                      case 'تم دمجه مع المورد':
                         statusColor = AppColors.infoBlue;
                         break;
                       case 'ملغى':
@@ -2488,6 +2815,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                       default:
                         statusColor = AppColors.mediumGray;
                     }
+
                     return DropdownMenuItem<String>(
                       value: value,
                       child: Row(
@@ -2506,9 +2834,11 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                       ),
                     );
                   }).toList(),
-                  onChanged: (value) {
+
+                  onChanged: (String? value) {
+                    if (value == null) return;
                     setState(() {
-                      _status = value!;
+                      _status = value;
                     });
                   },
                 ),

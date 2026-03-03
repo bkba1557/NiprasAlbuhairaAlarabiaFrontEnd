@@ -9,7 +9,9 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 class MergeOrdersScreen extends StatefulWidget {
-  const MergeOrdersScreen({super.key});
+  final Order? orderToEdit;
+
+  const MergeOrdersScreen({super.key, this.orderToEdit});
 
   @override
   State<MergeOrdersScreen> createState() => _MergeOrdersScreenState();
@@ -25,11 +27,16 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
   String? _selectedCustomerId;
   String? _selectedSupplierId;
 
+  bool _isEditingMergedOrder = false;
+  Order? _mergedOrder;
+
   // ============================================
   // 📌 بيانات التصفية
   // ============================================
   String _fuelTypeFilter = 'جميع الأنواع';
   String _quantityFilter = 'جميع الكميات';
+
+  bool _isEditMode = false;
 
   // ============================================
   // 📌 قوائم البيانات
@@ -64,7 +71,68 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
   @override
   void initState() {
     super.initState();
+
+    if (widget.orderToEdit != null) {
+      _isEditMode = true;
+      _initializeEditMode(widget.orderToEdit!);
+    }
     _loadOrders();
+  }
+
+  void _initializeEditMode(Order mergedOrder) {
+    _isEditingMergedOrder = true;
+    _mergedOrder = mergedOrder;
+    _fuelTypeFilter = 'جميع الأنواع';
+    _quantityFilter = 'جميع الكميات';
+  }
+
+  PreferredSizeWidget _buildDesktopAppBar() {
+    return AppBar(
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new),
+        color: AppColors.primaryBlue,
+        tooltip: 'رجوع',
+        onPressed: () {
+          Navigator.pop(context);
+        },
+      ),
+      title: const Text(
+        'دمج الطلبات',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: AppColors.primaryBlue,
+        ),
+      ),
+      centerTitle: true,
+    );
+  }
+
+
+  void _selectMergedOrders(List<Order> allOrders) {
+    if (_mergedOrder == null) return;
+    if (_mergedOrder!.status == '?? ???????') return;
+
+    final supplier = allOrders.firstWhere(
+      (o) => o.orderSource == '????' && o.mergedWithOrderId == _mergedOrder!.id,
+      orElse: () => _selectedSupplierOrder ?? Order.empty(),
+    );
+    final customer = allOrders.firstWhere(
+      (o) => o.orderSource == '????' && o.mergedWithOrderId == _mergedOrder!.id,
+      orElse: () => _selectedCustomerOrder ?? Order.empty(),
+    );
+
+    if (supplier.id.isNotEmpty) {
+      _selectedSupplierOrder = supplier;
+      _selectedSupplierId = supplier.id;
+      _fuelTypeFilter = supplier.fuelType ?? '???? ???????';
+      _quantityFilter = '???? ???????';
+    }
+
+    if (customer.id.isNotEmpty) {
+      _selectedCustomerOrder = customer;
+      _selectedCustomerId = customer.id;
+    }
   }
 
   Future<void> _loadOrders() async {
@@ -74,23 +142,36 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
 
       final allOrders = orderProvider.orders;
 
+      if (_isEditMode) {
+        _selectMergedOrders(allOrders);
+      }
+
       // =========================
       // طلبات المورد (مورد فقط + غير مدموجة)
       // =========================
       _supplierOrders = allOrders.where((order) {
         return order.orderSource == 'مورد' &&
-            order.mergeStatus == 'منفصل' &&
-            order.status == 'في انتظار عمل طلب جديد';
+            order.mergeStatus != 'مدمج' &&
+            order.mergeStatus != 'مكتمل' &&
+            [
+              'في المستودع',
+              'تم الإنشاء',
+              'جاهز للتحميل',
+              'تم التحميل',
+            ].contains(order.status);
       }).toList();
 
       // =========================
       // طلبات العملاء (عميل فقط + غير مدموجة)
       // =========================
+      // =========================
+      // طلبات العملاء (عميل فقط + غير مدموجة)
+      // =========================
       _customerOrders = allOrders.where((order) {
-        return order.orderSource == 'عميل' &&
-            order.mergeStatus == 'منفصل' &&
-            order.status == 'في انتظار عمل طلب جديد';
-      }).toList();
+  return order.orderSource == 'عميل' &&
+      order.mergeStatus != 'مدمج' &&
+      order.status == 'في انتظار التخصيص';
+}).toList();
 
       _filteredCustomerOrders = List.from(_customerOrders);
 
@@ -106,30 +187,55 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
   void _filterCustomerOrders() {
     setState(() {
       _filteredCustomerOrders = _customerOrders.where((order) {
-        // تصفية حسب نوع الوقود
+        // =========================
+        // لو فيه مورد مختار → فلترة تلقائية
+        // =========================
+        if (_selectedSupplierOrder != null) {
+          final supplier = _selectedSupplierOrder!;
+
+          // 1️⃣ نفس نوع الوقود
+          if (order.fuelType != supplier.fuelType) {
+            return false;
+          }
+
+          // 2️⃣ كمية العميل ≤ كمية المورد
+          if (order.quantity == null || supplier.quantity == null) {
+            return false;
+          }
+
+          if (order.quantity! > supplier.quantity!) {
+            return false;
+          }
+        }
+
+        // =========================
+        // فلترة يدوية (Dropdowns)
+        // =========================
+
+        // نوع الوقود
         if (_fuelTypeFilter != 'جميع الأنواع' &&
             order.fuelType != _fuelTypeFilter) {
           return false;
         }
 
-        // تصفية حسب نطاق الكمية
+        // نطاق الكمية
         if (_quantityFilter != 'جميع الكميات' && order.quantity != null) {
-          final quantity = order.quantity!;
+          final q = order.quantity!;
           switch (_quantityFilter) {
             case '1000 - 5000 لتر':
-              if (quantity < 1000 || quantity > 5000) return false;
+              if (q < 1000 || q > 5000) return false;
               break;
             case '5000 - 10000 لتر':
-              if (quantity < 5000 || quantity > 10000) return false;
+              if (q < 5000 || q > 10000) return false;
               break;
             case '10000 - 20000 لتر':
-              if (quantity < 10000 || quantity > 20000) return false;
+              if (q < 10000 || q > 20000) return false;
               break;
             case '20000 - 30000 لتر':
-              if (quantity < 20000 || quantity > 30000) return false;
+              if (q < 20000 || q > 30000) return false;
               break;
             case '30000+ لتر':
-              if (quantity < 30000) return false;
+              if (q < 30000) return false;
               break;
           }
         }
@@ -137,6 +243,29 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
         return true;
       }).toList();
     });
+  }
+
+  Future<void> _updateMergedOrder() async {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+
+    final success = await orderProvider.updateOrderLimited(_mergedOrder!.id, {
+      'status': _mergedOrder!.status,
+      'driver': _mergedOrder!.driverId,
+      'arrivalDate': _mergedOrder!.arrivalDate.toIso8601String(),
+      'arrivalTime': _mergedOrder!.arrivalTime,
+      'notes': _mergedOrder!.notes,
+    }, null);
+
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('تم تحديث الطلب المدمج بنجاح'),
+          backgroundColor: AppColors.successGreen,
+        ),
+      );
+
+      Navigator.pop(context, true);
+    }
   }
 
   // ============================================
@@ -170,8 +299,8 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
 
     try {
       final success = await orderProvider.mergeOrders(
-        sourceOrderId: _selectedSupplierOrder!.id!,
-        targetOrderId: _selectedCustomerOrder!.id!,
+        supplierOrderId: _selectedSupplierOrder!.id,
+        customerOrderId: _selectedCustomerOrder!.id,
       );
 
       if (success) {
@@ -211,6 +340,73 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
     }
   }
 
+  Future<void> _replaceMergeOrders() async {
+    if (_selectedSupplierOrder == null || _selectedCustomerOrder == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('يرجى اختيار طلب مورد وطلب عميل للدمج'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
+    if (!_areOrdersCompatible()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('الطلبات غير متوافقة (تختلف في نوع الوقود أو الكمية)'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
+    if (_mergedOrder == null) return;
+    if (_mergedOrder!.status == '?? ???????') return;
+
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+
+    final unmerged = await orderProvider.unmergeOrder(_mergedOrder!.id);
+    if (!unmerged) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(orderProvider.error ?? 'فشل فك الدمج الحالي'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final success = await orderProvider.mergeOrders(
+        supplierOrderId: _selectedSupplierOrder!.id,
+        customerOrderId: _selectedCustomerOrder!.id,
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('تم تحديث الدمج بنجاح'),
+            backgroundColor: AppColors.successGreen,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ أثناء تحديث الدمج: ${e.toString()}'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
+    }
+  }
+
+
   // ============================================
   // ✅ التحقق من التوافق
   // ============================================
@@ -219,16 +415,27 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
       return false;
     }
 
-    final supplierQuantity = _selectedSupplierOrder!.quantity;
-    final customerQuantity = _selectedCustomerOrder!.quantity;
+    final supplier = _selectedSupplierOrder!;
+    final customer = _selectedCustomerOrder!;
 
-    // لازم الكميتين موجودين
-    if (supplierQuantity == null || customerQuantity == null) {
+    // 1️⃣ تحقق من نوع الوقود
+    if (supplier.fuelType == null ||
+        customer.fuelType == null ||
+        supplier.fuelType != customer.fuelType) {
       return false;
     }
 
-    // التوافق فقط: المورد >= العميل
-    return supplierQuantity >= customerQuantity;
+    // 2️⃣ تحقق من الكمية
+    if (supplier.quantity == null || customer.quantity == null) {
+      return false;
+    }
+
+    if (customer.quantity != supplier.quantity) {
+      return false;
+    }
+
+    // 3️⃣ تحقق من الوقت (اختياري لكن منطقي)
+    return true;
   }
 
   // ============================================
@@ -322,14 +529,14 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
             Icon(Icons.link, size: 48, color: Colors.white),
             const SizedBox(height: 16),
             Text(
-              'دمج الطلبات المتوافقة',
+              _isEditMode ? 'تعديل الطلب المدمج' : 'دمج الطلبات المتوافقة',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
-              textAlign: TextAlign.center,
             ),
+
             const SizedBox(height: 8),
             Text(
               'اختر طلب مورد وطلب عميل متوافقين للدمج',
@@ -490,8 +697,9 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
                         );
                       }).toList(),
                       onChanged: (value) {
+                        if (value == null) return;
                         setState(() {
-                          _fuelTypeFilter = value!;
+                          _fuelTypeFilter = value;
                           _filterCustomerOrders();
                         });
                       },
@@ -529,8 +737,9 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
                         );
                       }).toList(),
                       onChanged: (value) {
+                        if (value == null) return;
                         setState(() {
-                          _quantityFilter = value!;
+                          _quantityFilter = value;
                           _filterCustomerOrders();
                         });
                       },
@@ -638,14 +847,26 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
       onTap: () {
         setState(() {
           if (isSupplier) {
+            // =========================
+            // اختيار طلب المورد
+            // =========================
             _selectedSupplierOrder = order;
             _selectedSupplierId = order.id;
 
-            if (order.fuelType != null) {
-              _fuelTypeFilter = order.fuelType!;
-              _filterCustomerOrders();
-            }
+            // تثبيت نوع الوقود تلقائيًا
+            _fuelTypeFilter = order.fuelType ?? 'جميع الأنواع';
+            _quantityFilter = 'جميع الكميات';
+
+            // إعادة تعيين اختيار العميل (لو كان غير متوافق)
+            _selectedCustomerOrder = null;
+            _selectedCustomerId = null;
+
+            // إعادة فلترة طلبات العملاء
+            _filterCustomerOrders();
           } else {
+            // =========================
+            // اختيار طلب العميل
+            // =========================
             _selectedCustomerOrder = order;
             _selectedCustomerId = order.id;
           }
@@ -696,7 +917,6 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // رقم الطلب الأساسي
                       Text(
                         order.orderNumber,
                         style: const TextStyle(
@@ -704,8 +924,6 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
                           fontSize: 16,
                         ),
                       ),
-
-                      // اسم المورد / العميل
                       Text(
                         isSupplier
                             ? (order.supplierName ?? 'مورد')
@@ -715,8 +933,6 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
                           fontSize: 14,
                         ),
                       ),
-
-                      // ✅ رقم طلب المورد (NEW)
                       if (isSupplier &&
                           order.supplierOrderNumber != null &&
                           order.supplierOrderNumber!.isNotEmpty)
@@ -1038,16 +1254,14 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
                   '${DateFormat('yyyy/MM/dd').format(_selectedSupplierOrder!.loadingDate)} ${_selectedSupplierOrder!.loadingTime}',
               customerValue:
                   '${DateFormat('yyyy/MM/dd').format(_selectedCustomerOrder!.arrivalDate)} ${_selectedCustomerOrder!.arrivalTime}',
-              isCompatible: !_selectedSupplierOrder!.loadingDate.isAfter(
-                _selectedCustomerOrder!.arrivalDate,
-              ),
+              isCompatible: true,
             ),
 
             if (!isCompatible)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  'ملاحظة: يجب أن تكون الكمية المتوفرة لدى المورد أكبر من أو تساوي كمية طلب العميل، وأن يكون وقت التحميل بعد وقت الوصول',
+                  'ملاحظة: يجب أن تكون الكمية المتوفرة لدى المورد تساوي كمية طلب العميل، وأن يكون وقت التحميل بعد وقت الوصول',
                   style: TextStyle(color: AppColors.errorRed, fontSize: 12),
                 ),
               ),
@@ -1115,15 +1329,65 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
     );
   }
 
+  Widget _buildEditMergedOrderForm() {
+    final order = _mergedOrder!;
+
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeaderCard(),
+
+          const SizedBox(height: 20),
+
+          _buildSelectedOrderCard(
+            order: order,
+            isSupplier: true,
+            onRemove: () {}, // ❌ ممنوع الإزالة
+          ),
+
+          const SizedBox(height: 20),
+
+          // ✅ تعديل السائق
+          if (order.driverName != null)
+            Text('السائق الحالي: ${order.driverName}'),
+
+          const SizedBox(height: 20),
+
+          GradientButton(
+            text: 'تحديث الطلب المدمج',
+            gradient: AppColors.accentGradient,
+            onPressed: _updateMergedOrder,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMergeButton() {
-    final isCompatible = _areOrdersCompatible();
     final orderProvider = Provider.of<OrderProvider>(context);
+
+    if (_isEditMode) {
+      return GradientButton(
+        onPressed:
+            (_selectedSupplierOrder != null &&
+                _selectedCustomerOrder != null &&
+                _areOrdersCompatible() &&
+                !orderProvider.isLoading)
+            ? _replaceMergeOrders
+            : null,
+        text: orderProvider.isLoading ? 'جاري التحديث...' : 'تحديث الدمج',
+        gradient: AppColors.accentGradient,
+        isLoading: orderProvider.isLoading,
+      );
+    }
 
     return GradientButton(
       onPressed:
           (_selectedSupplierOrder != null &&
               _selectedCustomerOrder != null &&
-              isCompatible &&
+              _areOrdersCompatible() &&
               !orderProvider.isLoading)
           ? _mergeOrders
           : null,
@@ -1133,18 +1397,22 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
     );
   }
 
-  // ============================================
-  // 🏗️ بناء الواجهة الرئيسية
-  // ============================================
   @override
   Widget build(BuildContext context) {
     final bool isDesktop = MediaQuery.of(context).size.width > 800;
 
     return Scaffold(
       appBar: isDesktop
-          ? null
-          : AppBar(title: const Text('دمج الطلبات'), centerTitle: true),
+          ? _buildDesktopAppBar()
+          : AppBar(
+              title: Text(
+                _isEditingMergedOrder ? 'تعديل الطلب المدمج' : 'دمج الطلبات',
+              ),
+              centerTitle: true,
+            ),
       body: isDesktop ? _buildDesktopLayout() : _buildMobileLayout(),
     );
   }
+
+
 }

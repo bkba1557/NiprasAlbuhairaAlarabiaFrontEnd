@@ -22,6 +22,58 @@ class _DriversScreenState extends State<DriversScreen> {
     });
   }
 
+  void _confirmDeleteDriver(BuildContext context, String driverId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('حذف السائق'),
+          content: const Text(
+            'هل أنت متأكد من حذف هذا السائق؟\nلا يمكن التراجع عن هذا الإجراء.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              icon: const Icon(Icons.delete, color: Colors.white),
+              label: const Text('حذف', style: TextStyle(color: Colors.white)),
+              onPressed: () async {
+                Navigator.pop(context);
+
+                final provider = Provider.of<DriverProvider>(
+                  context,
+                  listen: false,
+                );
+
+                final success = await provider.deleteDriver(driverId);
+
+                if (success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تم حذف السائق بنجاح'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  _loadDrivers();
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(provider.error ?? 'فشل حذف السائق'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _loadDrivers() async {
     await Provider.of<DriverProvider>(context, listen: false).fetchDrivers();
   }
@@ -116,6 +168,9 @@ class _DriversScreenState extends State<DriversScreen> {
                                       '/driver/form',
                                       arguments: driver,
                                     );
+                                  },
+                                  onDelete: () {
+                                    _confirmDeleteDriver(context, driver.id);
                                   },
                                 );
                               },

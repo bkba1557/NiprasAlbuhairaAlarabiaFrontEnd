@@ -36,7 +36,7 @@ class _CustomerSelectionDialogState extends State<CustomerSelectionDialog> {
       context,
       listen: false,
     );
-    await customerProvider.fetchCustomers();
+    await customerProvider.fetchCustomers(fetchAll: true);
     _filterCustomers('');
   }
 

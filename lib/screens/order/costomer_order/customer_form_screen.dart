@@ -1,10 +1,23 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:order_tracker/models/customer_model.dart';
 import 'package:order_tracker/providers/customer_provider.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:order_tracker/widgets/attachment_item.dart';
 import 'package:order_tracker/widgets/custom_text_field.dart';
 import 'package:order_tracker/widgets/gradient_button.dart';
 import 'package:provider/provider.dart';
+
+const Map<String, String> _customerDocumentTypeLabels = {
+  'commercialRecord': 'السجل التجاري',
+  'energyCertificate': 'شهادة الطاقة',
+  'taxCertificate': 'شهادة الضريبة',
+  'safetyCertificate': 'شهادة السلامة',
+  'municipalLicense': 'رخصة بلدي',
+  'additionalDocument': 'مرفق إضافي',
+};
 
 class CustomerFormScreen extends StatefulWidget {
   final Customer? customerToEdit;
@@ -26,6 +39,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   final _contactPersonController = TextEditingController();
   final _contactPersonPhoneController = TextEditingController();
   final _notesController = TextEditingController();
+  bool _showDocumentSection = false;
+  final Map<String, PlatformFile?> _documentFiles =
+      Map.fromEntries(_customerDocumentTypeLabels.keys.map((key) => MapEntry(key, null)));
 
   @override
   void initState() {
@@ -45,6 +61,99 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _contactPersonController.text = customer.contactPerson ?? '';
     _contactPersonPhoneController.text = customer.contactPersonPhone ?? '';
     _notesController.text = customer.notes ?? '';
+  }
+
+  int get _documentAttachmentCount =>
+      _documentFiles.values.where((file) => file != null).length;
+
+  Future<void> _pickCustomerDocument(String docType) async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() {
+      _documentFiles[docType] = result.files.first;
+    });
+  }
+
+  void _removeCustomerDocument(String docType) {
+    setState(() {
+      _documentFiles[docType] = null;
+    });
+  }
+
+  void _clearDocumentSelections() {
+    setState(() {
+      for (final key in _documentFiles.keys) {
+        _documentFiles[key] = null;
+      }
+    });
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB'];
+    var size = bytes.toDouble();
+    var index = 0;
+
+    while (size >= 1024 && index < suffixes.length - 1) {
+      size /= 1024;
+      index++;
+    }
+
+    final displayValue = size < 10 ? size.toStringAsFixed(1) : size.toStringAsFixed(0);
+    return '$displayValue ${suffixes[index]}';
+  }
+
+  List<CustomerDocumentUpload> _prepareDocumentUploads() {
+    final uploads = <CustomerDocumentUpload>[];
+
+    _documentFiles.forEach((docType, file) {
+      if (file == null || file.path == null) return;
+      uploads.add(CustomerDocumentUpload(
+        docType: docType,
+        fileName: file.name,
+        file: File(file.path!),
+      ));
+    });
+
+    return uploads;
+  }
+
+  Widget _buildDocumentPicker(String docType, String label) {
+    final file = _documentFiles[docType];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _pickCustomerDocument(docType),
+              icon: const Icon(Icons.attach_file),
+              label: const Text('إرفاق'),
+            ),
+          ],
+        ),
+        if (file != null) ...[
+          const SizedBox(height: 6),
+          AttachmentItem(
+            fileName: file.name,
+            fileSize: _formatFileSize(file.size),
+            onDelete: () => _removeCustomerDocument(docType),
+          ),
+        ],
+      ],
+    );
   }
 
   Future<void> _submitForm() async {
@@ -78,14 +187,37 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       data['code'] = _codeController.text.trim();
     }
 
+    final documentUploads = _prepareDocumentUploads();
+
     bool success;
+    Customer? createdCustomer;
     if (widget.customerToEdit != null) {
       success = await provider.updateCustomer(widget.customerToEdit!.id, data);
     } else {
-      success = await provider.createCustomer(data);
+      createdCustomer = await provider.createCustomer(data);
+      success = createdCustomer != null;
     }
 
     if (success && mounted) {
+      final String customerId =
+          widget.customerToEdit?.id ?? createdCustomer!.id;
+
+      if (documentUploads.isNotEmpty) {
+        final docsUploaded = await provider.uploadCustomerDocuments(
+          customerId,
+          documentUploads,
+        );
+        if (!docsUploaded && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(provider.error ?? 'حدث خطأ أثناء رفع المستندات'),
+              backgroundColor: AppColors.errorRed,
+            ),
+          );
+          return;
+        }
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -124,7 +256,12 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         final int gridCols = isDesktop ? 2 : 1;
 
         return Scaffold(
-          appBar: AppBar(title: Text(isEditing ? 'تعديل العميل' : 'عميل جديد')),
+          appBar: AppBar(
+            title: Text(
+              isEditing ? 'تعديل العميل' : 'عميل جديد',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
           body: SingleChildScrollView(
             child: Center(
               child: ConstrainedBox(
@@ -274,6 +411,56 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                   prefixIcon: Icons.note,
                                   maxLines: 4,
                                 ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SwitchListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    'إنشاء ملف للعميل',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  subtitle: const Text('جميع مستندات العميل'),
+                                  value: _showDocumentSection,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _showDocumentSection = value;
+                                      if (!value) {
+                                        _clearDocumentSelections();
+                                      }
+                                    });
+                                  },
+                                ),
+                                if (_showDocumentSection) ...[
+                                  const SizedBox(height: 12),
+                                  for (final entry in _customerDocumentTypeLabels.entries)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 12),
+                                      child: _buildDocumentPicker(
+                                        entry.key,
+                                        entry.value,
+                                      ),
+                                    ),
+                                  Text(
+                                    'عدد المرفقات: $_documentAttachmentCount',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

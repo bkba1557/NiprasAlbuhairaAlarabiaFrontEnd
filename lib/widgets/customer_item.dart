@@ -3,6 +3,89 @@ import 'package:intl/intl.dart';
 import 'package:order_tracker/utils/constants.dart';
 import '../models/customer_model.dart';
 
+enum _CustomerStatusType { active, suspended, banned }
+
+const Set<String> _activeStatusKeywords = {
+  'active',
+  'نشط',
+  'نشيط',
+  'فعال',
+  'مفعل',
+  'enabled',
+};
+
+const Set<String> _suspendedStatusKeywords = {
+  'suspended',
+  'موقوف',
+  'معلق',
+  'تعليق',
+  'متوقف',
+  'inactive',
+  'غير نشط',
+  'مؤقت',
+};
+
+const Set<String> _bannedStatusKeywords = {
+  'banned',
+  'blocked',
+  'محظور',
+  'ممنوع',
+  'معاقب',
+  'مغلق',
+  'محجوز',
+};
+
+bool _matchesStatus(String normalized, Set<String> keywords) {
+  return keywords.any((keyword) => normalized.contains(keyword));
+}
+
+_CustomerStatusType _resolveCustomerStatus(Customer customer) {
+  final normalized = customer.status.toLowerCase().trim();
+  if (normalized.isEmpty) {
+    return customer.isActive
+        ? _CustomerStatusType.active
+        : _CustomerStatusType.banned;
+  }
+
+  if (_matchesStatus(normalized, _bannedStatusKeywords)) {
+    return _CustomerStatusType.banned;
+  }
+  if (_matchesStatus(normalized, _suspendedStatusKeywords)) {
+    return _CustomerStatusType.suspended;
+  }
+  if (_matchesStatus(normalized, _activeStatusKeywords)) {
+    return _CustomerStatusType.active;
+  }
+
+  return customer.isActive
+      ? _CustomerStatusType.active
+      : _CustomerStatusType.banned;
+}
+
+String _customerStatusLabel(_CustomerStatusType type) {
+  switch (type) {
+    case _CustomerStatusType.suspended:
+      return 'موقوف';
+    case _CustomerStatusType.banned:
+      return 'محظور';
+    case _CustomerStatusType.active:
+    default:
+      return 'نشط';
+  }
+}
+
+Color _customerStatusColor(_CustomerStatusType type) {
+  switch (type) {
+    case _CustomerStatusType.suspended:
+      return AppColors.warningOrange;
+    case _CustomerStatusType.banned:
+      return AppColors.errorRed;
+    case _CustomerStatusType.active:
+    default:
+      return AppColors.successGreen;
+  }
+}
+
 class CustomerItem extends StatelessWidget {
   final Customer customer;
   final VoidCallback onTap;
@@ -19,14 +102,16 @@ class CustomerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final statusType = _resolveCustomerStatus(customer);
+    final statusColor = _customerStatusColor(statusType);
+    final statusLabel = _customerStatusLabel(statusType);
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: customer.isActive
-              ? AppColors.successGreen.withOpacity(0.3)
-              : AppColors.errorRed.withOpacity(0.3),
+          color: statusColor.withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -138,22 +223,16 @@ class CustomerItem extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: customer.isActive
-                              ? AppColors.successGreen.withOpacity(0.1)
-                              : AppColors.errorRed.withOpacity(0.1),
+                          color: statusColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: customer.isActive
-                                ? AppColors.successGreen
-                                : AppColors.errorRed,
+                            color: statusColor,
                           ),
                         ),
                         child: Text(
-                          customer.isActive ? 'نشط' : 'غير نشط',
+                          statusLabel,
                           style: TextStyle(
-                            color: customer.isActive
-                                ? AppColors.successGreen
-                                : AppColors.errorRed,
+                            color: statusColor,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -327,10 +406,10 @@ class CustomerItem extends StatelessWidget {
 }
 
 // Customer Item Compact (للـ ListView)
-class CustomerItemCompact extends StatelessWidget {
-  final Customer customer;
-  final VoidCallback onTap;
-  final bool showActions;
+  class CustomerItemCompact extends StatelessWidget {
+    final Customer customer;
+    final VoidCallback onTap;
+    final bool showActions;
 
   const CustomerItemCompact({
     super.key,
@@ -341,6 +420,10 @@ class CustomerItemCompact extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final statusType = _resolveCustomerStatus(customer);
+    final statusColor = _customerStatusColor(statusType);
+    final statusLabel = _customerStatusLabel(statusType);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -431,17 +514,13 @@ class CustomerItemCompact extends StatelessWidget {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: customer.isActive
-                      ? AppColors.successGreen.withOpacity(0.1)
-                      : AppColors.errorRed.withOpacity(0.1),
+                  color: statusColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  customer.isActive ? 'نشط' : 'غير نشط',
+                  statusLabel,
                   style: TextStyle(
-                    color: customer.isActive
-                        ? AppColors.successGreen
-                        : AppColors.errorRed,
+                    color: statusColor,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
