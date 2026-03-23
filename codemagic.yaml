@@ -6,7 +6,7 @@ workflows:
 
     # Replace this with the App Store Connect API key name you add in Codemagic UI.
     integrations:
-      app_store_connect: N7M34F7S3L
+      app_store_connect: GDGJXZ9NF3
 
     environment:
       flutter: 3.38.3
@@ -18,7 +18,7 @@ workflows:
       vars:
         XCODE_WORKSPACE: Runner.xcworkspace
         XCODE_SCHEME: Runner
-        APP_STORE_APPLE_ID: "N7M34F7S3L"
+        APP_STORE_APPLE_ID: "GDGJXZ9NF3"
 
     cache:
       cache_paths:
