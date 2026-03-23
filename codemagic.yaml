@@ -39,7 +39,11 @@ workflows:
 
       - name: Install CocoaPods dependencies
         script: |
-          find . -name "Podfile" -execdir pod install \;
+          find ios -name "Podfile" -execdir pod install \;
+
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
 
       - name: Build signed IPA
         script: |
@@ -56,8 +60,7 @@ workflows:
 
           echo "Using iOS build number: $NEXT_BUILD_NUMBER"
 
-          flutter build ipa --release \
-            --build-number="$NEXT_BUILD_NUMBER"
+          flutter build ipa --release --build-number="$NEXT_BUILD_NUMBER"
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -69,6 +72,5 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-        submit_to_app_store: true
+        submit_to_app_store: false
         cancel_previous_submissions: true
-        release_type: AFTER_APPROVAL
