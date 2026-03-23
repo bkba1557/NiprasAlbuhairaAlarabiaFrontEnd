@@ -19,7 +19,7 @@ workflows:
       vars:
         XCODE_WORKSPACE: Runner.xcworkspace
         XCODE_SCHEME: Runner
-        APP_STORE_APPLE_ID: "GDGJXZ9NF3"
+        APP_STORE_APPLE_ID: "8105356752"
 
     cache:
       cache_paths:
@@ -41,18 +41,9 @@ workflows:
         script: |
           find . -name "Podfile" -execdir pod install \;
 
-      - name: Apply provisioning profiles
-        script: |
-          xcode-project use-profiles --workspace="ios/$XCODE_WORKSPACE" --scheme="$XCODE_SCHEME"
-
       - name: Build signed IPA
         script: |
           set -e
-
-          if ! echo "$APP_STORE_APPLE_ID" | grep -Eq '^[0-9]+$'; then
-            echo "APP_STORE_APPLE_ID must be numeric."
-            exit 1
-          fi
 
           PUBSPEC_BUILD_NUMBER=$(grep '^version:' pubspec.yaml | sed -E 's/.*\+([0-9]+)$/\1/')
           LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || true)
