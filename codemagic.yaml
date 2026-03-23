@@ -4,21 +4,24 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
 
-    # Replace this with the App Store Connect API key name you add in Codemagic UI.
+    # Use the App Store Connect integration name from Codemagic UI.
     integrations:
-      app_store_connect: GDGJXZ9NF3
+      app_store_connect: codemagic-app-store-connect
 
     environment:
       flutter: 3.38.3
       xcode: latest
       cocoapods: default
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.albuhaira.nipras
+        certificates:
+          - ios_distribution_cert
+        provisioning_profiles:
+          - nipras_app_store_profile
       vars:
         XCODE_WORKSPACE: Runner.xcworkspace
         XCODE_SCHEME: Runner
-        APP_STORE_APPLE_ID: "GDGJXZ9NF3"
+        # Replace with the numeric Apple ID from App Store Connect > App Information.
+        APP_STORE_APPLE_ID: "1234567890"
 
     cache:
       cache_paths:
@@ -47,6 +50,11 @@ workflows:
       - name: Build signed IPA
         script: |
           set -e
+
+          if ! echo "$APP_STORE_APPLE_ID" | grep -Eq '^[0-9]+$'; then
+            echo "APP_STORE_APPLE_ID must be the numeric Apple app ID from App Store Connect."
+            exit 1
+          fi
 
           PUBSPEC_BUILD_NUMBER=$(grep '^version:' pubspec.yaml | sed -E 's/.*\+([0-9]+)$/\1/')
           LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || true)
