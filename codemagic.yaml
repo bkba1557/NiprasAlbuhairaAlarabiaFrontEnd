@@ -4,7 +4,6 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
 
-    # Use the App Store Connect integration name from Codemagic UI.
     integrations:
       app_store_connect: codemagic-app-store-connect
 
@@ -12,16 +11,15 @@ workflows:
       flutter: 3.38.3
       xcode: latest
       cocoapods: default
+
       ios_signing:
-        certificates:
-          - ios_distribution_cert
-        provisioning_profiles:
-          - nipras_app_store_profile
+        distribution_type: app_store
+        bundle_identifier: com.albuhaira.nipras
+
       vars:
         XCODE_WORKSPACE: Runner.xcworkspace
         XCODE_SCHEME: Runner
-        # Replace with the numeric Apple ID from App Store Connect > App Information.
-        APP_STORE_APPLE_ID: "1234567890"
+        APP_STORE_APPLE_ID: "GDGJXZ9NF3"
 
     cache:
       cache_paths:
@@ -52,7 +50,7 @@ workflows:
           set -e
 
           if ! echo "$APP_STORE_APPLE_ID" | grep -Eq '^[0-9]+$'; then
-            echo "APP_STORE_APPLE_ID must be the numeric Apple app ID from App Store Connect."
+            echo "APP_STORE_APPLE_ID must be numeric."
             exit 1
           fi
 
@@ -68,8 +66,7 @@ workflows:
           echo "Using iOS build number: $NEXT_BUILD_NUMBER"
 
           flutter build ipa --release \
-            --build-number="$NEXT_BUILD_NUMBER" \
-            --export-options-plist=/Users/builder/export_options.plist
+            --build-number="$NEXT_BUILD_NUMBER"
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -80,7 +77,7 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: false
+        submit_to_testflight: true
         submit_to_app_store: true
         cancel_previous_submissions: true
         release_type: AFTER_APPROVAL
