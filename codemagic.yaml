@@ -63,7 +63,9 @@ workflows:
 
           echo "Using iOS build number: $NEXT_BUILD_NUMBER"
 
-          flutter build ipa --release --build-number="$NEXT_BUILD_NUMBER"
+          flutter build ipa --release \
+            --build-number="$NEXT_BUILD_NUMBER" \
+            --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
