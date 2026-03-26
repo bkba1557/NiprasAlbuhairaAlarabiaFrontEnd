@@ -3,7 +3,7 @@
 ## What is ready
 
 - `codemagic.yaml` builds a signed iOS `IPA` (downloadable from build artifacts).
-- `ios-app-store-release` uploads the build to App Store Connect (TestFlight).
+- `ios-app-store-release` is configured for App Store signing, but the App Store Connect upload is currently commented out in `codemagic.yaml`.
 - `ios-ad-hoc-ipa` builds an Ad Hoc `IPA` for direct device installation (requires an Ad Hoc provisioning profile with your device UDIDs).
 - `codemagic.yaml` regenerates the iOS icons before each build.
 - `scripts/generate_ios_app_icons.sh` generates `ios/Runner/Assets.xcassets/AppIcon.appiconset`.

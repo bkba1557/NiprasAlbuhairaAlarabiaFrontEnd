@@ -1,4 +1,6 @@
 workflows:
+  # NOTE: App Store-signed IPAs can't be installed directly on devices.
+  # For direct iPhone installs, use the `ios-ad-hoc-ipa` workflow.
   ios-app-store-release:
     name: iOS App Store Release (TestFlight + IPA)
     max_build_duration: 120
@@ -73,17 +75,21 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
 
-    publishing:
-      app_store_connect:
-        auth: integration
+    # Publishing (disabled): do not upload to Apple / App Store Connect.
+    # Uncomment this block to enable TestFlight/App Store upload again.
+    # publishing:
+    #   app_store_connect:
+    #     auth: integration
 
   ios-ad-hoc-ipa:
     name: iOS Ad Hoc IPA (Direct Install)
     max_build_duration: 120
     instance_type: mac_mini_m2
 
-    integrations:
-      app_store_connect: albuhairaalarabianipras
+    # No App Store Connect upload is needed for Ad Hoc builds.
+    # Uncomment if you want to use App Store Connect tools in scripts.
+    # integrations:
+    #   app_store_connect: albuhairaalarabianipras
 
     environment:
       flutter: 3.38.3
@@ -97,7 +103,6 @@ workflows:
       vars:
         XCODE_WORKSPACE: Runner.xcworkspace
         XCODE_SCHEME: Runner
-        APP_STORE_APPLE_ID: "6759683802"
 
     cache:
       cache_paths:
@@ -130,14 +135,8 @@ workflows:
         script: |
           set -e
 
-          PUBSPEC_BUILD_NUMBER=$(grep '^version:' pubspec.yaml | sed -E 's/.*\+([0-9]+)$/\1/')
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || true)
-
-          if [ -n "$LATEST_BUILD_NUMBER" ]; then
-            NEXT_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
-          else
-            NEXT_BUILD_NUMBER="${PUBSPEC_BUILD_NUMBER:-1}"
-          fi
+          # Use a monotonic build number for device installs (no App Store Connect needed).
+          NEXT_BUILD_NUMBER="$(date +%s)"
 
           echo "Using iOS build number: $NEXT_BUILD_NUMBER"
 
