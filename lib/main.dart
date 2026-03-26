@@ -38,6 +38,7 @@ import 'package:order_tracker/localization/app_localizations.dart';
 import 'package:order_tracker/utils/app_navigation.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:order_tracker/utils/device_performance.dart';
 import 'package:order_tracker/utils/role_route_guard_observer.dart';
 import 'package:order_tracker/utils/role_route_policy.dart';
 
@@ -54,6 +55,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await DevicePerformance.init();
+  DevicePerformance.tuneFlutterCaches();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   if (!kIsWeb) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -154,9 +157,12 @@ class MyApp extends StatelessWidget {
 
       // 🔔 Notifications
       builder: (context, child) {
-        return AppShell(
-          observer: appNavigationObserver,
-          child: _AppWithNotifications(child: child!),
+        if (child == null) return const SizedBox.shrink();
+        return _SelectionOverlay(
+          child: AppShell(
+            observer: appNavigationObserver,
+            child: _AppWithNotifications(child: child),
+          ),
         );
       },
     );
@@ -345,4 +351,41 @@ class _AppWithNotificationsState extends State<_AppWithNotifications>
 class AuthChangeNotification extends Notification {
   final bool isLoggedIn;
   AuthChangeNotification(this.isLoggedIn);
+}
+
+class _SelectionOverlay extends StatefulWidget {
+  final Widget child;
+  const _SelectionOverlay({required this.child});
+
+  @override
+  State<_SelectionOverlay> createState() => _SelectionOverlayState();
+}
+
+class _SelectionOverlayState extends State<_SelectionOverlay> {
+  late final OverlayEntry _entry = OverlayEntry(builder: _buildEntry);
+
+  Widget _buildEntry(BuildContext context) {
+    return SelectionArea(child: widget.child);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SelectionOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.child != widget.child) {
+      _entry.markNeedsBuild();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_entry.mounted) {
+      _entry.remove();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Overlay(initialEntries: [_entry]);
+  }
 }

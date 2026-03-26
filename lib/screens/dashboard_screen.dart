@@ -13,9 +13,7 @@ import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/widgets/recent_orders_widget.dart';
 import 'package:order_tracker/widgets/candlestick_chart_widget.dart';
 import 'package:order_tracker/widgets/overdue_orders_widget.dart';
-import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
-import 'package:order_tracker/widgets/chat_floating_button.dart';
 import 'package:order_tracker/utils/file_saver.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -922,7 +920,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: isDesktop ? null : Colors.transparent,
+      backgroundColor: isDesktop ? null : Colors.white,
       drawer: isDesktop
           ? null
           : _buildMobileDrawer(
@@ -980,9 +978,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-      floatingActionButton: const ChatFloatingButton(
-        heroTag: 'dashboard_chat_fab',
-      ),
       body: isDesktop
           ? _buildDesktopLayout(
               context,
@@ -1007,7 +1002,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             )
           : Stack(
               children: [
-                const AppSoftBackground(),
+                const Positioned.fill(
+                  child: ColoredBox(color: Colors.white),
+                ),
                 RefreshIndicator(
                   color: AppColors.primaryBlue,
                   displacement: 26,
@@ -1706,7 +1703,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
@@ -5963,7 +5960,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       if (moChildren.isNotEmpty)
         _buildDesktopFolderSection(
-          folderKey: 'parties',
+          folderKey: 'tracking',
           title: 'المتابعة',
           icon: Icons.folder,
           children: moChildren,
@@ -6656,7 +6653,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                   ),
                 ],
-                const SizedBox(height: 14),
+                const SizedBox(height: 20),
                 // Text(
                 //   'واجهة الجوال أصبحت أخف، والتنقل الآن من القائمة الجانبية بدل شبكة الأيقونات.',
                 //   style: TextStyle(
@@ -6665,7 +6662,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 //     fontSize: 12.5,
                 //   ),
                 // ),
-                const SizedBox(height: 14),
+               
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -6679,11 +6676,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? AppColors.errorRed
                           : AppColors.successGreen,
                     ),
-                    // _buildSidebarInfoChip(
-                    //   icon: Icons.mobile_friendly_rounded,
-                    //   label: 'وضع الجوال المحسّن',
-                    //   color: AppColors.primaryBlue,
-                    // ),
+                 
                   ],
                 ),
               ],
@@ -6715,12 +6708,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // العنوان الرئيسي مع أيقونة
         Row(
           children: [
-            Icon(Icons.insights, color: AppColors.primaryBlue, size: 24),
+            Icon(Icons.insights, color: AppColors.primaryBlue, size: 20),
             const SizedBox(width: 8),
             Text(
               'الإحصائيات التفصيلية',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
+                fontSize: 15,
                 color: AppColors.primaryBlue,
               ),
             ),
@@ -8716,7 +8710,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Expanded(
                   child: _buildPerformanceItem(
-                    icon: Icons.timer_outlined,
+                    icon: Icons.timer_outlined, 
                     title: 'متوسط وقت الاستجابة',
                     value: '2.5 ساعة',
                     color: AppColors.successGreen,
@@ -8780,20 +8774,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 20),
+              Icon(icon, color: color, size: 15),
               const SizedBox(width: 8),
               Text(
                 title,
-                style: TextStyle(color: AppColors.mediumGray, fontSize: 12),
+                style: TextStyle(color: AppColors.mediumGray, fontSize: 10),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             value,
             style: TextStyle(
               color: color,
-              fontSize: 20,
+              fontSize: 15,
               fontWeight: FontWeight.bold,
             ),
           ),

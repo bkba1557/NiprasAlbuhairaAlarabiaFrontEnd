@@ -4,6 +4,9 @@ class ApiConfig {
   static const String productionBaseUrl =
       'https://system-albuhairaalarabia.cloud/api';
 
+  // Local/LAN API URL used in development (so mobile devices can reach it too).
+  static const String devLanBaseUrl = 'http://192.168.8.203:6030/api';
+
   static const String _envKey = 'API_BASE_URL';
 
   static String get baseUrl {
@@ -20,20 +23,23 @@ class ApiConfig {
   }
 
   static String _defaultDevBaseUrl() {
-    if (kIsWeb) return 'https://system-albuhairaalarabia.cloud/api';
-    // if (kIsWeb) return 'http://localhost:6030/api';
+    // if (kIsWeb) return productionBaseUrl;
+    if (kIsWeb) return devLanBaseUrl;
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:6030/api';
+        // Use LAN by default so it works on real devices.
+        // If you're using an Android emulator with a localhost-bound backend,
+        // you can override via `--dart-define=API_BASE_URL=http://10.0.2.2:6030`.
+        return devLanBaseUrl;
       case TargetPlatform.iOS:
-        return 'http://127.0.0.1:6030/api';
+        return devLanBaseUrl;
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
       case TargetPlatform.linux:
-        return 'http://localhost:6030/api';
+        return devLanBaseUrl;
       default:
-        return 'http://localhost:6030/api';
+        return devLanBaseUrl;
     }
   }
 
@@ -50,4 +56,3 @@ class ApiConfig {
     return url;
   }
 }
-

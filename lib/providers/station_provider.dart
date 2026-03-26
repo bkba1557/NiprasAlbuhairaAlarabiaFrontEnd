@@ -45,6 +45,9 @@ class StationProvider with ChangeNotifier {
   StationStats? get stationStats => _stationStats;
   Map<String, double> get fuelTankCapacities => _fuelTankCapacities;
   Map<String, double> get sessionTotalsByFuel => _sessionTotalsByFuel;
+  int get currentPage => _currentPage;
+  int get totalPages => _totalPages;
+  int get totalItems => _totalItems;
   bool get isLoading => _isLoading;
   String? get error => _error;
   Map<String, dynamic> get filters => _filters;
@@ -131,6 +134,96 @@ class StationProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<bool> createStockDisbursement({
+    required String stationId,
+    required String fuelType,
+    required double quantity,
+    required String reason,
+    DateTime? movementDate,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final payload = <String, dynamic>{
+        'fuelType': fuelType,
+        'quantity': quantity,
+        'reason': reason,
+        if (movementDate != null) 'movementDate': movementDate.toIso8601String(),
+      };
+
+      final response = await http.post(
+        Uri.parse('${ApiEndpoints.baseUrl}/stations/$stationId/stock-disbursements'),
+        headers: ApiService.headers,
+        body: json.encode(payload),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      final errorData = json.decode(response.body);
+      _error = errorData['error'] ?? 'فشل صرف المخزون';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> createStockTransfer({
+    required String fromStationId,
+    required String toStationId,
+    required String fuelType,
+    required double quantity,
+    DateTime? movementDate,
+    String? notes,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final payload = <String, dynamic>{
+        'toStationId': toStationId,
+        'fuelType': fuelType,
+        'quantity': quantity,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        if (movementDate != null) 'movementDate': movementDate.toIso8601String(),
+      };
+
+      final response = await http.post(
+        Uri.parse('${ApiEndpoints.baseUrl}/stations/$fromStationId/stock-transfers'),
+        headers: ApiService.headers,
+        body: json.encode(payload),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      final errorData = json.decode(response.body);
+      _error = errorData['error'] ?? 'فشل تحويل المخزون';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر';
+      _isLoading = false;
+      notifyListeners();
+      return false;
     }
   }
 
@@ -1113,6 +1206,60 @@ class StationProvider with ChangeNotifier {
         final data = json.decode(response.body);
         final newInventory = DailyInventory.fromJson(data['inventory']);
         _inventories.insert(0, newInventory);
+
+        if (inventory.totalSales > 0) {
+          final calculatedBalance =
+              inventory.previousBalance +
+              inventory.receivedQuantity -
+              inventory.totalSales;
+          final actualBalance = inventory.actualBalance;
+          final difference = actualBalance == null
+              ? null
+              : (actualBalance - calculatedBalance);
+          final differencePercentage =
+              (difference != null && calculatedBalance != 0)
+              ? (difference / calculatedBalance) * 100
+              : null;
+
+          final updates = <String, dynamic>{
+            'totalSales': inventory.totalSales,
+            'calculatedBalance': calculatedBalance,
+            if (actualBalance != null) 'actualBalance': actualBalance,
+            'difference': difference,
+            'differencePercentage': differencePercentage,
+            if (inventory.differenceReason != null)
+              'differenceReason': inventory.differenceReason,
+            if (inventory.notes != null) 'notes': inventory.notes,
+            'updatedAt': DateTime.now().toIso8601String(),
+          };
+
+          try {
+            final patchResponse = await http.put(
+              Uri.parse(
+                '${ApiEndpoints.baseUrl}/stations/inventory/${newInventory.id}',
+              ),
+              headers: ApiService.headers,
+              body: json.encode(updates),
+            );
+
+            if (patchResponse.statusCode == 200) {
+              final patchedData = json.decode(patchResponse.body);
+              final updatedInventory = DailyInventory.fromJson(
+                patchedData['inventory'],
+              );
+
+              final index = _inventories.indexWhere(
+                (inv) => inv.id == updatedInventory.id,
+              );
+              if (index != -1) {
+                _inventories[index] = updatedInventory;
+              }
+              if (_selectedInventory?.id == updatedInventory.id) {
+                _selectedInventory = updatedInventory;
+              }
+            }
+          } catch (_) {}
+        }
 
         _isLoading = false;
         notifyListeners();

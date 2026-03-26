@@ -12,7 +12,6 @@ import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/widgets/maintenance/maintenance_card.dart';
 import 'package:order_tracker/widgets/maintenance/stats_card.dart';
-import 'package:order_tracker/widgets/chat_floating_button.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -327,8 +326,6 @@ class _MaintenanceDashboardScreenState
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const ChatFloatingButton(heroTag: 'maintenance_chat_fab', mini: true),
-          const SizedBox(height: 10),
           FloatingActionButton(
             heroTag: 'maintenance_add_fab',
             onPressed: () {

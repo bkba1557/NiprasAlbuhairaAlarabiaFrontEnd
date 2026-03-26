@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/chat_provider.dart';
 import 'package:order_tracker/utils/app_navigation.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:order_tracker/widgets/chat_floating_button.dart';
 import 'package:provider/provider.dart';
 
 class NavigationLoadingObserver extends NavigatorObserver {
@@ -94,15 +96,6 @@ class _AppShellState extends State<AppShell>
     final auth = context.watch<AuthProvider>();
     final chat = context.watch<ChatProvider>();
     final canShowChat = auth.isAuthenticated && auth.user != null;
-    const embeddedChatFabRoutes = <String>{
-      AppRoutes.dashboard,
-      AppRoutes.mainHome,
-      AppRoutes.maintenanceDashboard,
-      AppRoutes.periodicMaintenance,
-      AppRoutes.marketingStations,
-      AppRoutes.chat,
-      AppRoutes.chatConversation,
-    };
 
     if (!canShowChat && (chat.hasRunningSync || chat.totalUnread > 0)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -232,31 +225,40 @@ class _AppShellState extends State<AppShell>
             final normalizedRoute = currentRouteName == null
                 ? null
                 : (Uri.tryParse(currentRouteName)?.path ?? currentRouteName);
-            final showGlobalChatFab =
-                canShowChat && !embeddedChatFabRoutes.contains(normalizedRoute);
+            final showGlobalChatFab = canShowChat;
             if (!showGlobalChatFab) {
               return const SizedBox.shrink();
             }
-            const chatFabLiftPx = 132.0; // ~3.5 cm on standard 96dpi displays
-            final fabBottom =
-                MediaQuery.of(context).padding.bottom + 32 + chatFabLiftPx;
+            double cmToLogicalPx(double cm) {
+              final inches = cm / 2.54;
+              final platform = Theme.of(context).platform;
+              final isDesktopPlatform = platform == TargetPlatform.windows ||
+                  platform == TargetPlatform.macOS ||
+                  platform == TargetPlatform.linux;
+              final dpi = (kIsWeb || isDesktopPlatform) ? 96.0 : 160.0;
+              return inches * dpi;
+            }
 
-            return Positioned(
-              left: 22,
-              bottom: fabBottom,
-              child: Badge(
-                isLabelVisible: chat.totalUnread > 0,
-                label: Text(
-                  chat.totalUnread > 99 ? '99+' : chat.totalUnread.toString(),
-                ),
-                child: FloatingActionButton(
-                  heroTag: 'global_chat_fab',
-                  onPressed: () {
-                    appNavigatorKey.currentState?.pushNamed(AppRoutes.chat);
-                  },
-                  child: const Icon(Icons.chat_bubble_outline),
-                ),
-              ),
+            // Default offset: 2.5cm from left and bottom.
+            final offsetPx = cmToLogicalPx(2.5);
+            final safePadding = MediaQuery.of(context).padding;
+            final fabLeft = safePadding.left + offsetPx;
+            final fabBottom = safePadding.bottom + offsetPx;
+
+            final isAlreadyInChat =
+                normalizedRoute == AppRoutes.chat ||
+                normalizedRoute == AppRoutes.chatConversation;
+
+            return ChatFloatingButton(
+              heroTag: 'global_chat_fab',
+              draggable: true,
+              persistKey: 'global_chat_fab_v2',
+              initialAlignment: Alignment.bottomLeft,
+              initialMargin: EdgeInsets.only(left: fabLeft, bottom: fabBottom),
+              onPressed: () {
+                if (isAlreadyInChat) return;
+                appNavigatorKey.currentState?.pushNamed(AppRoutes.chat);
+              },
             );
           },
         ),

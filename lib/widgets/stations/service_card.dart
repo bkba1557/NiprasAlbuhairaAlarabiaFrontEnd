@@ -6,6 +6,7 @@ class ServiceCard extends StatefulWidget {
   final IconData icon;
   final Gradient gradient;
   final VoidCallback? onTap;
+  final bool compact;
 
   const ServiceCard({
     super.key,
@@ -14,6 +15,7 @@ class ServiceCard extends StatefulWidget {
     required this.icon,
     required this.gradient,
     this.onTap,
+    this.compact = false,
   });
 
   @override
@@ -28,16 +30,29 @@ class _ServiceCardState extends State<ServiceCard> {
     final theme = Theme.of(context);
     final enabled = widget.onTap != null;
     final hover = enabled && _hovered;
+    final compact = widget.compact;
+    final radius = compact ? 16.0 : 22.0;
+    final badgeSize = compact ? 36.0 : 46.0;
+    final badgeIconSize = compact ? 18.0 : 24.0;
+    final contentPadding = compact ? 10.0 : 16.0;
+    final topStripHeight = compact ? 4.0 : 6.0;
+    final glowSize = compact ? 96.0 : 140.0;
+    final titleGap = compact ? 3.0 : 6.0;
+    final betweenGap = compact ? 8.0 : 12.0;
+    final trailingGap = compact ? 2.0 : 8.0;
+    final chevronSize = compact ? 18.0 : 24.0;
 
     final accent = _accentColor(widget.gradient) ?? theme.colorScheme.primary;
 
     final titleStyle = theme.textTheme.titleMedium?.copyWith(
+      fontSize: compact ? 12.5 : null,
       fontWeight: FontWeight.w800,
       height: 1.1,
       color: enabled ? const Color(0xFF0F172A) : theme.disabledColor,
     );
 
     final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
+      fontSize: compact ? 9.5 : null,
       height: 1.25,
       color: enabled
           ? const Color(0xFF475569).withValues(alpha: 0.92)
@@ -65,7 +80,7 @@ class _ServiceCardState extends State<ServiceCard> {
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(radius),
           boxShadow: [
             BoxShadow(
               color: shadowColor,
@@ -76,12 +91,12 @@ class _ServiceCardState extends State<ServiceCard> {
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(radius),
           clipBehavior: Clip.antiAlias,
           child: Ink(
             decoration: BoxDecoration(
               gradient: background,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(color: borderColor),
             ),
             child: InkWell(
@@ -95,18 +110,18 @@ class _ServiceCardState extends State<ServiceCard> {
                     top: 0,
                     left: 0,
                     right: 0,
-                    height: 6,
+                    height: topStripHeight,
                     child: DecoratedBox(
                       decoration: BoxDecoration(gradient: widget.gradient),
                     ),
                   ),
                   Positioned(
-                    top: -54,
-                    right: -64,
+                    top: compact ? -34 : -54,
+                    right: compact ? -40 : -64,
                     child: IgnorePointer(
                       child: Container(
-                        width: 140,
-                        height: 140,
+                        width: glowSize,
+                        height: glowSize,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
@@ -120,7 +135,7 @@ class _ServiceCardState extends State<ServiceCard> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(contentPadding),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -128,8 +143,11 @@ class _ServiceCardState extends State<ServiceCard> {
                           icon: widget.icon,
                           gradient: widget.gradient,
                           enabled: enabled,
+                          size: badgeSize,
+                          iconSize: badgeIconSize,
+                          compact: compact,
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: betweenGap),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,21 +159,22 @@ class _ServiceCardState extends State<ServiceCard> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 6),
+                              SizedBox(height: titleGap),
                               Text(
                                 widget.subtitle,
                                 style: subtitleStyle,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: trailingGap),
                         Icon(
                           Directionality.of(context) == TextDirection.rtl
                               ? Icons.chevron_left_rounded
                               : Icons.chevron_right_rounded,
+                          size: chevronSize,
                           color: enabled
                               ? const Color(0xFF64748B).withValues(alpha: 0.85)
                               : theme.disabledColor.withValues(alpha: 0.75),
@@ -190,11 +209,17 @@ class _IconBadge extends StatelessWidget {
   final IconData icon;
   final Gradient gradient;
   final bool enabled;
+  final double size;
+  final double iconSize;
+  final bool compact;
 
   const _IconBadge({
     required this.icon,
     required this.gradient,
     required this.enabled,
+    required this.size,
+    required this.iconSize,
+    required this.compact,
   });
 
   @override
@@ -202,20 +227,20 @@ class _IconBadge extends StatelessWidget {
     return Opacity(
       opacity: enabled ? 1.0 : 0.45,
       child: Container(
-        width: 46,
-        height: 46,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           gradient: gradient,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(compact ? 11 : 16),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.10),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+              blurRadius: compact ? 10 : 16,
+              offset: Offset(0, compact ? 5 : 8),
             ),
           ],
         ),
-        child: Icon(icon, color: Colors.white, size: 24),
+        child: Icon(icon, color: Colors.white, size: iconSize),
       ),
     );
   }

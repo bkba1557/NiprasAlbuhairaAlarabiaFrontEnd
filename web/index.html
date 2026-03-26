@@ -39,9 +39,9 @@
     window.flutterWebRenderer = "html";
   </script>
 
-  <!-- Google Maps Map ID -->
+  <!-- Google Maps Map ID (disabled for classic tiles) -->
   <script>
-    window.GOOGLE_MAPS_MAP_ID = "91aedc28da83b4c9d9692050";
+    window.GOOGLE_MAPS_MAP_ID = "";
     window.__googleMapsLoadState = "loading";
     window.__googleMapsLoadError = "";
     window.gm_authFailure = function () {
@@ -53,7 +53,7 @@
 
   <!-- Google Maps JS -->
   <script
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCayUZhpM7kmI4rxeg-URtOBjk5137XLS4&v=weekly&libraries=marker&map_ids=91aedc28da83b4c9d9692050"
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCayUZhpM7kmI4rxeg-URtOBjk5137XLS4&v=weekly"
     onload="window.__googleMapsLoadState = (window.google && window.google.maps) ? 'ready' : 'loaded_no_maps'; if (window.__googleMapsLoadState !== 'ready' && !window.__googleMapsLoadError) { window.__googleMapsLoadError = 'Google Maps script loaded but google.maps is unavailable.'; }"
     onerror="window.__googleMapsLoadState = 'load_error'; window.__googleMapsLoadError = 'Failed to load Google Maps JavaScript API.';">
   </script>

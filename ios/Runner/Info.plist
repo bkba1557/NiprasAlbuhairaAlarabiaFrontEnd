@@ -51,6 +51,8 @@
 	<string>نحتاج إلى موقعك في الخلفية لمواصلة التتبع المباشر للطلب أثناء الرحلة.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>نحتاج إلى الميكروفون لتسجيل الرسائل الصوتية داخل المحادثات.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>نحتاج إلى إذن التعرف على الكلام لتحويل الصوت إلى نص داخل التطبيق.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>نحتاج إلى الكاميرا لالتقاط الصور والفيديو وإرسالها في المحادثة.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

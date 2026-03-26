@@ -13,6 +13,8 @@ import 'package:order_tracker/utils/login_device_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthProvider with ChangeNotifier {
+  static const Duration _requestTimeout = Duration(seconds: 20);
+
   User? _user;
   String? _token;
   bool _isLoading = false;
@@ -92,11 +94,13 @@ class AuthProvider with ChangeNotifier {
     _error = null;
 
     try {
-      final response = await http.post(
-        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.login}'),
-        headers: const {'Content-Type': 'application/json'},
-        body: json.encode({'email': email, 'password': password}),
-      );
+      final response = await http
+          .post(
+            Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.login}'),
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode({'email': email, 'password': password}),
+          )
+          .timeout(_requestTimeout);
 
       final body = json.decode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
@@ -107,8 +111,12 @@ class AuthProvider with ChangeNotifier {
       }
 
       _error = body['error']?.toString() ?? 'فشل تسجيل الدخول';
+    } on TimeoutException {
+      _error = 'انتهت مهلة الاتصال بالخادم';
     } on SocketException {
       _error = 'لا يوجد اتصال بالإنترنت';
+    } on http.ClientException catch (e) {
+      _error = _friendlyClientErrorMessage(e.message);
     } catch (e, s) {
       debugPrint('LOGIN ERROR: $e');
       debugPrint('STACK: $s');
@@ -136,15 +144,17 @@ class AuthProvider with ChangeNotifier {
 
     try {
       final device = await LoginDeviceUtil.resolve();
-      final response = await http.post(
-        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.requestLoginOtp}'),
-        headers: const {'Content-Type': 'application/json'},
-        body: json.encode({
-          'loginType': loginType,
-          'identifier': trimmedIdentifier,
-          ...device.toJson(),
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.requestLoginOtp}'),
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode({
+              'loginType': loginType,
+              'identifier': trimmedIdentifier,
+              ...device.toJson(),
+            }),
+          )
+          .timeout(_requestTimeout);
 
       final body = json.decode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
@@ -157,8 +167,12 @@ class AuthProvider with ChangeNotifier {
       }
 
       _error = body['error']?.toString() ?? 'تعذر إرسال رمز التحقق';
+    } on TimeoutException {
+      _error = 'انتهت مهلة الاتصال بالخادم';
     } on SocketException {
       _error = 'لا يوجد اتصال بالإنترنت';
+    } on http.ClientException catch (e) {
+      _error = _friendlyClientErrorMessage(e.message);
     } catch (e, s) {
       debugPrint('OTP REQUEST ERROR: $e');
       debugPrint('STACK: $s');
@@ -190,16 +204,18 @@ class AuthProvider with ChangeNotifier {
 
     try {
       final device = await LoginDeviceUtil.resolve();
-      final response = await http.post(
-        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.verifyLoginOtp}'),
-        headers: const {'Content-Type': 'application/json'},
-        body: json.encode({
-          'loginType': _pendingLoginType,
-          'identifier': _pendingIdentifier,
-          'otp': trimmedOtp,
-          ...device.toJson(),
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.verifyLoginOtp}'),
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode({
+              'loginType': _pendingLoginType,
+              'identifier': _pendingIdentifier,
+              'otp': trimmedOtp,
+              ...device.toJson(),
+            }),
+          )
+          .timeout(_requestTimeout);
 
       final body = json.decode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
@@ -211,8 +227,12 @@ class AuthProvider with ChangeNotifier {
       }
 
       _error = body['error']?.toString() ?? 'فشل التحقق من الرمز';
+    } on TimeoutException {
+      _error = 'انتهت مهلة الاتصال بالخادم';
     } on SocketException {
       _error = 'لا يوجد اتصال بالإنترنت';
+    } on http.ClientException catch (e) {
+      _error = _friendlyClientErrorMessage(e.message);
     } catch (e, s) {
       debugPrint('OTP VERIFY ERROR: $e');
       debugPrint('STACK: $s');
@@ -236,18 +256,20 @@ class AuthProvider with ChangeNotifier {
     _error = null;
 
     try {
-      final response = await http.post(
-        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.register}'),
-        headers: const {'Content-Type': 'application/json'},
-        body: json.encode({
-          'name': name,
-          'username': username,
-          'email': email,
-          'password': password,
-          'company': company,
-          'phone': phone,
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.register}'),
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode({
+              'name': name,
+              'username': username,
+              'email': email,
+              'password': password,
+              'company': company,
+              'phone': phone,
+            }),
+          )
+          .timeout(_requestTimeout);
 
       final body = json.decode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 201) {
@@ -258,6 +280,12 @@ class AuthProvider with ChangeNotifier {
       }
 
       _error = body['error']?.toString() ?? 'فشل إنشاء الحساب';
+    } on TimeoutException {
+      _error = 'انتهت مهلة الاتصال بالخادم';
+    } on SocketException {
+      _error = 'لا يوجد اتصال بالإنترنت';
+    } on http.ClientException catch (e) {
+      _error = _friendlyClientErrorMessage(e.message);
     } catch (e, s) {
       debugPrint('REGISTER ERROR: $e');
       debugPrint('STACK: $s');
@@ -325,6 +353,21 @@ class AuthProvider with ChangeNotifier {
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
+  }
+
+  String _friendlyClientErrorMessage(String message) {
+    final normalized = message.trim();
+
+    if (normalized.isEmpty) {
+      return 'تعذر الاتصال بالخادم';
+    }
+
+    final lower = normalized.toLowerCase();
+    if (lower.contains('cleartext') && lower.contains('not permitted')) {
+      return 'الاتصال غير مسموح لأن الخادم يستخدم HTTP (يرجى تفعيل Cleartext على أندرويد)';
+    }
+
+    return 'تعذر الاتصال بالخادم';
   }
 
   Future<void> _clearStoredAuthData([SharedPreferences? prefs]) async {

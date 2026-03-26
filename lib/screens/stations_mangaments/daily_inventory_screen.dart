@@ -218,12 +218,28 @@ class _DailyInventoryScreenState extends State<DailyInventoryScreen> {
       snapshotByFuel[fuelType] = item;
     }
 
+    final stationProvider = context.read<StationProvider>();
+    final sessionSalesByFuel = _salesTotalsFromSessions(stationProvider.sessions);
+
     double totalPrevious = 0;
     for (final entry in _fuelEntries) {
       final snapshot = snapshotByFuel[_normalizeFuelType(entry.fuelType)];
+      final referenceBalance =
+          snapshot != null && snapshot.containsKey('inventoryReferenceBalance')
+          ? _stockValue(snapshot['inventoryReferenceBalance'])
+          : null;
+      final double backendSales = snapshot == null
+          ? 0.0
+          : _stockValue(snapshot['salesSinceInventory']);
+      final double sessionSales =
+          sessionSalesByFuel[_normalizeFuelType(entry.fuelType)] ?? 0.0;
+      final double salesSinceInventory = backendSales > 0
+          ? backendSales
+          : sessionSales;
       entry.applyBackendSnapshot(
+        inventoryReferenceBalance: referenceBalance,
         currentBalance: _stockValue(snapshot?['currentBalance']),
-        salesSinceInventory: _stockValue(snapshot?['salesSinceInventory']),
+        salesSinceInventory: salesSinceInventory,
       );
       totalPrevious += entry.previousBalanceValue;
     }
@@ -438,14 +454,8 @@ class _DailyInventoryScreenState extends State<DailyInventoryScreen> {
     return '';
   }
 
-  void _updateSalesFromSessions(List<PumpSession> sessions) {
-    if (_selectedStationId == null) return;
-
-    final targetDate = DateTime(
-      _inventoryDate.year,
-      _inventoryDate.month,
-      _inventoryDate.day,
-    );
+  Map<String, double> _salesTotalsFromSessions(List<PumpSession> sessions) {
+    if (_selectedStationId == null) return const <String, double>{};
 
     final totals = <String, double>{};
 
@@ -456,23 +466,18 @@ class _DailyInventoryScreenState extends State<DailyInventoryScreen> {
         if (normalized.isEmpty) return;
         totals[normalized] = (totals[normalized] ?? 0) + value;
       });
-
-      for (final entry in _fuelEntries) {
-        final liters = totals[_normalizeFuelType(entry.fuelType)] ?? 0;
-        entry.litersSoldController.text = liters.toStringAsFixed(2);
-        entry.recalculate();
-      }
-
-      if (mounted) {
-        setState(() {});
-        _calculateProfitLoss();
-      }
-      return;
+      return totals;
     }
+
+    final fromDate = DateTime(
+      _inventoryDate.year,
+      _inventoryDate.month,
+      _inventoryDate.day,
+    );
 
     for (final session in sessions) {
       if (session.stationId != _selectedStationId) continue;
-      if (!_isSameDay(session.sessionDate, targetDate)) continue;
+      if (session.sessionDate.isBefore(fromDate)) continue;
 
       final readings = session.nozzleReadings ?? [];
       if (readings.isNotEmpty) {
@@ -525,16 +530,7 @@ class _DailyInventoryScreenState extends State<DailyInventoryScreen> {
       }
     }
 
-    for (final entry in _fuelEntries) {
-      final liters = totals[_normalizeFuelType(entry.fuelType)] ?? 0;
-
-      entry.litersSoldController.text = liters.toStringAsFixed(2);
-
-      entry.recalculate();
-    }
-
-    setState(() {});
-    _calculateProfitLoss();
+    return totals;
   }
 
   double _sessionReadingLiters(NozzleReading reading) {
@@ -2451,14 +2447,31 @@ class FuelSupplyEntry {
   }
 
   void applyBackendSnapshot({
+    double? inventoryReferenceBalance,
     required double currentBalance,
     required double salesSinceInventory,
   }) {
     hasPreviousBalance = true;
-    salesAlreadyAppliedInBalance = true;
     _actualBalanceEdited = false;
-    previousBalanceController.text = currentBalance.toStringAsFixed(2);
-    openingBalanceController.text = currentBalance.toStringAsFixed(2);
+
+    final baseline = inventoryReferenceBalance ?? currentBalance;
+    final expectedRemaining = baseline - salesSinceInventory;
+    const tolerance = 0.01;
+
+    final salesApplied = inventoryReferenceBalance == null
+        ? false
+        : (currentBalance - expectedRemaining).abs() <= tolerance
+        ? true
+        : (currentBalance - inventoryReferenceBalance).abs() <= tolerance &&
+              salesSinceInventory > 0
+        ? false
+        : true;
+
+    salesAlreadyAppliedInBalance = salesApplied;
+
+    final openingForUi = salesApplied ? currentBalance : baseline;
+    previousBalanceController.text = openingForUi.toStringAsFixed(2);
+    openingBalanceController.text = openingForUi.toStringAsFixed(2);
     litersSoldController.text = salesSinceInventory.toStringAsFixed(2);
     recalculate();
   }

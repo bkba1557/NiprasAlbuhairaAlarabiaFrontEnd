@@ -445,6 +445,32 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
                   },
                 ),
 
+                // صرف مخزون
+                IconButton(
+                  tooltip: 'صرف مخزون',
+                  icon: const Icon(Icons.remove_circle_outline),
+                  onPressed: () {
+                    _showStockDisbursementDialog(
+                      context: context,
+                      station: station,
+                      stockRows: stockRows,
+                    );
+                  },
+                ),
+
+                // تحويل مخزون
+                IconButton(
+                  tooltip: 'تحويل مخزون',
+                  icon: const Icon(Icons.swap_horiz),
+                  onPressed: () {
+                    _showStockTransferDialog(
+                      context: context,
+                      station: station,
+                      stockRows: stockRows,
+                    );
+                  },
+                ),
+
                 // تعديل بيانات المحطة
                 IconButton(
                   tooltip: 'تعديل المحطة',
@@ -2429,6 +2455,574 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showStockDisbursementDialog({
+    required BuildContext context,
+    required Station station,
+    required List<_StationFuelStockRow> stockRows,
+  }) async {
+    if (stockRows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد بيانات مخزون حالية لهذه المحطة'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
+    final fuelTypes = stockRows
+        .map((row) => row.fuelType.trim())
+        .where((fuel) => fuel.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    var selectedFuelType = fuelTypes.isNotEmpty ? fuelTypes.first : '';
+    final qtyController = TextEditingController();
+    final reasonController = TextEditingController();
+
+    Future<void> submit(BuildContext dialogContext) async {
+      final quantity = double.tryParse(qtyController.text.trim()) ?? 0;
+      final reason = reasonController.text.trim();
+
+      final row = stockRows.where((r) => r.fuelType == selectedFuelType);
+      final available = row.isNotEmpty ? row.first.remainingStock : 0;
+
+      if (selectedFuelType.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى اختيار نوع الوقود'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      if (quantity <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى إدخال كمية صحيحة'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      if (quantity > available) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('الكمية أكبر من المتاح (${available.toStringAsFixed(2)} لتر)'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      if (reason.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى إدخال سبب الصرف'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      final provider = context.read<StationProvider>();
+      final success = await provider.createStockDisbursement(
+        stationId: station.id,
+        fuelType: selectedFuelType,
+        quantity: quantity,
+        reason: reason,
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        Navigator.pop(dialogContext);
+        await provider.fetchCurrentStock(station.id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم صرف المخزون بنجاح'),
+            backgroundColor: AppColors.successGreen,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.error ?? 'فشل صرف المخزون'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          final row = stockRows.where((r) => r.fuelType == selectedFuelType);
+          final available = row.isNotEmpty ? row.first.remainingStock : 0;
+
+          return AlertDialog(
+            title: const Text('صرف مخزون'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedFuelType.isEmpty ? null : selectedFuelType,
+                    decoration: const InputDecoration(
+                      labelText: 'نوع الوقود',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: fuelTypes
+                        .map(
+                          (fuel) => DropdownMenuItem<String>(
+                            value: fuel,
+                            child: Text(fuel),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => selectedFuelType = value);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'المتاح: ${available.toStringAsFixed(2)} لتر',
+                      style: const TextStyle(color: AppColors.mediumGray),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: qtyController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'الكمية (لتر)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    decoration: const InputDecoration(
+                      labelText: 'سبب الصرف',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: () => submit(dialogContext),
+                child: const Text('تأكيد'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    qtyController.dispose();
+    reasonController.dispose();
+  }
+
+  Future<Station?> _showInlineCreateStationDialog(BuildContext context) async {
+    final nameController = TextEditingController();
+    final codeController = TextEditingController();
+    final locationController = TextEditingController();
+    final cityController = TextEditingController();
+    final managerNameController = TextEditingController();
+    final managerPhoneController = TextEditingController();
+
+    Future<Station?> create(BuildContext dialogContext) async {
+      final name = nameController.text.trim();
+      final location = locationController.text.trim();
+      final city = cityController.text.trim();
+      final managerName = managerNameController.text.trim();
+      final managerPhone = managerPhoneController.text.trim();
+      final stationCode = codeController.text.trim();
+
+      if ([name, location, city, managerName, managerPhone].any((v) => v.isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى تعبئة جميع الحقول المطلوبة'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return null;
+      }
+
+      final station = Station(
+        id: '',
+        stationCode: stationCode,
+        stationName: name,
+        location: location,
+        city: city,
+        managerName: managerName,
+        managerPhone: managerPhone,
+        fuelTypes: const [],
+        pumps: const [],
+        createdById: '',
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        fuelPrices: const [],
+      );
+
+      final provider = context.read<StationProvider>();
+      final success = await provider.createStation(station);
+      if (!mounted) return null;
+
+      if (!success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.error ?? 'فشل إنشاء المحطة'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return null;
+      }
+
+      final created = provider.stations.isNotEmpty ? provider.stations.first : null;
+      Navigator.pop(dialogContext, created);
+      return created;
+    }
+
+    final createdStation = await showDialog<Station?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('إضافة محطة جديدة'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'اسم المحطة *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codeController,
+                decoration: const InputDecoration(
+                  labelText: 'كود المحطة (اختياري)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: cityController,
+                decoration: const InputDecoration(
+                  labelText: 'المدينة *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: locationController,
+                decoration: const InputDecoration(
+                  labelText: 'الموقع *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: managerNameController,
+                decoration: const InputDecoration(
+                  labelText: 'اسم المدير *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: managerPhoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'رقم المدير *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => create(dialogContext),
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+
+    nameController.dispose();
+    codeController.dispose();
+    locationController.dispose();
+    cityController.dispose();
+    managerNameController.dispose();
+    managerPhoneController.dispose();
+
+    return createdStation;
+  }
+
+  Future<void> _showStockTransferDialog({
+    required BuildContext context,
+    required Station station,
+    required List<_StationFuelStockRow> stockRows,
+  }) async {
+    if (stockRows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد بيانات مخزون حالية لهذه المحطة'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
+    final provider = context.read<StationProvider>();
+    if (provider.stations.isEmpty) {
+      await provider.fetchStations();
+    }
+
+    final fuelTypes = stockRows
+        .map((row) => row.fuelType.trim())
+        .where((fuel) => fuel.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    var selectedFuelType = fuelTypes.isNotEmpty ? fuelTypes.first : '';
+    String? toStationId;
+    final qtyController = TextEditingController();
+    final notesController = TextEditingController();
+
+    Future<void> submit(BuildContext dialogContext) async {
+      final quantity = double.tryParse(qtyController.text.trim()) ?? 0;
+
+      final row = stockRows.where((r) => r.fuelType == selectedFuelType);
+      final available = row.isNotEmpty ? row.first.remainingStock : 0;
+
+      if (toStationId == null || toStationId!.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى اختيار المحطة المحول لها'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      if (toStationId == station.id) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('لا يمكن التحويل لنفس المحطة'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      if (selectedFuelType.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى اختيار نوع الوقود'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      if (quantity <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى إدخال كمية صحيحة'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      if (quantity > available) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('الكمية أكبر من المتاح (${available.toStringAsFixed(2)} لتر)'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
+
+      final success = await provider.createStockTransfer(
+        fromStationId: station.id,
+        toStationId: toStationId!,
+        fuelType: selectedFuelType,
+        quantity: quantity,
+        notes: notesController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        Navigator.pop(dialogContext);
+        await provider.fetchCurrentStock(station.id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تحويل المخزون بنجاح'),
+            backgroundColor: AppColors.successGreen,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.error ?? 'فشل تحويل المخزون'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          final stations = context.watch<StationProvider>().stations;
+          final stationOptions = stations
+              .where((s) => s.id != station.id)
+              .toList()
+            ..sort((a, b) => a.stationName.compareTo(b.stationName));
+
+          final row = stockRows.where((r) => r.fuelType == selectedFuelType);
+          final available = row.isNotEmpty ? row.first.remainingStock : 0;
+
+          return AlertDialog(
+            title: const Text('تحويل مخزون'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedFuelType.isEmpty ? null : selectedFuelType,
+                    decoration: const InputDecoration(
+                      labelText: 'نوع الوقود',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: fuelTypes
+                        .map(
+                          (fuel) => DropdownMenuItem<String>(
+                            value: fuel,
+                            child: Text(fuel),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => selectedFuelType = value);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'المتاح: ${available.toStringAsFixed(2)} لتر',
+                      style: const TextStyle(color: AppColors.mediumGray),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: qtyController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'الكمية (لتر)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: toStationId,
+                    decoration: const InputDecoration(
+                      labelText: 'المحطة المحول لها',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: stationOptions
+                        .map(
+                          (s) => DropdownMenuItem<String>(
+                            value: s.id,
+                            child: Text(s.stationName),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setState(() => toStationId = value),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final created = await _showInlineCreateStationDialog(
+                          context,
+                        );
+                        if (!mounted) return;
+                        if (created == null) return;
+                        setState(() => toStationId = created.id);
+                      },
+                      icon: const Icon(Icons.add_business_outlined),
+                      label: const Text('إضافة محطة جديدة'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    decoration: const InputDecoration(
+                      labelText: 'ملاحظات (اختياري)',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: () => submit(dialogContext),
+                child: const Text('تأكيد'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    qtyController.dispose();
+    notesController.dispose();
   }
 }
 

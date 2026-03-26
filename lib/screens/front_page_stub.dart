@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:order_tracker/utils/device_performance.dart';
 
 class FrontPage extends StatelessWidget {
   final VoidCallback onEmployeeLogin;
@@ -10,6 +11,7 @@ class FrontPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final reduceEffects = DevicePerformance.reduceEffects;
     return Scaffold(
       body: Stack(
         children: [
@@ -50,7 +52,10 @@ class FrontPage extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    filter: ImageFilter.blur(
+                      sigmaX: reduceEffects ? 0 : 18,
+                      sigmaY: reduceEffects ? 0 : 18,
+                    ),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,
@@ -62,7 +67,10 @@ class FrontPage extends StatelessWidget {
                         border: Border.all(
                           color: Colors.white.withOpacity(0.55),
                         ),
-                        boxShadow: [
+                        boxShadow:
+                            reduceEffects
+                                ? null
+                                : [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.18),
                             blurRadius: 24,

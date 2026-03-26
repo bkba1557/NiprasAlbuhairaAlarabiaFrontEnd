@@ -12,8 +12,10 @@ class AdvancedWebMap extends StatefulWidget {
   final LatLng? secondaryMarker;
   final String? primaryMarkerIcon;
   final String? secondaryMarkerIcon;
+  final List<LatLng>? polylineOutline;
   final List<LatLng>? polyline;
   final ValueChanged<LatLng>? onTap;
+  final bool useMapId;
 
   const AdvancedWebMap({
     super.key,
@@ -23,8 +25,10 @@ class AdvancedWebMap extends StatefulWidget {
     this.secondaryMarker,
     this.primaryMarkerIcon,
     this.secondaryMarkerIcon,
+    this.polylineOutline,
     this.polyline,
     this.onTap,
+    this.useMapId = true,
   });
 
   @override
@@ -37,6 +41,7 @@ class _AdvancedWebMapState extends State<AdvancedWebMap> {
   dynamic _map;
   dynamic _primaryMarker;
   dynamic _secondaryMarker;
+  dynamic _polylineOutline;
   dynamic _polyline;
   dynamic _tapListener;
   bool _mapReady = false;
@@ -80,6 +85,7 @@ class _AdvancedWebMapState extends State<AdvancedWebMap> {
     _map = null;
     _primaryMarker = null;
     _secondaryMarker = null;
+    _polylineOutline = null;
     _polyline = null;
     super.dispose();
   }
@@ -95,6 +101,11 @@ class _AdvancedWebMapState extends State<AdvancedWebMap> {
 
   void _ensureMap() {
     if (_mapReady || _element == null || _initError != null) return;
+    final loadError = _loadError();
+    if (loadError != null) {
+      _setInitError(loadError);
+      return;
+    }
     final maps = _getMaps();
     if (maps == null) {
       return;
@@ -106,11 +117,17 @@ class _AdvancedWebMapState extends State<AdvancedWebMap> {
       );
       return;
     }
-    _mapId = _resolveMapId();
-    _advancedMarkerCtor = _resolveAdvancedMarkerCtor(maps);
+    if (widget.useMapId) {
+      _mapId = _resolveMapId();
+    } else {
+      _mapId = null;
+    }
+    _advancedMarkerCtor =
+        widget.useMapId ? _resolveAdvancedMarkerCtor(maps) : null;
     final options = <String, dynamic>{
       'center': _toJsLatLng(widget.center),
       'zoom': widget.zoom,
+      'mapTypeId': 'roadmap',
     };
     if (_mapId != null) {
       options['mapId'] = _mapId;
@@ -249,7 +266,12 @@ class _AdvancedWebMapState extends State<AdvancedWebMap> {
   void _syncPolyline() {
     if (!_mapReady) return;
     final points = widget.polyline;
-    if (points == null || points.isEmpty) {
+    final outlinePoints = widget.polylineOutline ?? points;
+    if ((points == null || points.isEmpty) &&
+        (outlinePoints == null || outlinePoints.isEmpty)) {
+      if (_polylineOutline != null) {
+        js_util.setProperty(_polylineOutline, 'map', null);
+      }
       if (_polyline != null) {
         js_util.setProperty(_polyline, 'map', null);
       }
@@ -257,39 +279,68 @@ class _AdvancedWebMapState extends State<AdvancedWebMap> {
     }
 
     try {
-      final jsPath = js_util.jsify(points.map(_toJsLatLng).toList());
-      final signature = _polylineSignature(points);
-      if (_polyline == null) {
-        final maps = _getMaps();
-        if (maps == null || !js_util.hasProperty(maps, 'Polyline')) {
-          return;
-        }
-        final polylineCtor = js_util.getProperty(maps, 'Polyline');
-        _polyline = js_util.callConstructor(polylineCtor, [
-          js_util.jsify({
-            'path': jsPath,
-            'strokeColor': '#1A73E8',
-            'strokeOpacity': 0.9,
-            'strokeWeight': 4,
-            'map': _map,
-          }),
-        ]);
-        if (signature != _lastPolylineSignature) {
-          _lastPolylineSignature = signature;
-          _fitBounds(points);
-        }
-        return;
-      }
+      _polylineOutline = _setPolyline(
+        polyline: _polylineOutline,
+        points: outlinePoints,
+        color: '#1B33B7',
+        width: 8,
+        opacity: 0.82,
+      );
+      _polyline = _setPolyline(
+        polyline: _polyline,
+        points: points,
+        color: '#5B7CFF',
+        width: 5,
+        opacity: 0.96,
+      );
 
-      js_util.callMethod(_polyline, 'setPath', [jsPath]);
-      js_util.setProperty(_polyline, 'map', _map);
+      final fitPoints = points ?? outlinePoints;
+      if (fitPoints == null || fitPoints.isEmpty) return;
+      final signature = _polylineSignature(fitPoints);
       if (signature != _lastPolylineSignature) {
         _lastPolylineSignature = signature;
-        _fitBounds(points);
+        _fitBounds(fitPoints);
       }
-    } catch (error) {
+    } catch (_) {
       _setInitError('Failed to render map elements. Check Maps JS settings.');
     }
+  }
+
+  dynamic _setPolyline({
+    required dynamic polyline,
+    required List<LatLng>? points,
+    required String color,
+    required int width,
+    required double opacity,
+  }) {
+    if (points == null || points.isEmpty) {
+      if (polyline != null) {
+        js_util.setProperty(polyline, 'map', null);
+      }
+      return polyline;
+    }
+
+    final jsPath = js_util.jsify(points.map(_toJsLatLng).toList());
+    if (polyline == null) {
+      final maps = _getMaps();
+      if (maps == null || !js_util.hasProperty(maps, 'Polyline')) {
+        return null;
+      }
+      final polylineCtor = js_util.getProperty(maps, 'Polyline');
+      return js_util.callConstructor(polylineCtor, [
+        js_util.jsify({
+          'path': jsPath,
+          'strokeColor': color,
+          'strokeOpacity': opacity,
+          'strokeWeight': width,
+          'map': _map,
+        }),
+      ]);
+    }
+
+    js_util.callMethod(polyline, 'setPath', [jsPath]);
+    js_util.setProperty(polyline, 'map', _map);
+    return polyline;
   }
 
   String _polylineSignature(List<LatLng> points) {
@@ -324,6 +375,28 @@ class _AdvancedWebMapState extends State<AdvancedWebMap> {
     if (mapId is String && mapId.trim().isNotEmpty) {
       return mapId.trim();
     }
+    return null;
+  }
+
+  String? _loadError() {
+    try {
+      final state = js_util.getProperty(
+        js_util.globalThis,
+        '__googleMapsLoadState',
+      );
+      final value = state?.toString() ?? '';
+      if (value == 'auth_failure' || value == 'load_error') {
+        final error = js_util.getProperty(
+          js_util.globalThis,
+          '__googleMapsLoadError',
+        );
+        final message = error?.toString().trim();
+        if (message != null && message.isNotEmpty) {
+          return message;
+        }
+        return 'Google Maps failed to load. Check API key and billing.';
+      }
+    } catch (_) {}
     return null;
   }
 

@@ -8,8 +8,10 @@ class AdvancedWebMap extends StatelessWidget {
   final LatLng? secondaryMarker;
   final String? primaryMarkerIcon;
   final String? secondaryMarkerIcon;
+  final List<LatLng>? polylineOutline;
   final List<LatLng>? polyline;
   final ValueChanged<LatLng>? onTap;
+  final bool useMapId;
 
   const AdvancedWebMap({
     super.key,
@@ -19,8 +21,10 @@ class AdvancedWebMap extends StatelessWidget {
     this.secondaryMarker,
     this.primaryMarkerIcon,
     this.secondaryMarkerIcon,
+    this.polylineOutline,
     this.polyline,
     this.onTap,
+    this.useMapId = true,
   });
 
   @override

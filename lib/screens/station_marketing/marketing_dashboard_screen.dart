@@ -9,7 +9,6 @@ import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
-import 'package:order_tracker/widgets/chat_floating_button.dart';
 
 import 'marketing_models.dart';
 import 'marketing_handover_report_form_screen.dart';
@@ -257,7 +256,9 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
             elevation: 0,
             scrolledUnderElevation: 0,
             flexibleSpace: Container(
-              decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+              decoration: const BoxDecoration(
+                gradient: AppColors.appBarGradient,
+              ),
             ),
             leading: isWide
                 ? IconButton(
@@ -316,14 +317,7 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
                 ),
           floatingActionButton: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              const ChatFloatingButton(
-                heroTag: 'marketing_chat_fab',
-                mini: true,
-              ),
-              const SizedBox(height: 10),
-              if (primaryFab != null) primaryFab,
-            ],
+            children: [if (primaryFab != null) primaryFab],
           ),
           body: Stack(
             children: [
@@ -428,8 +422,12 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.86),
         border: Border(
-          left: isRtl ? BorderSide(color: AppColors.lightGray) : BorderSide.none,
-          right: isRtl ? BorderSide.none : BorderSide(color: AppColors.lightGray),
+          left: isRtl
+              ? BorderSide(color: AppColors.lightGray)
+              : BorderSide.none,
+          right: isRtl
+              ? BorderSide.none
+              : BorderSide(color: AppColors.lightGray),
         ),
         boxShadow: [
           BoxShadow(
@@ -601,7 +599,9 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
         ),
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryBlue.withValues(alpha: 0.10) : null,
+          color: isSelected
+              ? AppColors.primaryBlue.withValues(alpha: 0.10)
+              : null,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected
@@ -833,40 +833,40 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
       child: AppSurfaceCard(
         padding: const EdgeInsets.all(18),
         borderRadius: const BorderRadius.all(Radius.circular(26)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.16),
+                    ),
+                  ),
+                  child: Icon(icon, size: 18, color: AppColors.primaryBlue),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.darkGray,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
-                child: Icon(icon, size: 18, color: AppColors.primaryBlue),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.darkGray,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            child,
+          ],
+        ),
       ),
     );
   }

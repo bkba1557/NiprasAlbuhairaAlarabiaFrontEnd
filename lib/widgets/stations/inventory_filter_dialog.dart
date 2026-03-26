@@ -44,6 +44,40 @@ class _InventoryFilterDialogState extends State<InventoryFilterDialog> {
     _endDate = widget.currentFilters['endDate'];
   }
 
+  Future<void> _selectSingleDay(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _startDate = picked;
+        _endDate = picked;
+      });
+    }
+  }
+
+  Future<void> _selectMonth(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      final start = DateTime(picked.year, picked.month, 1);
+      final end = DateTime(picked.year, picked.month + 1, 0);
+      setState(() {
+        _startDate = start;
+        _endDate = end;
+      });
+    }
+  }
+
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
     final picked = await showDatePicker(
       context: context,
@@ -111,12 +145,8 @@ class _InventoryFilterDialogState extends State<InventoryFilterDialog> {
                 value: _stationId,
                 isExpanded: true,
                 underline: const SizedBox(),
-                hint: const Text('جميع المحطات'),
+                hint: const Text('اختر محطة'),
                 items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('جميع المحطات'),
-                  ),
                   ...widget.stations.map((station) {
                     return DropdownMenuItem<String>(
                       value: station.id,
@@ -160,6 +190,23 @@ class _InventoryFilterDialogState extends State<InventoryFilterDialog> {
             ),
             const SizedBox(height: 16),
             // Date Range Filter
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _selectSingleDay(context),
+                  icon: const Icon(Icons.today_outlined),
+                  label: const Text('عرض يوم'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _selectMonth(context),
+                  icon: const Icon(Icons.calendar_view_month_outlined),
+                  label: const Text('عرض شهر'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -234,7 +281,9 @@ class _InventoryFilterDialogState extends State<InventoryFilterDialog> {
           child: const Text('إلغاء'),
         ),
         ElevatedButton(
-          onPressed: () {
+          onPressed: _stationId == null
+              ? null
+              : () {
             final filters = {
               'status': _status == 'الكل' ? null : _status,
               'stationId': _stationId,

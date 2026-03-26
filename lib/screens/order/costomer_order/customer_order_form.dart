@@ -71,6 +71,10 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   List<Driver> _drivers = [];
   bool get _isEditMode => widget.orderToEdit != null;
 
+  late final Future<void> _customersFuture;
+  late final Future<void> _driversFuture;
+  late final Future<void> _initFuture;
+
   // الكميات المقترحة
   final List<String> _suggestedQuantities = [
     '32000',
@@ -114,12 +118,14 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   @override
   void initState() {
     super.initState();
-    _initEditMode();
+    _customersFuture = _loadCustomers();
+    _driversFuture = _loadDrivers();
+    _initFuture = _initEditMode();
   }
 
   Future<void> _initEditMode() async {
-    await _loadCustomers();
-    await _loadDrivers();
+    await _customersFuture;
+    await _driversFuture;
 
     if (widget.orderToEdit != null) {
       _initializeFormWithOrder();
@@ -162,110 +168,205 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   }
 
   void _showCustomerPicker() {
-    setState(() {
-      _filteredCustomers = _allCustomers;
-      _customerFilterController.clear();
-    });
+    FocusScope.of(context).unfocus();
+    _customerFilterController.clear();
 
-    showModalBottomSheet(
+    final Future<void> loadFuture =
+        _allCustomers.isNotEmpty ? Future.value() : _customersFuture;
+
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return SizedBox(
-          height: MediaQuery.of(context).size.height * 0.6,
-          child: Column(
-            children: [
-              // العنوان
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'اختر العميل',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryBlue,
-                  ),
-                ),
-              ),
+        final sheetHeight = MediaQuery.of(context).size.height * 0.6;
 
-              const Divider(),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: TextField(
-                  controller: _customerFilterController,
-                  onChanged: _filterCustomers,
-                  decoration: InputDecoration(
-                    hintText: 'بحث عن عميل...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-
-              // القائمة
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _filteredCustomers.length,
-                  itemBuilder: (context, index) {
-                    final customer = _filteredCustomers[index];
-
-                    return ListTile(
-                      leading: CircleAvatar(
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SizedBox(
+            height: sheetHeight,
+            child: FutureBuilder<void>(
+              future: loadFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done &&
+                    _allCustomers.isEmpty) {
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
                         child: Text(
-                          customer.name.substring(0, 1).toUpperCase(),
+                          'اختر العميل',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryBlue,
+                          ),
                         ),
                       ),
-                      title: Text(customer.name),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('كود: ${customer.code}'),
-                          if (customer.city != null || customer.area != null)
-                            Text(
-                              '${customer.city ?? ''} ${customer.area ?? ''}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.mediumGray,
+                      const Divider(),
+                      const Expanded(
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ],
+                  );
+                }
+
+                var modalCustomers = List<Customer>.of(_allCustomers);
+                var isRefreshing = false;
+
+                return StatefulBuilder(
+                  builder: (context, modalSetState) {
+                    void applyFilter(String query) {
+                      final value = query.trim().toLowerCase();
+                      modalSetState(() {
+                        if (value.isEmpty) {
+                          modalCustomers = List<Customer>.of(_allCustomers);
+                        } else {
+                          modalCustomers = _allCustomers.where((customer) {
+                            final name = customer.name.toLowerCase();
+                            final code = customer.code.toLowerCase();
+                            final phone = customer.phone?.toLowerCase() ?? '';
+                            return name.contains(value) ||
+                                code.contains(value) ||
+                                phone.contains(value);
+                          }).toList();
+                        }
+                      });
+                    }
+
+                    Future<void> refreshCustomers() async {
+                      modalSetState(() => isRefreshing = true);
+                      await _loadCustomers();
+                      if (!context.mounted) return;
+                      modalSetState(() {
+                        isRefreshing = false;
+                        modalCustomers = List<Customer>.of(_allCustomers);
+                      });
+                    }
+
+                    return Column(
+                      children: [
+                        // العنوان
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'اختر العميل',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryBlue,
+                            ),
+                          ),
+                        ),
+
+                        const Divider(),
+
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: TextField(
+                            controller: _customerFilterController,
+                            onChanged: applyFilter,
+                            decoration: InputDecoration(
+                              hintText: 'بحث عن عميل...',
+                              prefixIcon: const Icon(Icons.search),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                        ],
-                      ),
-                      onTap: () {
-                        setState(() {
-                          _selectedCustomer = customer;
-                          _selectedCustomerId = customer.id;
-                          _customerSearchController.text = customer.name;
+                          ),
+                        ),
 
-                          // ✅ تعبئة الموقع تلقائيًا من عنوان العميل
-                          if (customer.area != null &&
-                              customer.area!.isNotEmpty &&
-                              customer.city != null &&
-                              customer.city!.isNotEmpty) {
-                            _selectedRegion = customer.area;
-                            _selectedCity = customer.city;
-                          } else {
-                            // ❗ لو العميل ما عندوش عنوان
-                            _selectedRegion = null;
-                            _selectedCity = null;
-                          }
-                        });
+                        // القائمة
+                        Expanded(
+                          child: isRefreshing
+                              ? const Center(
+                                  child: CircularProgressIndicator(),
+                                )
+                              : modalCustomers.isEmpty
+                                  ? Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text('لا يوجد عملاء'),
+                                          const SizedBox(height: 12),
+                                          OutlinedButton.icon(
+                                            onPressed: refreshCustomers,
+                                            icon: const Icon(Icons.refresh),
+                                            label: const Text('تحديث'),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: modalCustomers.length,
+                                      itemBuilder: (context, index) {
+                                        final customer = modalCustomers[index];
 
-                        Navigator.pop(context);
-                      },
+                                        return ListTile(
+                                          leading: CircleAvatar(
+                                            child: Text(
+                                              customer.name
+                                                  .substring(0, 1)
+                                                  .toUpperCase(),
+                                            ),
+                                          ),
+                                          title: Text(customer.name),
+                                          subtitle: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text('كود: ${customer.code}'),
+                                              if (customer.city != null ||
+                                                  customer.area != null)
+                                                Text(
+                                                  '${customer.city ?? ''} ${customer.area ?? ''}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: AppColors.mediumGray,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedCustomer = customer;
+                                              _selectedCustomerId = customer.id;
+                                              _customerSearchController.text =
+                                                  customer.name;
+
+                                              // ✅ تعبئة الموقع تلقائيًا من عنوان العميل
+                                              if (customer.area != null &&
+                                                  customer.area!.isNotEmpty &&
+                                                  customer.city != null &&
+                                                  customer.city!.isNotEmpty) {
+                                                _selectedRegion = customer.area;
+                                                _selectedCity = customer.city;
+                                              } else {
+                                                // ❗ لو العميل ما عندوش عنوان
+                                                _selectedRegion = null;
+                                                _selectedCity = null;
+                                              }
+                                            });
+
+                                            Navigator.pop(context);
+                                          },
+                                        );
+                                      },
+                                    ),
+                        ),
+                      ],
                     );
                   },
-                ),
-              ),
-            ],
+                );
+              },
+            ),
           ),
         );
       },
@@ -335,6 +436,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
           .where((c) => c.isActive)
           .toList();
 
+      if (!mounted) return;
       setState(() {
         _allCustomers = activeCustomers;
         _filteredCustomers = activeCustomers; // في البداية الكل ظاهر
@@ -370,6 +472,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
       );
       await driverProvider.fetchDrivers();
 
+      if (!mounted) return;
       setState(() {
         _drivers = driverProvider.drivers.where((d) => d.isActive).toList();
       });
@@ -1222,7 +1325,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   // ============================================
   Widget _buildMobileLayout(BuildContext context, OrderProvider orderProvider) {
     return FutureBuilder(
-      future: _loadCustomers(),
+      future: _initFuture,
       builder: (context, snapshot) {
         return Form(
           key: _formKey,

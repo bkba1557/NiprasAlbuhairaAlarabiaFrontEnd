@@ -8,7 +8,6 @@ import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/utils/api_service.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
-import 'package:order_tracker/widgets/chat_floating_button.dart';
 import 'package:order_tracker/widgets/stations/service_card.dart';
 import 'package:provider/provider.dart';
 
@@ -34,6 +33,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     return w >= 600 && w < 1100;
   }
 
+  bool _isPhone(BuildContext context) => MediaQuery.of(context).size.width < 600;
+
   @override
   void initState() {
     super.initState();
@@ -54,10 +55,11 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     final media = MediaQuery.of(context);
     final bool isDesktop = _isDesktop(context);
     final bool tablet = _isTablet(context);
+    final bool isPhone = _isPhone(context);
     final bool wideAppBar = media.size.width >= 900;
 
     final int gridColumns = isDesktop ? 4 : (tablet ? 3 : 2);
-    final double horizontalPadding = isDesktop ? 18 : 14;
+    final double horizontalPadding = isDesktop ? 18 : (isPhone ? 10 : 14);
 
     final services = <Widget>[
       _service(
@@ -67,6 +69,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         Icons.local_gas_station_rounded,
         [AppColors.secondaryTeal, const Color(0xFF1D976C)],
         '/stations/dashboard',
+        compact: isPhone,
       ),
       if (!isOwnerStation)
         _service(
@@ -76,6 +79,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           Icons.apartment_rounded,
           [AppColors.warningOrange, const Color(0xFFFF6B00)],
           '/stations/list',
+          compact: isPhone,
         ),
       _service(
         context,
@@ -84,6 +88,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         Icons.gas_meter_rounded,
         [AppColors.successGreen, const Color(0xFF16A34A)],
         '/sessions/list',
+        compact: isPhone,
       ),
       _service(
         context,
@@ -92,6 +97,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         Icons.inventory_2_rounded,
         [AppColors.infoBlue, const Color(0xFF2563EB)],
         '/inventory/list',
+        compact: isPhone,
       ),
       _service(
         context,
@@ -100,6 +106,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         Icons.account_balance_wallet_rounded,
         [const Color(0xFF0F766E), const Color(0xFF0EA5A4)],
         AppRoutes.stationTreasury,
+        compact: isPhone,
       ),
       _service(
         context,
@@ -108,6 +115,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         Icons.query_stats_rounded,
         [const Color(0xFF334155), const Color(0xFF0F172A)],
         AppRoutes.monthlyStationsReport,
+        compact: isPhone,
       ),
       if (!isOwnerStation)
         _service(
@@ -117,6 +125,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           Icons.task_alt_rounded,
           [AppColors.primaryBlue, AppColors.appBarWaterBright],
           AppRoutes.tasks,
+          compact: isPhone,
         ),
       if (!isOwnerStation)
         _service(
@@ -126,6 +135,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           Icons.receipt_long_rounded,
           [const Color(0xFF0EA5E9), const Color(0xFF1D4ED8)],
           AppRoutes.custodyDocuments,
+          compact: isPhone,
         ),
       if (user?.role == 'admin')
         _service(
@@ -135,21 +145,29 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           Icons.manage_accounts_rounded,
           [const Color(0xFFEC4899), const Color(0xFFDB2777)],
           '',
+          compact: isPhone,
         ),
     ];
 
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: !isStationDashboardUser,
+        toolbarHeight: isPhone ? 64 : 72,
         elevation: 0,
         backgroundColor: Colors.transparent,
         flexibleSpace: const _GradientAppBarBackground(),
-        title: const Text('نظام إدارة مبيعات المحطات وتكاليفها'),
+        titleSpacing: isPhone ? 8 : NavigationToolbar.kMiddleSpacing,
+        titleTextStyle: TextStyle(
+          fontSize: isPhone ? 17 : 20,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+        title: const Text('إدارة مبيعات المحطات', style: TextStyle(fontFamily: "Cairo"),),
         actions: [
           _appBarIconAction(
             tooltip: 'الإشعارات',
             icon: Icons.notifications_rounded,
-            onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.notifications), 
           ),
           const SizedBox(width: 4),
           _profileAction(
@@ -190,9 +208,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       horizontalPadding,
-                      isDesktop ? 20 : 16,
+                      isDesktop ? 20 : (isPhone ? 12 : 16),
                       horizontalPadding,
-                      12,
+                      isPhone ? 10 : 12,
                     ),
                     sliver: SliverToBoxAdapter(
                       child: _buildWelcomeHeader(
@@ -200,18 +218,19 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                         name: user?.name ?? '',
                         company: user?.company ?? '',
                         isDesktop: isDesktop,
+                        isPhone: isPhone,
                       ),
                     ),
                   ),
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       horizontalPadding,
-                      6,
+                      isPhone ? 2 : 6,
                       horizontalPadding,
-                      12,
+                      isPhone ? 10 : 12,
                     ),
                     sliver: SliverToBoxAdapter(
-                      child: _buildSectionHeader(context),
+                      child: _buildSectionHeader(context, isPhone: isPhone),
                     ),
                   ),
                   SliverPadding(
@@ -224,9 +243,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     sliver: SliverGrid(
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: gridColumns,
-                        crossAxisSpacing: 14,
-                        mainAxisSpacing: 14,
-                        mainAxisExtent: isDesktop ? 148 : 156,
+                        crossAxisSpacing: isPhone ? 10 : 14,
+                        mainAxisSpacing: isPhone ? 10 : 14,
+                        mainAxisExtent: isDesktop ? 148 : (isPhone ? 122 : 156),
                       ),
                       delegate: SliverChildListDelegate(services),
                     ),
@@ -236,21 +255,20 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                       horizontalPadding,
                       0,
                       horizontalPadding,
-                      16,
+                      isPhone ? 12 : 16,
                     ),
                     sliver: SliverToBoxAdapter(
-                      child: _buildStatsPanel(context),
+                      child: _buildStatsPanel(context, isPhone: isPhone),
                     ),
                   ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 110)),
+                  SliverToBoxAdapter(
+                    child: SizedBox(height: isPhone ? 90 : 110),
+                  ),
                 ],
               ),
             ),
           ),
         ],
-      ),
-      floatingActionButton: const ChatFloatingButton(
-        heroTag: 'main_home_chat_fab',
       ),
     );
   }
@@ -397,6 +415,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     IconData icon,
     List<Color> colors,
     String route,
+    {required bool compact}
   ) {
     final gradient = LinearGradient(
       begin: Alignment.topRight,
@@ -409,11 +428,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       subtitle: subtitle,
       icon: icon,
       gradient: gradient,
+      compact: compact,
       onTap: route.isEmpty ? null : () => Navigator.pushNamed(context, route),
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context) {
+  Widget _buildSectionHeader(BuildContext context, {required bool isPhone}) {
     final theme = Theme.of(context);
 
     return Row(
@@ -425,14 +445,16 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               Text(
                 'الخدمات',
                 style: theme.textTheme.titleLarge?.copyWith(
+                  fontSize: isPhone ? 16 : null,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF0F172A),
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: isPhone ? 1 : 4),
               Text(
                 'اختر الخدمة المطلوبة للبدء',
                 style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: isPhone ? 10 : null,
                   color: const Color(0xFF64748B),
                 ),
               ),
@@ -448,6 +470,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     required String name,
     required String company,
     required bool isDesktop,
+    required bool isPhone,
   }) {
     final theme = Theme.of(context);
     final greeting = _getGreeting();
@@ -458,9 +481,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     final title = trimmedName.isEmpty ? 'مرحباً' : 'مرحباً، $trimmedName';
 
     return Container(
-      padding: EdgeInsets.all(isDesktop ? 22 : 18),
+      padding: EdgeInsets.all(isDesktop ? 22 : (isPhone ? 12 : 18)),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(isPhone ? 20 : 26),
         color: Colors.white.withValues(alpha: 0.92),
         border: Border.all(color: Colors.white.withValues(alpha: 0.95)),
         boxShadow: [
@@ -480,40 +503,42 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 Text(
                   title,
                   style: theme.textTheme.headlineSmall?.copyWith(
+                    fontSize: isPhone ? 18 : null,
                     fontWeight: FontWeight.w900,
                     color: const Color(0xFF0F172A),
                   ),
                 ),
                 if (trimmedCompany.isNotEmpty) ...[
-                  const SizedBox(height: 6),
+                  SizedBox(height: isPhone ? 3 : 6),
                   Text(
                     trimmedCompany,
                     style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: isPhone ? 11 : null,
                       color: const Color(0xFF475569),
                     ),
                   ),
                 ],
-                const SizedBox(height: 14),
+                SizedBox(height: isPhone ? 8 : 14),
                 _infoPill(icon: greetingIcon, label: greeting),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          _welcomeMark(isDesktop: isDesktop),
+          SizedBox(width: isPhone ? 8 : 16),
+          _welcomeMark(isDesktop: isDesktop, isPhone: isPhone),
         ],
       ),
     );
   }
 
-  Widget _welcomeMark({required bool isDesktop}) {
-    final double size = isDesktop ? 84 : 74;
+  Widget _welcomeMark({required bool isDesktop, required bool isPhone}) {
+    final double size = isDesktop ? 84 : (isPhone ? 58 : 74);
 
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         gradient: AppColors.appBarGradient,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(isPhone ? 18 : 24),
         boxShadow: [
           BoxShadow(
             color: AppColors.appBarWaterDeep.withValues(alpha: 0.28),
@@ -522,15 +547,15 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ),
         ],
       ),
-      child: const Icon(
+      child: Icon(
         Icons.local_gas_station_rounded,
         color: Colors.white,
-        size: 34,
+        size: isPhone ? 24 : 34,
       ),
     );
   }
 
-  Widget _buildStatsPanel(BuildContext context) {
+  Widget _buildStatsPanel(BuildContext context, {required bool isPhone}) {
     final theme = Theme.of(context);
 
     final quickStats = _quickStats;
@@ -587,9 +612,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     ];
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(isPhone ? 10 : 14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(isPhone ? 16 : 22),
         color: Colors.white.withValues(alpha: 0.90),
         border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
       ),
@@ -601,6 +626,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               Text(
                 'إحصائيات اليوم',
                 style: theme.textTheme.titleSmall?.copyWith(
+                  fontSize: isPhone ? 13 : null,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF0F172A),
                 ),
@@ -609,8 +635,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               IconButton(
                 tooltip: 'تحديث',
                 onPressed: _isLoadingQuickStats ? null : _loadQuickStats,
+                visualDensity: isPhone
+                    ? const VisualDensity(horizontal: -2, vertical: -2)
+                    : VisualDensity.standard,
                 icon: Icon(
                   Icons.refresh_rounded,
+                  size: isPhone ? 20 : 24,
                   color: const Color(0xFF0F172A).withValues(alpha: 0.78),
                 ),
               ),
@@ -673,13 +703,17 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               }
 
               return Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: isPhone ? 10 : 12,
+                runSpacing: isPhone ? 10 : 12,
                 children: [
                   for (final s in stats)
                     SizedBox(
                       width: itemWidth,
-                      child: _buildStatTile(context, stat: s),
+                      child: _buildStatTile(
+                        context,
+                        stat: s,
+                        isPhone: isPhone,
+                      ),
                     ),
                 ],
               );
@@ -690,28 +724,35 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     );
   }
 
-  Widget _buildStatTile(BuildContext context, {required _QuickStat stat}) {
+  Widget _buildStatTile(
+    BuildContext context, {
+    required _QuickStat stat,
+    required bool isPhone,
+  }) {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: isPhone ? 10 : 14,
+        vertical: isPhone ? 8 : 12,
+      ),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(isPhone ? 14 : 18),
         color: const Color(0xFFF8FAFC),
         border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
       ),
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: isPhone ? 34 : 42,
+            height: isPhone ? 34 : 42,
             decoration: BoxDecoration(
               color: stat.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(isPhone ? 11 : 14),
             ),
-            child: Icon(stat.icon, color: stat.color, size: 22),
+            child: Icon(stat.icon, color: stat.color, size: isPhone ? 17 : 22),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: isPhone ? 8 : 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -720,15 +761,17 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 Text(
                   stat.value,
                   style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: isPhone ? 15 : null,
                     fontWeight: FontWeight.w900,
                     height: 1.0,
                     color: const Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: isPhone ? 1 : 2),
                 Text(
                   stat.label,
                   style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: isPhone ? 10 : null,
                     color: const Color(0xFF64748B),
                   ),
                 ),
@@ -741,8 +784,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   }
 
   Widget _infoPill({required IconData icon, required String label}) {
+    final isPhone = MediaQuery.of(context).size.width < 600;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: isPhone ? 8 : 12,
+        vertical: isPhone ? 5 : 8,
+      ),
       decoration: BoxDecoration(
         color: AppColors.appBarWaterDeep.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
@@ -753,12 +801,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: AppColors.appBarWaterDeep),
-          const SizedBox(width: 8),
+          Icon(icon, size: isPhone ? 14 : 18, color: AppColors.appBarWaterDeep),
+          SizedBox(width: isPhone ? 5 : 8),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.w700,
+              fontSize: isPhone ? 10.5 : 13,
               color: Color(0xFF0F172A),
             ),
           ),
@@ -786,21 +835,26 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     required IconData icon,
     required VoidCallback onTap,
   }) {
+    final isPhone = MediaQuery.of(context).size.width < 600;
+
     return Tooltip(
       message: tooltip,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(isPhone ? 12 : 14),
         child: Container(
-          width: 40,
-          height: 40,
-          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          width: isPhone ? 34 : 40,
+          height: isPhone ? 34 : 40,
+          margin: EdgeInsets.symmetric(
+            horizontal: isPhone ? 1 : 4,
+            vertical: isPhone ? 8 : 10,
+          ),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(isPhone ? 12 : 14),
             border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
           ),
-          child: Icon(icon, color: Colors.white),
+          child: Icon(icon, color: Colors.white, size: isPhone ? 18 : 22),
         ),
       ),
     );
@@ -811,6 +865,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     required String name,
     required bool showName,
   }) {
+    final isPhone = MediaQuery.of(context).size.width < 600;
     final trimmed = name.trim();
     final initial = trimmed.isNotEmpty ? trimmed[0].toUpperCase() : 'U';
 
@@ -818,10 +873,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       onTap: () => Navigator.pushNamed(context, AppRoutes.profile),
       borderRadius: BorderRadius.circular(999),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        margin: EdgeInsets.symmetric(
+          horizontal: isPhone ? 1 : 4,
+          vertical: isPhone ? 8 : 10,
+        ),
         padding: EdgeInsets.symmetric(
-          horizontal: showName ? 10 : 8,
-          vertical: 6,
+          horizontal: showName ? (isPhone ? 7 : 10) : (isPhone ? 5 : 8),
+          vertical: isPhone ? 4 : 6,
         ),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.10),
@@ -832,8 +890,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: showName ? 32 : 30,
-              height: showName ? 32 : 30,
+              width: showName ? (isPhone ? 28 : 32) : (isPhone ? 26 : 30),
+              height: showName ? (isPhone ? 28 : 32) : (isPhone ? 26 : 30),
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -851,31 +909,31 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
-                    fontSize: showName ? 14 : 13,
+                    fontSize: showName ? (isPhone ? 12 : 14) : (isPhone ? 11 : 13),
                   ),
                 ),
               ),
             ),
             if (showName) ...[
-              const SizedBox(width: 10),
+              SizedBox(width: isPhone ? 8 : 10),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 140),
                 child: Text(
                   trimmed,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                    fontSize: isPhone ? 12 : 13,
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
-              const Icon(
+              SizedBox(width: isPhone ? 2 : 4),
+              Icon(
                 Icons.keyboard_arrow_down_rounded,
                 color: Colors.white70,
-                size: 20,
+                size: isPhone ? 18 : 20,
               ),
             ],
           ],

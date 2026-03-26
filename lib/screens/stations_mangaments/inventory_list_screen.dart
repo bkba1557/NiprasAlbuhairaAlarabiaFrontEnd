@@ -19,12 +19,15 @@ class InventoryListScreen extends StatefulWidget {
 }
 
 class _InventoryListScreenState extends State<InventoryListScreen> {
+  static const int _pageSize = 30;
+
   final TextEditingController _searchController = TextEditingController();
   String _filterStatus = 'الكل';
   String? _filterStationId;
   String? _filterFuelType;
   DateTime? _filterStartDate;
   DateTime? _filterEndDate;
+  int _page = 1;
   bool _isTankLoading = false;
   final Map<String, double> _liveSalesByKey = {};
   Timer? _liveTimer;
@@ -274,12 +277,21 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
 
       if (user?.role == 'station_boy' && user?.stationId != null) {
         await stationProvider.fetchStations(forceStationId: user!.stationId);
+        if (mounted) {
+          setState(() {
+            _filterStationId = user.stationId;
+            _page = 1;
+          });
+        } else {
+          _filterStationId = user.stationId;
+          _page = 1;
+        }
       } else {
         await stationProvider.fetchStations();
       }
 
-      await _loadInventories();
       _initializeTableColumns();
+      await _loadInventories();
     });
     _liveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
@@ -337,21 +349,54 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
   }
 
   Future<void> _loadInventories() async {
+    if (_filterStationId == null) {
+      _liveSalesByKey.clear();
+      return;
+    }
+
     final filters = <String, dynamic>{};
     if (_filterStatus != 'الكل') filters['status'] = _filterStatus;
-    if (_filterStationId != null) filters['stationId'] = _filterStationId;
+    filters['stationId'] = _filterStationId;
     if (_filterFuelType != null) filters['fuelType'] = _filterFuelType;
     if (_filterStartDate != null)
       filters['startDate'] = _filterStartDate!.toIso8601String();
     if (_filterEndDate != null)
       filters['endDate'] = _filterEndDate!.toIso8601String();
+    filters['limit'] = _pageSize;
 
-    await Provider.of<StationProvider>(
-      context,
-      listen: false,
-    ).fetchInventories(filters: filters);
+    final provider = Provider.of<StationProvider>(context, listen: false);
+    await provider.fetchInventories(page: _page, filters: filters);
+    if (!mounted) return;
+    if (_page != provider.currentPage) {
+      setState(() {
+        _page = provider.currentPage;
+      });
+    }
 
     await _loadLiveSales(filters);
+  }
+
+  Future<void> _showFiltersDialog(
+    BuildContext context,
+    List<Station> stations,
+  ) async {
+    final filters = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => InventoryFilterDialog(
+        currentFilters: {
+          'status': _filterStatus,
+          'stationId': _filterStationId,
+          'fuelType': _filterFuelType,
+          'startDate': _filterStartDate,
+          'endDate': _filterEndDate,
+        },
+        stations: stations,
+      ),
+    );
+
+    if (filters != null) {
+      _applyFilters(filters);
+    }
   }
 
   void _applyFilters(Map<String, dynamic> filters) {
@@ -361,6 +406,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
       _filterFuelType = filters['fuelType'];
       _filterStartDate = filters['startDate'];
       _filterEndDate = filters['endDate'];
+      _page = 1;
     });
     _loadInventories();
   }
@@ -372,7 +418,23 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
       _filterFuelType = null;
       _filterStartDate = null;
       _filterEndDate = null;
+      _page = 1;
     });
+    _loadInventories();
+  }
+
+  void _goToPreviousPage() {
+    if (_filterStationId == null) return;
+    if (_page <= 1) return;
+    setState(() => _page -= 1);
+    _loadInventories();
+  }
+
+  void _goToNextPage() {
+    if (_filterStationId == null) return;
+    final totalPages = context.read<StationProvider>().totalPages;
+    if (_page >= totalPages) return;
+    setState(() => _page += 1);
     _loadInventories();
   }
 
@@ -615,18 +677,21 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
             return haystack.contains(query);
           }).toList();
 
+    final scopedInventories =
+        _filterStationId == null ? <DailyInventory>[] : filteredInventories;
+
     if (isMobile) {
       return _buildMobileLayout(
         context,
         stationProvider,
-        filteredInventories,
+        scopedInventories,
         stations,
       );
     } else {
       return _buildTableLayout(
         context,
         stationProvider,
-        filteredInventories,
+        scopedInventories,
         stations,
       );
     }
@@ -651,6 +716,33 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
           style: TextStyle(color: Colors.white),
         ),
         actions: [
+          IconButton(
+            onPressed:
+                (_filterStationId != null && stationProvider.currentPage > 1)
+                ? _goToPreviousPage
+                : null,
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'الصفحة السابقة',
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Center(
+              child: Text(
+                _filterStationId == null
+                    ? '--/--'
+                    : '${stationProvider.currentPage}/${stationProvider.totalPages}',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: (_filterStationId != null &&
+                    stationProvider.currentPage < stationProvider.totalPages)
+                ? _goToNextPage
+                : null,
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'الصفحة التالية',
+          ),
           if (_hasActiveFilters())
             IconButton(
               onPressed: _clearFilters,
@@ -733,26 +825,8 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            onPressed: () async {
-                              final filters =
-                                  await showDialog<Map<String, dynamic>>(
-                                    context: context,
-                                    builder: (context) => InventoryFilterDialog(
-                                      currentFilters: {
-                                        'status': _filterStatus,
-                                        'stationId': _filterStationId,
-                                        'fuelType': _filterFuelType,
-                                        'startDate': _filterStartDate,
-                                        'endDate': _filterEndDate,
-                                      },
-                                      stations: stations,
-                                    ),
-                                  );
-
-                              if (filters != null) {
-                                _applyFilters(filters);
-                              }
-                            },
+                            onPressed: () =>
+                                _showFiltersDialog(context, stations),
                             icon: const Icon(Icons.filter_alt),
                             tooltip: 'تصفية',
                             iconSize: 22,
@@ -777,6 +851,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 onDeleted: () {
                                   setState(() {
                                     _filterStatus = 'الكل';
+                                    _page = 1;
                                   });
                                   _loadInventories();
                                 },
@@ -786,22 +861,36 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 ),
                               ),
                             if (_filterStationId != null)
-                              Chip(
-                                label: Text(
-                                  'المحطة: ${stations.firstWhere((s) => s.id == _filterStationId).stationName}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onDeleted: () {
-                                  setState(() {
-                                    _filterStationId = null;
-                                  });
-                                  _loadInventories();
+                              Builder(
+                                builder: (context) {
+                                  final match = stations.where(
+                                    (s) => s.id == _filterStationId,
+                                  );
+                                  final stationName = match.isNotEmpty
+                                      ? match.first.stationName
+                                      : '---';
+                                  return Chip(
+                                    label: Text(
+                                      'المحطة: $stationName',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onDeleted: () {
+                                      setState(() {
+                                        _filterStationId = null;
+                                        _page = 1;
+                                      });
+                                      _loadInventories();
+                                    },
+                                    deleteIcon: const Icon(
+                                      Icons.close,
+                                      size: 16,
+                                    ),
+                                    labelPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                  );
                                 },
-                                deleteIcon: const Icon(Icons.close, size: 16),
-                                labelPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
                               ),
                             if (_filterFuelType != null)
                               Chip(
@@ -809,6 +898,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 onDeleted: () {
                                   setState(() {
                                     _filterFuelType = null;
+                                    _page = 1;
                                   });
                                   _loadInventories();
                                 },
@@ -825,6 +915,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 onDeleted: () {
                                   setState(() {
                                     _filterStartDate = null;
+                                    _page = 1;
                                   });
                                   _loadInventories();
                                 },
@@ -841,6 +932,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 onDeleted: () {
                                   setState(() {
                                     _filterEndDate = null;
+                                    _page = 1;
                                   });
                                   _loadInventories();
                                 },
@@ -857,45 +949,49 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: _loadInventories,
-                      child: stationProvider.isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : inventories.isEmpty
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: AppSurfaceCard(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: const [
-                                      Icon(
-                                        Icons.inventory,
-                                        size: 56,
-                                        color: AppColors.mediumGray,
-                                      ),
-                                      SizedBox(height: 10),
-                                      Text(
-                                        'لا توجد سجلات جرد',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: AppColors.mediumGray,
+                      child: _filterStationId == null
+                          ? _buildSelectStationCard(context, stations)
+                          : stationProvider.isLoading
+                              ? const Center(
+                                  child: CircularProgressIndicator(),
+                                )
+                              : inventories.isEmpty
+                                  ? Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: AppSurfaceCard(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: const [
+                                              Icon(
+                                                Icons.inventory,
+                                                size: 56,
+                                                color: AppColors.mediumGray,
+                                              ),
+                                              SizedBox(height: 10),
+                                              Text(
+                                                'لا توجد سجلات جرد',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: AppColors.mediumGray,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.all(12.0),
-                              itemCount: inventories.length,
-                              separatorBuilder: (context, index) =>
-                                  const SizedBox(height: 12),
-                              itemBuilder: (context, index) {
-                                return _buildMobileInventoryCard(
-                                  inventories[index],
-                                );
-                              },
-                            ),
+                                    )
+                                  : ListView.separated(
+                                      padding: const EdgeInsets.all(12.0),
+                                      itemCount: inventories.length,
+                                      separatorBuilder: (context, index) =>
+                                          const SizedBox(height: 12),
+                                      itemBuilder: (context, index) {
+                                        return _buildMobileInventoryCard(
+                                          inventories[index],
+                                        );
+                                      },
+                                    ),
                     ),
                   ),
                 ],
@@ -912,6 +1008,37 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
               },
               child: const Icon(Icons.add),
             ),
+    );
+  }
+
+  Widget _buildSelectStationCard(BuildContext context, List<Station> stations) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: AppSurfaceCard(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.local_gas_station,
+                size: 56,
+                color: AppColors.mediumGray,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'اختر محطة لعرض توريدها',
+                style: TextStyle(fontSize: 16, color: AppColors.mediumGray),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () => _showFiltersDialog(context, stations),
+                icon: const Icon(Icons.filter_alt),
+                label: const Text('اختيار محطة'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1305,6 +1432,33 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
           style: TextStyle(color: Colors.white),
         ),
         actions: [
+          IconButton(
+            onPressed:
+                (_filterStationId != null && stationProvider.currentPage > 1)
+                ? _goToPreviousPage
+                : null,
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'الصفحة السابقة',
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Center(
+              child: Text(
+                _filterStationId == null
+                    ? '--/--'
+                    : '${stationProvider.currentPage}/${stationProvider.totalPages}',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: (_filterStationId != null &&
+                    stationProvider.currentPage < stationProvider.totalPages)
+                ? _goToNextPage
+                : null,
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'الصفحة التالية',
+          ),
           if (_hasActiveFilters())
             IconButton(
               onPressed: _clearFilters,
@@ -1323,12 +1477,8 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
       body: Stack(
         children: [
           const AppSoftBackground(),
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: Column(
-                children: [
+          Column(
+            children: [
                   // Search and Filter Bar
                   Padding(
                     padding: const EdgeInsets.all(16),
@@ -1387,26 +1537,8 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                           ),
                           const SizedBox(width: 12),
                           IconButton(
-                            onPressed: () async {
-                              final filters =
-                                  await showDialog<Map<String, dynamic>>(
-                                    context: context,
-                                    builder: (context) => InventoryFilterDialog(
-                                      currentFilters: {
-                                        'status': _filterStatus,
-                                        'stationId': _filterStationId,
-                                        'fuelType': _filterFuelType,
-                                        'startDate': _filterStartDate,
-                                        'endDate': _filterEndDate,
-                                      },
-                                      stations: stations,
-                                    ),
-                                  );
-
-                              if (filters != null) {
-                                _applyFilters(filters);
-                              }
-                            },
+                            onPressed: () =>
+                                _showFiltersDialog(context, stations),
                             icon: const Icon(Icons.filter_alt),
                             tooltip: 'تصفية',
                             iconSize: 24,
@@ -1431,6 +1563,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 onDeleted: () {
                                   setState(() {
                                     _filterStatus = 'الكل';
+                                    _page = 1;
                                   });
                                   _loadInventories();
                                 },
@@ -1440,22 +1573,36 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 ),
                               ),
                             if (_filterStationId != null)
-                              Chip(
-                                label: Text(
-                                  'المحطة: ${stations.firstWhere((s) => s.id == _filterStationId).stationName}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onDeleted: () {
-                                  setState(() {
-                                    _filterStationId = null;
-                                  });
-                                  _loadInventories();
+                              Builder(
+                                builder: (context) {
+                                  final match = stations.where(
+                                    (s) => s.id == _filterStationId,
+                                  );
+                                  final stationName = match.isNotEmpty
+                                      ? match.first.stationName
+                                      : '---';
+                                  return Chip(
+                                    label: Text(
+                                      'المحطة: $stationName',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onDeleted: () {
+                                      setState(() {
+                                        _filterStationId = null;
+                                        _page = 1;
+                                      });
+                                      _loadInventories();
+                                    },
+                                    deleteIcon: const Icon(
+                                      Icons.close,
+                                      size: 16,
+                                    ),
+                                    labelPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                  );
                                 },
-                                deleteIcon: const Icon(Icons.close, size: 16),
-                                labelPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
                               ),
                             if (_filterFuelType != null)
                               Chip(
@@ -1463,6 +1610,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 onDeleted: () {
                                   setState(() {
                                     _filterFuelType = null;
+                                    _page = 1;
                                   });
                                   _loadInventories();
                                 },
@@ -1479,6 +1627,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 onDeleted: () {
                                   setState(() {
                                     _filterStartDate = null;
+                                    _page = 1;
                                   });
                                   _loadInventories();
                                 },
@@ -1495,6 +1644,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                 onDeleted: () {
                                   setState(() {
                                     _filterEndDate = null;
+                                    _page = 1;
                                   });
                                   _loadInventories();
                                 },
@@ -1565,37 +1715,44 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                             Expanded(
                               child: RefreshIndicator(
                                 onRefresh: _loadInventories,
-                                child: stationProvider.isLoading
-                                    ? const Center(
-                                        child: CircularProgressIndicator(),
-                                      )
-                                    : inventories.isEmpty
-                                    ? Center(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16),
-                                          child: AppSurfaceCard(
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: const [
-                                                Icon(
-                                                  Icons.inventory,
-                                                  size: 56,
-                                                  color: AppColors.mediumGray,
-                                                ),
-                                                SizedBox(height: 10),
-                                                Text(
-                                                  'لا توجد سجلات جرد',
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    color: AppColors.mediumGray,
+                                child: _filterStationId == null
+                                    ? _buildSelectStationCard(context, stations)
+                                    : stationProvider.isLoading
+                                        ? const Center(
+                                            child: CircularProgressIndicator(),
+                                          )
+                                        : inventories.isEmpty
+                                            ? Center(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(
+                                                    16,
+                                                  ),
+                                                  child: AppSurfaceCard(
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: const [
+                                                        Icon(
+                                                          Icons.inventory,
+                                                          size: 56,
+                                                          color: AppColors
+                                                              .mediumGray,
+                                                        ),
+                                                        SizedBox(height: 10),
+                                                        Text(
+                                                          'لا توجد سجلات جرد',
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            color: AppColors
+                                                                .mediumGray,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                    : Scrollbar(
+                                              )
+                                            : Scrollbar(
                                         controller: _verticalScrollController,
                                         thumbVisibility: true,
                                         child: SingleChildScrollView(
@@ -1774,7 +1931,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                                       horizontal: 16,
                                     ),
                                     child: Text(
-                                      'إجمالي ${inventories.length} سجل',
+                                      'إجمالي ${_filterStationId == null ? 0 : stationProvider.totalItems} سجل',
                                       style: const TextStyle(
                                         color: AppColors.mediumGray,
                                       ),
@@ -1799,9 +1956,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
+            ],
           ),
         ],
       ),
@@ -1813,7 +1968,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
               },
               child: const Icon(Icons.add),
             ),
-    );
+  );
   }
 
   Widget _buildSummaryItem(
