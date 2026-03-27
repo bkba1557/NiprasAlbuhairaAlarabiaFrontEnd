@@ -3,7 +3,6 @@ import 'package:order_tracker/models/station_models.dart';
 import 'package:order_tracker/providers/station_provider.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
-import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
 import 'package:provider/provider.dart';
 
@@ -57,7 +56,7 @@ class _StationsListScreenState extends State<StationsListScreen> {
     final bool tablet = isTablet(context);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color.fromARGB(255, 243, 241, 241),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -85,7 +84,6 @@ class _StationsListScreenState extends State<StationsListScreen> {
             ),
       body: Stack(
         children: [
-          const AppSoftBackground(),
           RefreshIndicator(
             onRefresh: _loadStations,
             child: Align(
@@ -148,6 +146,7 @@ class _StationsListScreenState extends State<StationsListScreen> {
                           ? const _EmptyState()
                           : web || tablet
                           ? GridView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
                               padding: EdgeInsets.all(web ? 12 : 16),
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(
@@ -158,15 +157,15 @@ class _StationsListScreenState extends State<StationsListScreen> {
                                   ),
                               itemCount: filtered.length,
                               itemBuilder: (context, index) {
-                                return _buildStationCard(
-                                  filtered[index],
-                                  web,
-                                );
+                                return _buildStationCard(filtered[index], web);
                               },
                             )
-                          : ListView.builder(
+                          : ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(),
                               padding: const EdgeInsets.all(16),
                               itemCount: filtered.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 14),
                               itemBuilder: (context, index) {
                                 return _buildStationCard(
                                   filtered[index],
@@ -189,6 +188,7 @@ class _StationsListScreenState extends State<StationsListScreen> {
 
   Widget _buildStationCard(Station station, bool web) {
     return AppSurfaceCard(
+      padding: EdgeInsets.all(web ? 12 : 16),
       onTap: () {
         Navigator.pushNamed(
           context,
@@ -197,11 +197,56 @@ class _StationsListScreenState extends State<StationsListScreen> {
         );
       },
       borderRadius: const BorderRadius.all(Radius.circular(22)),
-      child: SizedBox(
-        height: double.infinity,
-        child: Padding(
-          padding: EdgeInsets.all(web ? 12 : 16),
-          child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final hasBoundedHeight =
+              constraints.hasBoundedHeight && constraints.maxHeight.isFinite;
+
+          final infoRows = <Widget>[
+            _infoRow(
+              title: 'الموقع',
+              value: '${station.city} - ${station.location}',
+              web: web,
+            ),
+            _infoRow(title: 'المدير', value: station.managerName, web: web),
+            _infoRow(
+              title: 'أنواع الوقود',
+              value: station.fuelTypes.join('، '),
+              web: web,
+            ),
+            _infoRow(
+              title: 'المضخات',
+              value: '${station.pumps.length} مضخة',
+              web: web,
+            ),
+          ];
+
+          Widget buildInfoBlock() {
+            if (hasBoundedHeight) {
+              return Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: infoRows,
+                ),
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (int i = 0; i < infoRows.length; i++) ...[
+                  infoRows[i],
+                  if (i != infoRows.length - 1) const SizedBox(height: 10),
+                ],
+              ],
+            );
+          }
+
+          return Column(
+            mainAxisSize: hasBoundedHeight
+                ? MainAxisSize.max
+                : MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -252,37 +297,10 @@ class _StationsListScreenState extends State<StationsListScreen> {
                 ],
               ),
               const SizedBox(height: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _infoRow(
-                      title: 'الموقع',
-                      value: '${station.city} - ${station.location}',
-                      web: web,
-                    ),
-                    _infoRow(
-                      title: 'المدير',
-                      value: station.managerName,
-                      web: web,
-                    ),
-                    _infoRow(
-                      title: 'أنواع الوقود',
-                      value: station.fuelTypes.join('، '),
-                      web: web,
-                    ),
-                    _infoRow(
-                      title: 'المضخات',
-                      value: '${station.pumps.length} مضخة',
-                      web: web,
-                    ),
-                  ],
-                ),
-              ),
+              buildInfoBlock(),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }

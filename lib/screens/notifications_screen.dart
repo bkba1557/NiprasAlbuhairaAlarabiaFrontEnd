@@ -288,19 +288,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
           SizedBox(height: isMobile ? 12 : 18),
           if (isMobile)
-            Column(
-              children: stats.map((stat) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _buildStatCard(
-                    stat.$1,
-                    stat.$2,
-                    stat.$3,
-                    stat.$4,
-                    true,
-                  ),
-                );
-              }).toList(),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 3,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1,
+              children: stats
+                  .map(
+                    (stat) => _buildStatCard(
+                      stat.$1,
+                      stat.$2,
+                      stat.$3,
+                      stat.$4,
+                      true,
+                    ),
+                  )
+                  .toList(),
             )
           else
             Row(
@@ -637,51 +642,88 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 12 : 16,
-        vertical: isMobile ? 12 : 16,
+        horizontal: isMobile ? 10 : 16,
+        vertical: isMobile ? 10 : 16,
       ),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.88),
         borderRadius: BorderRadius.circular(isMobile ? 18 : 22),
         border: Border.all(color: color.withOpacity(0.16)),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: isMobile ? 38 : 48,
-            height: isMobile ? 38 : 48,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: color, size: isMobile ? 18 : 22),
-          ),
-          SizedBox(width: isMobile ? 10 : 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: isMobile
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: color, size: 18),
+                ),
+                const SizedBox(height: 10),
                 Text(
                   value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: isMobile ? 17 : 22,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: color,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: isMobile ? 10.5 : 12.5,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 10.5,
                     color: AppColors.mediumGray,
                   ),
                 ),
               ],
+            )
+          : Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: color, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: color,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.mediumGray,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 

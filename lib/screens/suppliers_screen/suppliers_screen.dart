@@ -139,6 +139,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
   Widget build(BuildContext context) {
     final supplierProvider = Provider.of<SupplierProvider>(context);
     final statistics = supplierProvider.statistics;
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
       appBar: AppBar(
@@ -170,37 +171,84 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               color: AppColors.backgroundGray,
-              child: Row(
-                children: [
-                  _buildStatCard(
-                    'إجمالي الموردين',
-                    statistics['total']?.toString() ?? '0',
-                    Icons.group,
-                    AppColors.primaryBlue,
-                  ),
-                  const SizedBox(width: 12),
-                  _buildStatCard(
-                    'نشط',
-                    statistics['active']?.toString() ?? '0',
-                    Icons.check_circle,
-                    AppColors.successGreen,
-                  ),
-                  const SizedBox(width: 12),
-                  _buildStatCard(
-                    'غير نشط',
-                    statistics['inactive']?.toString() ?? '0',
-                    Icons.cancel,
-                    AppColors.errorRed,
-                  ),
-                  const SizedBox(width: 12),
-                  _buildStatCard(
-                    'متوسط التقييم',
-                    statistics['avgRating']?.toStringAsFixed(1) ?? '0.0',
-                    Icons.star,
-                    AppColors.warningOrange,
-                  ),
-                ],
-              ),
+              child: isMobile
+                  ? GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1,
+                      children: [
+                        _buildStatCard(
+                          'إجمالي الموردين',
+                          statistics['total']?.toString() ?? '0',
+                          Icons.group,
+                          AppColors.primaryBlue,
+                          compact: true,
+                        ),
+                        _buildStatCard(
+                          'نشط',
+                          statistics['active']?.toString() ?? '0',
+                          Icons.check_circle,
+                          AppColors.successGreen,
+                          compact: true,
+                        ),
+                        _buildStatCard(
+                          'غير نشط',
+                          statistics['inactive']?.toString() ?? '0',
+                          Icons.cancel,
+                          AppColors.errorRed,
+                          compact: true,
+                        ),
+                        _buildStatCard(
+                          'متوسط التقييم',
+                          statistics['avgRating']?.toStringAsFixed(1) ?? '0.0',
+                          Icons.star,
+                          AppColors.warningOrange,
+                          compact: true,
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatCard(
+                            'إجمالي الموردين',
+                            statistics['total']?.toString() ?? '0',
+                            Icons.group,
+                            AppColors.primaryBlue,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            'نشط',
+                            statistics['active']?.toString() ?? '0',
+                            Icons.check_circle,
+                            AppColors.successGreen,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            'غير نشط',
+                            statistics['inactive']?.toString() ?? '0',
+                            Icons.cancel,
+                            AppColors.errorRed,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            'متوسط التقييم',
+                            statistics['avgRating']?.toStringAsFixed(1) ?? '0.0',
+                            Icons.star,
+                            AppColors.warningOrange,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           // Search bar
           Padding(
@@ -312,45 +360,80 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     String value,
     IconData icon,
     Color color,
-  ) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
-                  ),
-                  Text(title, style: TextStyle(fontSize: 12, color: color)),
-                ],
-              ),
-            ),
-          ],
-        ),
+    {bool compact = false}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
+      child: compact
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.mediumGray,
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                        ),
+                      ),
+                      Text(title, style: TextStyle(fontSize: 12, color: color)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

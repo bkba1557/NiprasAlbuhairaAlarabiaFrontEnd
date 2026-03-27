@@ -14,6 +14,7 @@ import 'package:order_tracker/models/models.dart';
 import 'package:order_tracker/models/task_model.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/task_provider.dart';
+import 'package:order_tracker/screens/tasks/task_form_screen.dart';
 import 'package:order_tracker/screens/tasks/task_route_screen.dart';
 import 'package:order_tracker/screens/tasks/task_tracking_map_screen.dart';
 import 'package:order_tracker/utils/api_service.dart';
@@ -31,6 +32,15 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:order_tracker/utils/web_platform.dart' as web_platform;
+
+enum _TaskOwnerMenuAction { edit, status, delete }
+
+class _TaskStatusChangeRequest {
+  final String status;
+  final String reason;
+
+  const _TaskStatusChangeRequest(this.status, this.reason);
+}
 
 class TaskDetailScreen extends StatefulWidget {
   final String taskId;
@@ -63,6 +73,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final ScrollController _chatScrollController = ScrollController();
   List<TaskMessage> _messages = [];
   bool _participantsSaving = false;
+  bool _deletingTask = false;
+  bool _updatingStatus = false;
 
   @override
   void initState() {
@@ -116,6 +128,236 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     if (!mounted) return;
     setState(() => _task = updated);
     _syncTaskUiState();
+  }
+
+  Future<void> _handleOwnerMenuAction(_TaskOwnerMenuAction action) async {
+    switch (action) {
+      case _TaskOwnerMenuAction.edit:
+        await _openEditTask();
+        break;
+      case _TaskOwnerMenuAction.status:
+        await _openStatusSheet();
+        break;
+      case _TaskOwnerMenuAction.delete:
+        await _confirmDeleteTask();
+        break;
+    }
+  }
+
+  Future<void> _openEditTask() async {
+    final task = _task;
+    if (task == null) return;
+
+    final updated = await Navigator.push<TaskModel?>(
+      context,
+      MaterialPageRoute(builder: (_) => TaskFormScreen(task: task)),
+    );
+
+    if (!mounted) return;
+    if (updated != null) {
+      _applyTaskUpdate(updated);
+    } else {
+      await _loadTask();
+    }
+  }
+
+  Future<void> _openStatusSheet() async {
+    final task = _task;
+    if (task == null || _updatingStatus) return;
+
+    final statuses = <String>[
+      'assigned',
+      'accepted',
+      'in_progress',
+      'completed',
+      'approved',
+      'rejected',
+      'overdue',
+    ];
+
+    String selected = task.status;
+    final reasonController = TextEditingController();
+
+    try {
+      final request = await showModalBottomSheet<_TaskStatusChangeRequest>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setModalState) {
+              final needsReason = selected == 'rejected';
+              return SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    MediaQuery.of(context).viewInsets.bottom + 16,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'تغيير حالة المهمة',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.primaryDarkBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: statuses.contains(selected)
+                            ? selected
+                            : statuses.first,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'الحالة',
+                        ),
+                        items: statuses
+                            .map(
+                              (status) => DropdownMenuItem(
+                                value: status,
+                                child: Text(_statusLabel(status)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setModalState(() => selected = value);
+                        },
+                      ),
+                      if (needsReason) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: reasonController,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'سبب الرفض',
+                          ),
+                          minLines: 1,
+                          maxLines: 3,
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('إلغاء'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: () {
+                                if (selected == 'rejected' &&
+                                    reasonController.text.trim().isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('أدخل سبب الرفض'),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                Navigator.pop(
+                                  context,
+                                  _TaskStatusChangeRequest(
+                                    selected,
+                                    reasonController.text.trim(),
+                                  ),
+                                );
+                              },
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.primaryBlue,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('تحديث'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      if (request == null) return;
+      if (request.status == task.status) return;
+
+      setState(() => _updatingStatus = true);
+      final provider = context.read<TaskProvider>();
+      final updated = await provider.setTaskStatus(
+        task.id,
+        status: request.status,
+        reason: request.reason,
+      );
+      if (!mounted) return;
+      setState(() => _updatingStatus = false);
+
+      if (updated != null) {
+        _applyTaskUpdate(updated);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر تحديث حالة المهمة')),
+        );
+      }
+    } finally {
+      reasonController.dispose();
+    }
+  }
+
+  Future<void> _confirmDeleteTask() async {
+    final task = _task;
+    if (task == null || _deletingTask) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('حذف المهمة'),
+        content: const Text('هل أنت متأكد من حذف المهمة؟ لا يمكن التراجع.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.errorRed,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _deletingTask = true);
+    final provider = context.read<TaskProvider>();
+    final ok = await provider.deleteTask(task.id);
+    if (!mounted) return;
+    setState(() => _deletingTask = false);
+
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر حذف المهمة')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context);
   }
 
   void _setupTrackingTimers() {
@@ -1576,6 +1818,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         auth.user?.hasPermission('tasks_penalty') ?? false;
     final canManageParticipants =
         auth.user?.hasPermission('tasks_manage_participants') ?? false;
+    final canEditTask = auth.user?.hasPermission('tasks_edit') ?? false;
+    final isOwnerRole = (auth.user?.role ?? '').trim().toLowerCase() == 'owner';
     final currentUserId = auth.user?.id;
     final isWorker = _isTaskWorker(currentUserId);
     final isPrimaryAssignee = _task?.assignedTo == currentUserId;
@@ -1597,6 +1841,46 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           ),
         ),
         actions: [
+          if (_task != null && (canEditTask || isOwnerRole))
+            PopupMenuButton<_TaskOwnerMenuAction>(
+              enabled: !_deletingTask && !_updatingStatus,
+              tooltip: 'خيارات المالك',
+              onSelected: _handleOwnerMenuAction,
+              itemBuilder: (context) => [
+                if (canEditTask)
+                  const PopupMenuItem(
+                    value: _TaskOwnerMenuAction.edit,
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('تعديل المهمة'),
+                    ),
+                  ),
+                if (isOwnerRole)
+                  const PopupMenuItem(
+                    value: _TaskOwnerMenuAction.status,
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.sync_alt_rounded),
+                      title: Text('تغيير الحالة'),
+                    ),
+                  ),
+                if (isOwnerRole) const PopupMenuDivider(),
+                if (isOwnerRole)
+                  PopupMenuItem(
+                    value: _TaskOwnerMenuAction.delete,
+                    child: const ListTile(
+                      dense: true,
+                      leading: Icon(Icons.delete_outline, color: Colors.red),
+                      title: Text(
+                        'حذف المهمة',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ),
+              ],
+              icon: const Icon(Icons.more_vert),
+            ),
           Builder(
             builder: (context) => IconButton(
               onPressed: () => Scaffold.of(context).openEndDrawer(),
@@ -1658,6 +1942,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               canExtendTask: canExtendTask,
               canApplyTaskPenalty: canApplyTaskPenalty,
               canManageParticipants: canManageParticipants,
+              canEditTask: canEditTask,
+              isOwnerRole: isOwnerRole,
             ),
         ],
       ),
@@ -1729,6 +2015,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     required bool canExtendTask,
     required bool canApplyTaskPenalty,
     required bool canManageParticipants,
+    required bool canEditTask,
+    required bool isOwnerRole,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1813,7 +2101,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ),
                 const SizedBox(height: 16),
                 if (isWorker) _buildEmployeeActions(),
-                _buildOwnerActions(canApproveTask: canApproveTask),
+                _buildOwnerActions(
+                  canApproveTask: canApproveTask,
+                  canEditTask: canEditTask,
+                  isOwnerRole: isOwnerRole,
+                ),
                 const SizedBox(height: 16),
                 _buildTrackingSection(canViewAllTasks, isPrimaryAssignee),
               ],
@@ -2879,11 +3171,62 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 
-  Widget _buildOwnerActions({required bool canApproveTask}) {
+  Widget _buildOwnerActions({
+    required bool canApproveTask,
+    required bool canEditTask,
+    required bool isOwnerRole,
+  }) {
     final task = _task!;
-    if (!canApproveTask || task.status != 'completed') {
+
+    final managementActions = <Widget>[];
+    if (canEditTask) {
+      managementActions.add(
+        ElevatedButton.icon(
+          onPressed: _openEditTask,
+          icon: const Icon(Icons.edit_outlined),
+          label: const Text('تعديل'),
+        ),
+      );
+    }
+
+    if (isOwnerRole) {
+      managementActions.add(
+        OutlinedButton.icon(
+          onPressed: _updatingStatus ? null : _openStatusSheet,
+          icon: const Icon(Icons.sync_alt_rounded),
+          label: const Text('تغيير الحالة'),
+        ),
+      );
+      managementActions.add(
+        OutlinedButton.icon(
+          onPressed: _deletingTask ? null : _confirmDeleteTask,
+          icon: const Icon(Icons.delete_outline),
+          label: const Text('حذف'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.errorRed,
+            side: BorderSide(
+              color: AppColors.errorRed.withValues(alpha: 0.45),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final approvalActions = <Widget>[];
+    if (canApproveTask && task.status == 'completed') {
+      approvalActions.addAll([
+        ElevatedButton(
+          onPressed: _approveTask,
+          child: const Text('اعتماد'),
+        ),
+        OutlinedButton(onPressed: _rejectTask, child: const Text('رفض')),
+      ]);
+    }
+
+    if (managementActions.isEmpty && approvalActions.isEmpty) {
       return const SizedBox.shrink();
     }
+
     return AppSurfaceCard(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -2891,22 +3234,26 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         children: [
           _buildSectionTitle(
             'إجراءات المالك',
-            'يمكن اعتماد المهمة أو رفضها بعد مراجعة تقرير التنفيذ والمرفقات.',
-            Icons.verified_user_outlined,
-            AppColors.successGreen,
+            'تعديل المهمة، تغيير الحالة، أو حذف المهمة. تظهر خيارات الاعتماد بعد إغلاق المهمة.',
+            Icons.admin_panel_settings_outlined,
+            AppColors.primaryBlue,
           ),
           const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ElevatedButton(
-                onPressed: _approveTask,
-                child: const Text('اعتماد'),
-              ),
-              OutlinedButton(onPressed: _rejectTask, child: const Text('رفض')),
-            ],
-          ),
+          if (managementActions.isNotEmpty)
+            Wrap(spacing: 8, runSpacing: 8, children: managementActions),
+          if (approvalActions.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            _buildSectionTitle(
+              'اعتماد المهمة',
+              'يمكن اعتماد المهمة أو رفضها بعد مراجعة تقرير التنفيذ والمرفقات.',
+              Icons.verified_user_outlined,
+              AppColors.successGreen,
+            ),
+            const SizedBox(height: 14),
+            Wrap(spacing: 8, runSpacing: 8, children: approvalActions),
+          ],
         ],
       ),
     );

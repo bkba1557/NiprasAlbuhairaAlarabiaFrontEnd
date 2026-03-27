@@ -1145,7 +1145,7 @@ class _QualificationStationDetailsScreenState
         final station = _resolveStation(provider);
 
         return Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: const Color.fromARGB(26, 245, 242, 242),
           appBar: AppBar(
             elevation: 0,
             scrolledUnderElevation: 0,
@@ -1164,6 +1164,8 @@ class _QualificationStationDetailsScreenState
                     Center(child: CircularProgressIndicator()),
                   ],
                 )
+
+//qualification_map_screen.dart احتاج هنا اقدر اعمل زوم ان وزووم اوت واقدر احرك يمين ويسار وفوق وتحت داخل الخريطة 
               : Stack(
                   children: [
                     const AppSoftBackground(),

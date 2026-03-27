@@ -391,12 +391,12 @@ class _MaintenanceDashboardScreenState
                                 ? 4
                                 : isMediumScreen
                                 ? 2
-                                : 1,
+                                : 3,
                             childAspectRatio: isLargeScreen
                                 ? 1.5
                                 : isMediumScreen
                                 ? 1.8
-                                : 2.0,
+                                : 1.0,
                             mainAxisSpacing: 16,
                             crossAxisSpacing: 16,
                             children: [
@@ -407,6 +407,7 @@ class _MaintenanceDashboardScreenState
                                 color: AppColors.infoBlue,
                                 subtitle: 'إجمالي المركبات',
                                 isLargeScreen: isLargeScreen,
+                                compact: !isMediumScreen,
                               ),
                               StatsCard(
                                 title: 'الأيام المكتملة',
@@ -415,6 +416,7 @@ class _MaintenanceDashboardScreenState
                                 color: AppColors.successGreen,
                                 subtitle: 'من إجمالي $totalDays يوم',
                                 isLargeScreen: isLargeScreen,
+                                compact: !isMediumScreen,
                               ),
                               StatsCard(
                                 title: 'نسبة الإنجاز',
@@ -424,6 +426,7 @@ class _MaintenanceDashboardScreenState
                                 color: AppColors.warningOrange,
                                 subtitle: 'معدل الإنجاز',
                                 isLargeScreen: isLargeScreen,
+                                compact: !isMediumScreen,
                               ),
                               StatsCard(
                                 title: 'تحت المراجعة',
@@ -432,6 +435,7 @@ class _MaintenanceDashboardScreenState
                                 color: AppColors.pendingYellow,
                                 subtitle: 'مركبات تحت المراجعة',
                                 isLargeScreen: isLargeScreen,
+                                compact: !isMediumScreen,
                               ),
                             ],
                           )

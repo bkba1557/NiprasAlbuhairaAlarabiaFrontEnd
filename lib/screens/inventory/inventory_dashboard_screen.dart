@@ -234,6 +234,38 @@ class _InventoryDashboardScreenState extends State<InventoryDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<InventoryProvider>();
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    final statCards = [
+      _buildStatCard(
+        'الفروع',
+        provider.branches.length.toString(),
+        Icons.account_tree_outlined,
+        AppColors.primaryBlue,
+        compact: isMobile,
+      ),
+      _buildStatCard(
+        'المخازن',
+        provider.warehouses.length.toString(),
+        Icons.warehouse_outlined,
+        AppColors.successGreen,
+        compact: isMobile,
+      ),
+      _buildStatCard(
+        'موردي المخزون',
+        provider.suppliers.length.toString(),
+        Icons.group_outlined,
+        AppColors.warningOrange,
+        compact: isMobile,
+      ),
+      _buildStatCard(
+        'أصناف بالمخزون',
+        provider.stockItems.length.toString(),
+        Icons.inventory_2_outlined,
+        AppColors.errorRed,
+        compact: isMobile,
+      ),
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -273,36 +305,22 @@ class _InventoryDashboardScreenState extends State<InventoryDashboardScreen> {
                         style: const TextStyle(color: AppColors.errorRed),
                       ),
                     ),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      _buildStatCard(
-                        'الفروع',
-                        provider.branches.length.toString(),
-                        Icons.account_tree_outlined,
-                        AppColors.primaryBlue,
-                      ),
-                      _buildStatCard(
-                        'المخازن',
-                        provider.warehouses.length.toString(),
-                        Icons.warehouse_outlined,
-                        AppColors.successGreen,
-                      ),
-                      _buildStatCard(
-                        'موردي المخزون',
-                        provider.suppliers.length.toString(),
-                        Icons.group_outlined,
-                        AppColors.warningOrange,
-                      ),
-                      _buildStatCard(
-                        'أصناف بالمخزون',
-                        provider.stockItems.length.toString(),
-                        Icons.inventory_2_outlined,
-                        AppColors.errorRed,
-                      ),
-                    ],
-                  ),
+                  if (isMobile)
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1,
+                      children: statCards,
+                    )
+                  else
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: statCards,
+                    ),
                   const SizedBox(height: 20),
                   Wrap(
                     spacing: 12,
@@ -380,43 +398,83 @@ class _InventoryDashboardScreenState extends State<InventoryDashboardScreen> {
     String value,
     IconData icon,
     Color color,
-  ) {
+    {bool compact = false}) {
     return Container(
-      width: 220,
-      padding: const EdgeInsets.all(16),
+      width: compact ? null : 220,
+      padding: EdgeInsets.all(compact ? 12 : 16),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withOpacity(0.25)),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: color,
+      child: compact
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 20),
                 ),
-              ),
-              Text(title, style: TextStyle(fontSize: 12, color: color)),
-            ],
-          ),
-        ],
-      ),
+                const SizedBox(height: 10),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.mediumGray,
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                    Text(
+                      title,
+                      style: TextStyle(fontSize: 12, color: color),
+                    ),
+                  ],
+                ),
+              ],
+            ),
     );
   }
 

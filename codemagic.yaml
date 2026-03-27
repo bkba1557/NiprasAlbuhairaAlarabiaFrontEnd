@@ -1,8 +1,6 @@
 workflows:
-  # NOTE: App Store-signed IPAs can't be installed directly on devices.
-  # For direct iPhone installs, use the `ios-ad-hoc-ipa` workflow.
   ios-app-store-release:
-    name: iOS App Store Release (TestFlight + IPA)
+    name: iOS App Store Release
     max_build_duration: 120
     instance_type: mac_mini_m2
 
@@ -69,19 +67,6 @@ workflows:
             --build-number="$NEXT_BUILD_NUMBER" \
             --export-options-plist=/Users/builder/export_options.plist
 
-      - name: Normalize IPA filename (ASCII)
-        script: |
-          set -e
-
-          IPA_DIR="build/ios/ipa"
-          IPA_SRC="$(ls -1 "$IPA_DIR"/*.ipa | head -n 1)"
-          IPA_DST="$IPA_DIR/order_tracker.ipa"
-
-          if [ "$IPA_SRC" != "$IPA_DST" ]; then
-            mv "$IPA_SRC" "$IPA_DST"
-            echo "Renamed IPA to: $IPA_DST"
-          fi
-
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
@@ -91,72 +76,3 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-
-  ios-ad-hoc-ipa:
-    name: iOS Ad Hoc IPA (Direct Install)
-    max_build_duration: 120
-    instance_type: mac_mini_m2
-
-    # No App Store Connect upload is needed for Ad Hoc builds.
-    # Uncomment if you want to use App Store Connect tools in scripts.
-    # integrations:
-    #   app_store_connect: albuhairaalarabianipras
-
-    environment:
-      flutter: 3.38.3
-      xcode: latest
-      cocoapods: default
-
-      ios_signing:
-        distribution_type: ad_hoc
-        bundle_identifier: com.albuhaira.nipras
-
-      vars:
-        XCODE_WORKSPACE: Runner.xcworkspace
-        XCODE_SCHEME: Runner
-
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - ~/.pub-cache
-        - ~/Library/Caches/CocoaPods
-
-    scripts:
-      - name: Get Flutter packages
-        script: |
-          flutter clean
-          flutter pub get
-
-      - name: Generate iOS app icons
-        script: |
-          chmod +x scripts/generate_ios_app_icons.sh
-          ./scripts/generate_ios_app_icons.sh
-
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios
-          pod install
-          cd ..
-
-      - name: Set up code signing
-        script: |
-          xcode-project use-profiles
-
-      - name: Build signed IPA (ad-hoc)
-        script: |
-          set -e
-
-          # Use a monotonic build number for device installs (no App Store Connect needed).
-          NEXT_BUILD_NUMBER="$(date +%s)"
-
-          echo "Using iOS build number: $NEXT_BUILD_NUMBER"
-
-          flutter build ipa --release \
-            --build-number="$NEXT_BUILD_NUMBER" \
-            --export-options-plist=/Users/builder/export_options.plist
-
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - build/ios/archive/*.xcarchive
-      - /tmp/xcodebuild_logs/*.log
-      - flutter_drive.log

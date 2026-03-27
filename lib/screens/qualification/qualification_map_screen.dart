@@ -3,12 +3,14 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:order_tracker/providers/qualification_provider.dart';
 import 'package:order_tracker/models/qualification_models.dart';
@@ -39,6 +41,7 @@ class _QualificationStationsMapScreenState
   Position? _currentPosition;
   QualificationStation? _activeStation;
   GoogleMapController? _mapController;
+  MapType _mapType = MapType.normal;
   QualificationStation? _pendingFocusStation;
   final Map<QualificationStatus, BitmapDescriptor> _statusMarkerIcons = {};
   BitmapDescriptor? _currentMarkerIcon;
@@ -48,6 +51,7 @@ class _QualificationStationsMapScreenState
   bool _showSelectedOnly = false;
   bool _webMapsReady = !kIsWeb;
   bool _checkingWebMaps = false;
+  bool _isMapFullscreen = false;
 
   @override
   void initState() {
@@ -476,6 +480,51 @@ class _QualificationStationsMapScreenState
     _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
   }
 
+  void _zoomIn() {
+    _mapController?.animateCamera(CameraUpdate.zoomIn());
+  }
+
+  void _zoomOut() {
+    _mapController?.animateCamera(CameraUpdate.zoomOut());
+  }
+
+  Widget _buildMapControls() {
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(6),
+      borderRadius: const BorderRadius.all(Radius.circular(18)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PopupMenuButton<MapType>(
+            tooltip: 'نوع الخريطة',
+            onSelected: (value) => setState(() => _mapType = value),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: MapType.normal, child: Text('عادية')),
+              PopupMenuItem(value: MapType.satellite, child: Text('قمر صناعي')),
+              PopupMenuItem(value: MapType.hybrid, child: Text('هجينة')),
+              PopupMenuItem(value: MapType.terrain, child: Text('تضاريس')),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(Icons.layers_rounded),
+            ),
+          ),
+          const Divider(height: 1),
+          IconButton(
+            tooltip: 'تكبير',
+            onPressed: _zoomIn,
+            icon: const Icon(Icons.add),
+          ),
+          IconButton(
+            tooltip: 'تصغير',
+            onPressed: _zoomOut,
+            icon: const Icon(Icons.remove),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _selectStation(QualificationStation station) async {
     setState(() {
       _activeStation = station;
@@ -595,6 +644,18 @@ class _QualificationStationsMapScreenState
                     ),
                   ],
                   const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showNavigationOptions(station);
+                      },
+                      icon: const Icon(Icons.navigation_rounded),
+                      label: const Text('ابدأ الملاحة'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       ElevatedButton.icon(
@@ -638,6 +699,75 @@ class _QualificationStationsMapScreenState
         );
       },
     );
+  }
+
+  Future<void> _showNavigationOptions(QualificationStation station) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'اختيار لغة الإرشادات',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                ListTile(
+                  leading: const Icon(Icons.navigation_rounded),
+                  title: const Text('ملاحة بالعربية'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _startExternalNavigation(station, languageCode: 'ar');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.navigation_rounded),
+                  title: const Text('Navigation (English)'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _startExternalNavigation(station, languageCode: 'en');
+                  },
+                ),
+                Text(
+                  'ملاحظة: صوت الإرشادات يعتمد على إعدادات تطبيق الخرائط في جهازك.',
+                  textAlign: TextAlign.start,
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _startExternalNavigation(
+    QualificationStation station, {
+    required String languageCode,
+  }) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${station.location.lat},${station.location.lng}&travelmode=driving&dir_action=navigate&hl=$languageCode',
+    );
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذّر فتح تطبيق الخرائط')),
+      );
+    }
   }
 
   Widget _buildStationSelector(List<QualificationStation> stations) {
@@ -955,13 +1085,31 @@ class _QualificationStationsMapScreenState
     required List<QualificationStation> allStations,
     required List<QualificationStation> filteredStations,
     required bool compact,
+    bool draggable = false,
   }) {
+    final padding = compact
+        ? const EdgeInsets.fromLTRB(16, 12, 16, 16)
+        : const EdgeInsets.all(18);
+
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(18),
+      padding: padding,
       borderRadius: const BorderRadius.all(Radius.circular(28)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (draggable) ...[
+            Center(
+              child: Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           compact
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -970,16 +1118,19 @@ class _QualificationStationsMapScreenState
                       'لوحة التحكم في الخريطة',
                       style: TextStyle(
                         color: AppColors.darkGray,
-                        fontSize: 22,
+                        fontSize: 20,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       'فلترة المحطات، تتبع المسار، والتركيز السريع على أي موقع من شاشة واحدة.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: AppColors.mediumGray,
                         height: 1.5,
+                        fontSize: 13,
                       ),
                     ),
                   ],
@@ -1037,7 +1188,7 @@ class _QualificationStationsMapScreenState
                   ],
                 ),
           if (compact) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -1063,12 +1214,12 @@ class _QualificationStationsMapScreenState
               ],
             ),
           ],
-          const SizedBox(height: 18),
+          SizedBox(height: compact ? 12 : 18),
           compact
               ? Column(
                   children: [
                     _buildModernStationSelector(allStations),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _buildModernSearchField(),
                   ],
                 )
@@ -1079,7 +1230,7 @@ class _QualificationStationsMapScreenState
                     Expanded(child: _buildModernSearchField()),
                   ],
                 ),
-          const SizedBox(height: 16),
+          SizedBox(height: compact ? 12 : 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -1275,6 +1426,11 @@ class _QualificationStationsMapScreenState
                   label: const Text('عرض التفاصيل'),
                 ),
                 FilledButton.tonalIcon(
+                  onPressed: () => _showNavigationOptions(station),
+                  icon: const Icon(Icons.navigation_rounded),
+                  label: const Text('ابدأ الملاحة'),
+                ),
+                FilledButton.tonalIcon(
                   onPressed: () => _toggleSelected(station.id),
                   icon: Icon(
                     _selectedIds.contains(station.id)
@@ -1409,7 +1565,7 @@ class _QualificationStationsMapScreenState
     }
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const ui.Color.fromARGB(255, 245, 242, 242),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -1423,6 +1579,18 @@ class _QualificationStationsMapScreenState
             tooltip: 'تحديث',
             onPressed: _loadInspections,
             icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: _isMapFullscreen ? 'إظهار لوحة التحكم' : 'عرض الخريطة كاملة',
+            onPressed: () {
+              FocusScope.of(context).unfocus();
+              setState(() => _isMapFullscreen = !_isMapFullscreen);
+            },
+            icon: Icon(
+              _isMapFullscreen
+                  ? Icons.fullscreen_exit_rounded
+                  : Icons.fullscreen_rounded,
+            ),
           ),
         ],
       ),
@@ -1445,115 +1613,186 @@ class _QualificationStationsMapScreenState
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 1480),
-                      child: Column(
-                        children: [
-                          _buildModernControlsCard(
-                            allStations: allStations,
-                            filteredStations: stations,
-                            compact: isCompact,
-                          ),
-                          const SizedBox(height: 16),
-                          Expanded(
-                            child: AppSurfaceCard(
-                              padding: const EdgeInsets.all(10),
-                              borderRadius: const BorderRadius.all(
-                                Radius.circular(30),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(24),
-                                child: provider.isLoading
-                                    ? const Center(
-                                        child: CircularProgressIndicator(),
-                                      )
-                                    : (!hasStations && _currentPosition == null)
-                                    ? const Center(
-                                        child: Text('لا توجد محطات للعرض'),
-                                      )
-                                    : Stack(
-                                        children: [
-                                          Positioned.fill(
-                                            child: kIsWeb && !_webMapsReady
-                                                ? _buildWebMapsState()
-                                                : GoogleMap(
-                                                    initialCameraPosition:
-                                                        CameraPosition(
-                                                          target: initialCenter,
-                                                          zoom: 10,
-                                                        ),
-                                                    markers: markers,
-                                                    polylines: polylines,
-                                                    myLocationEnabled: true,
-                                                    myLocationButtonEnabled:
-                                                        false,
-                                                    zoomControlsEnabled: true,
-                                                    compassEnabled: true,
-                                                    onMapCreated: (controller) {
-                                                      _mapController =
-                                                          controller;
-                                                      final pending =
-                                                          _pendingFocusStation;
-                                                      if (pending != null) {
-                                                        _fitMapToSelection(
-                                                          pending,
-                                                        );
-                                                        _pendingFocusStation =
-                                                            null;
-                                                      }
-                                                    },
-                                                  ),
-                                          ),
-                                          if (_activeStation != null)
-                                            PositionedDirectional(
-                                              top: 16,
-                                              start: 16,
-                                              child: _buildActiveStationOverlay(
-                                                _activeStation!,
-                                              ),
-                                            ),
-                                          if (_routeLoading)
-                                            PositionedDirectional(
-                                              top: 16,
-                                              end: 16,
-                                              child: AppSurfaceCard(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 10,
-                                                    ),
-                                                borderRadius:
-                                                    const BorderRadius.all(
-                                                      Radius.circular(18),
-                                                    ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: const [
-                                                    SizedBox(
-                                                      width: 14,
-                                                      height: 14,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                          ),
-                                                    ),
-                                                    SizedBox(width: 8),
-                                                    Text(
-                                                      'جاري تحديث المسار',
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w700,
+                      child: Builder(
+                        builder: (context) {
+                          final mapOuterRadius =
+                              BorderRadius.circular(isCompact ? 26 : 30);
+                          final mapInnerRadius =
+                              BorderRadius.circular(isCompact ? 20 : 24);
+                          final mapPadding = EdgeInsets.all(isCompact ? 6 : 10);
+
+                          final mapCard = AppSurfaceCard(
+                            padding: mapPadding,
+                            borderRadius: mapOuterRadius,
+                            child: ClipRRect(
+                              borderRadius: mapInnerRadius,
+                              child: provider.isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : (!hasStations && _currentPosition == null)
+                                      ? const Center(
+                                          child: Text('لا توجد محطات للعرض'),
+                                        )
+                                      : Stack(
+                                          children: [
+                                            Positioned.fill(
+                                              child: kIsWeb && !_webMapsReady
+                                                  ? _buildWebMapsState()
+                                                  : GoogleMap(
+                                                      initialCameraPosition:
+                                                          CameraPosition(
+                                                        target: initialCenter,
+                                                        zoom: 10,
                                                       ),
+                                                      mapType: _mapType,
+                                                      markers: markers,
+                                                      polylines: polylines,
+                                                      myLocationEnabled: true,
+                                                      myLocationButtonEnabled:
+                                                          false,
+                                                      zoomControlsEnabled: false,
+                                                      zoomGesturesEnabled: true,
+                                                      scrollGesturesEnabled: true,
+                                                      rotateGesturesEnabled: true,
+                                                      tiltGesturesEnabled: true,
+                                                      compassEnabled: true,
+                                                      gestureRecognizers: <Factory<
+                                                        OneSequenceGestureRecognizer
+                                                      >>{
+                                                        Factory<
+                                                          OneSequenceGestureRecognizer
+                                                        >(
+                                                          () =>
+                                                              EagerGestureRecognizer(),
+                                                        ),
+                                                      },
+                                                      onMapCreated:
+                                                          (controller) {
+                                                        _mapController =
+                                                            controller;
+                                                        final pending =
+                                                            _pendingFocusStation;
+                                                        if (pending != null) {
+                                                          _fitMapToSelection(
+                                                            pending,
+                                                          );
+                                                          _pendingFocusStation =
+                                                              null;
+                                                        }
+                                                      },
                                                     ),
-                                                  ],
+                                            ),
+                                            if (_activeStation != null)
+                                              PositionedDirectional(
+                                                top: 16,
+                                                start: 16,
+                                                child:
+                                                    _buildActiveStationOverlay(
+                                                  _activeStation!,
                                                 ),
                                               ),
+                                            if (_routeLoading)
+                                              PositionedDirectional(
+                                                top: 16,
+                                                end: 16,
+                                                child: AppSurfaceCard(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 10,
+                                                  ),
+                                                  borderRadius:
+                                                      const BorderRadius.all(
+                                                    Radius.circular(18),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: const [
+                                                      SizedBox(
+                                                        width: 14,
+                                                        height: 14,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Text(
+                                                        'جاري تحديث المسار',
+                                                        style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            PositionedDirectional(
+                                              top: _routeLoading ? 72 : 16,
+                                              end: 16,
+                                              child: _buildMapControls(),
                                             ),
-                                        ],
-                                      ),
-                              ),
+                                          ],
+                                        ),
                             ),
-                          ),
-                        ],
+                          );
+
+                          if (isCompact) {
+                            return Stack(
+                              children: [
+                                Positioned.fill(child: mapCard),
+                                if (!_isMapFullscreen)
+                                  DraggableScrollableSheet(
+                                    minChildSize: 0.18,
+                                    initialChildSize: 0.36,
+                                    maxChildSize: 0.92,
+                                    builder: (context, scrollController) {
+                                      return SafeArea(
+                                        top: false,
+                                        child: SingleChildScrollView(
+                                          controller: scrollController,
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
+                                              bottom: 12,
+                                            ),
+                                            child: SizedBox(
+                                              width: double.infinity,
+                                              child: _buildModernControlsCard(
+                                                allStations: allStations,
+                                                filteredStations: stations,
+                                                compact: true,
+                                                draggable: true,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                              ],
+                            );
+                          }
+
+                          return Column(
+                            children: [
+                              if (!_isMapFullscreen) ...[
+                                _buildModernControlsCard(
+                                  allStations: allStations,
+                                  filteredStations: stations,
+                                  compact: false,
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                              Expanded(child: mapCard),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),

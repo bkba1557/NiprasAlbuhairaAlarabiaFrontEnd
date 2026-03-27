@@ -704,7 +704,7 @@ class _InventoryListScreenState extends State<InventoryListScreen> {
     List<Station> stations,
   ) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color.fromARGB(255, 243, 241, 241),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,

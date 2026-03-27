@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:order_tracker/models/models.dart';
+import 'package:order_tracker/models/task_model.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/task_provider.dart';
 import 'package:order_tracker/providers/user_management_provider.dart';
@@ -18,7 +19,8 @@ class _AttachmentDraft {
 }
 
 class TaskFormScreen extends StatefulWidget {
-  const TaskFormScreen({super.key});
+  final TaskModel? task;
+  const TaskFormScreen({super.key, this.task});
 
   @override
   State<TaskFormScreen> createState() => _TaskFormScreenState();
@@ -60,10 +62,17 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     _manualTitleOption,
   ];
 
+  bool get _isEditing => widget.task != null;
+
   @override
   void initState() {
     super.initState();
     _userProvider = UserManagementProvider()..fetchAllUsers();
+
+    final task = widget.task;
+    if (task != null) {
+      _hydrateFromTask(task);
+    }
   }
 
   @override
@@ -82,6 +91,63 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     _penaltyAmountController.dispose();
     _userProvider.dispose();
     super.dispose();
+  }
+
+  void _hydrateFromTask(TaskModel task) {
+    final normalizedTitle = task.title.trim();
+    if (_taskTitleOptions.contains(normalizedTitle)) {
+      _selectedTitle = normalizedTitle;
+    } else {
+      _selectedTitle = _manualTitleOption;
+    }
+    _titleController.text = normalizedTitle;
+    _descriptionController.text = task.description;
+    _departmentController.text = task.department;
+
+    final location = task.location;
+    if ((location?.address ?? '').trim().isNotEmpty) {
+      _locationAddressController.text = location!.address!.trim();
+    }
+    if (location?.latitude != null) {
+      _latController.text = location!.latitude!.toStringAsFixed(6);
+    }
+    if (location?.longitude != null) {
+      _lngController.text = location!.longitude!.toStringAsFixed(6);
+    }
+
+    _selectedUserIds
+      ..clear()
+      ..add(task.assignedTo)
+      ..addAll(
+        task.participants
+            .map((participant) => participant.userId.trim())
+            .where((id) => id.isNotEmpty),
+      );
+    _primaryAssigneeId = task.assignedTo;
+
+    final totalSeconds = task.countdownDurationSeconds;
+    if (totalSeconds > 0) {
+      var remaining = totalSeconds;
+      final days = remaining ~/ (24 * 60 * 60);
+      remaining -= days * 24 * 60 * 60;
+      final hours = remaining ~/ (60 * 60);
+      remaining -= hours * 60 * 60;
+      final minutes = remaining ~/ 60;
+      remaining -= minutes * 60;
+      final seconds = remaining;
+
+      _daysController.text = days.toString();
+      _hoursController.text = hours.toString();
+      _minutesController.text = minutes.toString();
+      _secondsController.text = seconds.toString();
+    }
+
+    final penalty = task.overduePenalty;
+    _penaltyEnabled = penalty?.enabled == true;
+    if (_penaltyEnabled) {
+      _penaltyAmountController.text =
+          (penalty?.amount ?? 0).toStringAsFixed(2);
+    }
   }
 
   Future<void> _pickAttachments() async {
@@ -309,26 +375,33 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     };
 
     final taskProvider = context.read<TaskProvider>();
-    final created = await taskProvider.createTask(payload);
+    final isEditing = _isEditing;
+    final saved = isEditing
+        ? await taskProvider.updateTask(widget.task!.id, payload)
+        : await taskProvider.createTask(payload);
 
-    if (created == null) {
+    if (saved == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('فشل إنشاء المهمة')));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(isEditing ? 'فشل حفظ التعديلات' : 'فشل إنشاء المهمة'),
+        ),
+      );
       return;
     }
 
     if (_attachments.isNotEmpty) {
       await taskProvider.uploadAttachments(
-        created.id,
+        saved.id,
         _attachments.map((attachment) => attachment.path).toList(),
         attachmentType: 'file',
       );
     }
 
     if (!mounted) return;
-    Navigator.pop(context);
+    Navigator.pop(context, saved);
   }
 
   String _attachmentLabel(_AttachmentDraft attachment) {
@@ -968,6 +1041,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   }
 
   Widget _buildSubmitCard() {
+    final isEditing = _isEditing;
     return AppSurfaceCard(
       padding: const EdgeInsets.all(20),
       color: const Color(0xFFF8FAFC),
@@ -983,9 +1057,11 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'راجع البيانات الأساسية، الفريق المكلف، والمهلة قبل إنشاء المهمة.',
-            style: TextStyle(
+          Text(
+            isEditing
+                ? 'راجع البيانات الأساسية، الفريق المكلف، والمهلة قبل حفظ التعديلات.'
+                : 'راجع البيانات الأساسية، الفريق المكلف، والمهلة قبل إنشاء المهمة.',
+            style: const TextStyle(
               color: Color(0xFF64748B),
               fontWeight: FontWeight.w600,
               height: 1.5,
@@ -1008,7 +1084,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              child: const Text('إنشاء المهمة'),
+              child: Text(isEditing ? 'حفظ التعديلات' : 'إنشاء المهمة'),
             ),
           ),
         ],
@@ -1019,15 +1095,17 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final canCreateTasks =
-        context.watch<AuthProvider>().user?.hasPermission('tasks_create') ??
-        false;
+    final authUser = context.watch<AuthProvider>().user;
+    final isEditing = _isEditing;
+    final canCreateTasks = authUser?.hasPermission('tasks_create') ?? false;
+    final canEditTasks = authUser?.hasPermission('tasks_edit') ?? false;
+    final canAccess = isEditing ? canEditTasks : canCreateTasks;
 
-    if (!canCreateTasks) {
+    if (!canAccess) {
       return Scaffold(
-        appBar: AppBar(title: const Text('إضافة مهمة')),
+        appBar: AppBar(title: Text(isEditing ? 'تعديل مهمة' : 'إضافة مهمة')),
         body: const Center(
-          child: Text('لا تملك صلاحية إنشاء المهام.'),
+          child: Text('لا تملك صلاحية إدارة المهام.'),
         ),
       );
     }
@@ -1038,7 +1116,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.transparent,
-          title: const Text('إضافة مهمة'),
+          title: Text(isEditing ? 'تعديل مهمة' : 'إضافة مهمة'),
           centerTitle: true,
           flexibleSpace: DecoratedBox(
             decoration: const BoxDecoration(gradient: AppColors.appBarGradient),

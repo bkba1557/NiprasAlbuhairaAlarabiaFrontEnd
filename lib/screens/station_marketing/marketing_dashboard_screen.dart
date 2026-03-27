@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:provider/provider.dart';
 
@@ -251,7 +252,7 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
         final primaryFab = _buildFloatingActionButton();
 
         return Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: const Color.fromARGB(255, 243, 241, 241),
           appBar: AppBar(
             elevation: 0,
             scrolledUnderElevation: 0,
@@ -303,15 +304,22 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
           drawer: isWide
               ? null
               : Drawer(
-                  child: SafeArea(
-                    child: _buildSideBar(
-                      isWide: true,
-                      isExpanded: true,
-                      selectedIndex: _selectedIndex,
-                      onSelected: (index) {
-                        _onSidebarSelected(index, closeDrawer: true);
-                      },
-                      title: title,
+                  child: AnnotatedRegion<SystemUiOverlayStyle>(
+                    value: SystemUiOverlayStyle.light.copyWith(
+                      statusBarColor: Colors.transparent,
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: _buildSideBar(
+                        isWide: true,
+                        isExpanded: true,
+                        padForStatusBar: true,
+                        selectedIndex: _selectedIndex,
+                        onSelected: (index) {
+                          _onSidebarSelected(index, closeDrawer: true);
+                        },
+                        title: title,
+                      ),
                     ),
                   ),
                 ),
@@ -402,6 +410,7 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
   Widget _buildSideBar({
     required bool isWide,
     required bool isExpanded,
+    bool padForStatusBar = false,
     required int selectedIndex,
     required ValueChanged<int> onSelected,
     required String title,
@@ -441,9 +450,14 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: effectiveExpanded ? 20 : 12,
-              vertical: 18,
+            padding: EdgeInsetsDirectional.fromSTEB(
+              effectiveExpanded ? 20 : 12,
+              18 +
+                  (padForStatusBar
+                      ? MediaQuery.of(context).padding.top
+                      : 0.0),
+              effectiveExpanded ? 20 : 12,
+              18,
             ),
             decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
             child: Row(
@@ -698,95 +712,126 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
     final expectedProfit = totalLeaseAmount - totalCost - totalExpenses;
     final suggestedTotal = _totalSuggestedLeaseAll(stations);
 
+    final marketingSummaryCards = [
+      _statCard(
+        label: 'المحطات المسجلة',
+        value: totalStations.toString(),
+        icon: Icons.local_gas_station,
+        color: AppColors.primaryBlue,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+      _statCard(
+        label: 'تحت المراجعة',
+        value:
+            _statusCount(stations, StationMarketingStatus.pendingReview)
+                .toString(),
+        icon: Icons.rate_review,
+        color: AppColors.warningOrange,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+      _statCard(
+        label: 'مؤجرة',
+        value: _statusCount(stations, StationMarketingStatus.rented).toString(),
+        icon: Icons.assignment_ind,
+        color: Colors.teal,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+      _statCard(
+        label: 'إجمالي اللترات',
+        value: _formatNumber(totalLiters),
+        icon: Icons.local_fire_department,
+        color: AppColors.successGreen,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+    ];
+
+    final financeSummaryCards = [
+      _statCard(
+        label: 'تكلفة الاستئجار',
+        value: _formatCurrency(totalCost),
+        icon: Icons.money_off,
+        color: AppColors.errorRed,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+      _statCard(
+        label: 'المصاريف',
+        value: _formatCurrency(totalExpenses),
+        icon: Icons.receipt_long,
+        color: AppColors.warningOrange,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+      _statCard(
+        label: 'سعر التأجير المخطط',
+        value: _formatCurrency(totalLeaseAmount),
+        icon: Icons.payments,
+        color: AppColors.successGreen,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+      _statCard(
+        label: 'الربح المتوقع',
+        value: _formatCurrency(expectedProfit),
+        icon: Icons.account_balance_wallet_outlined,
+        color: expectedProfit >= 0 ? Colors.teal : AppColors.errorRed,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+      _statCard(
+        label: 'سعر تأجير مقترح',
+        value: _formatCurrency(suggestedTotal),
+        icon: Icons.lightbulb,
+        color: AppColors.accentBlue,
+        width: isWide ? 260 : null,
+        compact: !isWide,
+      ),
+    ];
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
         _buildSectionTitle('ملخص التسويق'),
         const SizedBox(height: 16),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _statCard(
-              label: 'المحطات المسجلة',
-              value: totalStations.toString(),
-              icon: Icons.local_gas_station,
-              color: AppColors.primaryBlue,
-              width: isWide ? 260 : double.infinity,
-            ),
-            _statCard(
-              label: 'تحت المراجعة',
-              value: _statusCount(
-                stations,
-                StationMarketingStatus.pendingReview,
-              ).toString(),
-              icon: Icons.rate_review,
-              color: AppColors.warningOrange,
-              width: isWide ? 260 : double.infinity,
-            ),
-            _statCard(
-              label: 'مؤجرة',
-              value: _statusCount(
-                stations,
-                StationMarketingStatus.rented,
-              ).toString(),
-              icon: Icons.assignment_ind,
-              color: Colors.teal,
-              width: isWide ? 260 : double.infinity,
-            ),
-            _statCard(
-              label: 'إجمالي اللترات',
-              value: _formatNumber(totalLiters),
-              icon: Icons.local_fire_department,
-              color: AppColors.successGreen,
-              width: isWide ? 260 : double.infinity,
-            ),
-          ],
-        ),
+        if (isWide)
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: marketingSummaryCards,
+          )
+        else
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 3,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1,
+            children: marketingSummaryCards,
+          ),
         const SizedBox(height: 24),
         _buildSectionTitle('ملخص مالي'),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _statCard(
-              label: 'تكلفة الاستئجار',
-              value: _formatCurrency(totalCost),
-              icon: Icons.money_off,
-              color: AppColors.errorRed,
-              width: isWide ? 260 : double.infinity,
-            ),
-            _statCard(
-              label: 'المصاريف',
-              value: _formatCurrency(totalExpenses),
-              icon: Icons.receipt_long,
-              color: AppColors.warningOrange,
-              width: isWide ? 260 : double.infinity,
-            ),
-            _statCard(
-              label: 'سعر التأجير المخطط',
-              value: _formatCurrency(totalLeaseAmount),
-              icon: Icons.payments,
-              color: AppColors.successGreen,
-              width: isWide ? 260 : double.infinity,
-            ),
-            _statCard(
-              label: 'الربح المتوقع',
-              value: _formatCurrency(expectedProfit),
-              icon: Icons.account_balance_wallet_outlined,
-              color: expectedProfit >= 0 ? Colors.teal : AppColors.errorRed,
-              width: isWide ? 260 : double.infinity,
-            ),
-            _statCard(
-              label: 'سعر تأجير مقترح',
-              value: _formatCurrency(suggestedTotal),
-              icon: Icons.lightbulb,
-              color: AppColors.accentBlue,
-              width: isWide ? 260 : double.infinity,
-            ),
-          ],
-        ),
+        if (isWide)
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: financeSummaryCards,
+          )
+        else
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 3,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1,
+            children: financeSummaryCards,
+          ),
         const SizedBox(height: 24),
         _buildSectionTitle('التوزيعات والإحصائيات'),
         const SizedBox(height: 12),
@@ -2784,57 +2829,104 @@ class _MarketingStationsScreenState extends State<MarketingStationsScreen> {
     required IconData icon,
     required Color color,
     double? width,
+    bool compact = false,
   }) {
     return SizedBox(
       width: width,
       child: AppSurfaceCard(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(compact ? 12 : 16),
         borderRadius: const BorderRadius.all(Radius.circular(26)),
         border: Border.all(color: color.withValues(alpha: 0.16)),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    color.withValues(alpha: 0.95),
-                    color.withValues(alpha: 0.55),
-                  ],
-                  begin: Alignment.topRight,
-                  end: Alignment.bottomLeft,
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(icon, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: compact
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: AppColors.mediumGray,
-                      fontWeight: FontWeight.w700,
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          color.withValues(alpha: 0.95),
+                          color.withValues(alpha: 0.55),
+                        ],
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
                     ),
+                    child: Icon(icon, color: Colors.white, size: 20),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 10),
                   Text(
                     value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 17,
                       fontWeight: FontWeight.w900,
                       color: color,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.mediumGray,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      height: 1.15,
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          color.withValues(alpha: 0.95),
+                          color.withValues(alpha: 0.55),
+                        ],
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(icon, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: AppColors.mediumGray,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          value,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }

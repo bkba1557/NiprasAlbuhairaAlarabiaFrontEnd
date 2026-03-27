@@ -1484,7 +1484,7 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
         sessionTotals.liters > 0 || actualSales > 0 || _isFuelPriceLoading;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color.fromARGB(255, 243, 241, 241),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,

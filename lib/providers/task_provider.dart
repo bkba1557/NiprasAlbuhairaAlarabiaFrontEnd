@@ -129,6 +129,45 @@ class TaskProvider with ChangeNotifier {
     return null;
   }
 
+  Future<TaskModel?> updateTask(String id, Map<String, dynamic> payload) async {
+    return _patchTask(ApiEndpoints.taskById(id), body: payload);
+  }
+
+  Future<TaskModel?> setTaskStatus(
+    String id, {
+    required String status,
+    String? reason,
+  }) async {
+    return _patchTask(
+      ApiEndpoints.taskStatus(id),
+      body: {
+        'status': status,
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
+  }
+
+  Future<bool> deleteTask(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.taskById(id)}'),
+        headers: ApiService.headers,
+      );
+
+      final ok = response.statusCode == 200 || response.statusCode == 204;
+      if (ok) {
+        _tasks.removeWhere((task) => task.id == id);
+        _myTasks.removeWhere((task) => task.id == id);
+        notifyListeners();
+      }
+      return ok;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<TaskModel?> startTask(String id) async {
     return _patchTask(ApiEndpoints.taskStart(id));
   }

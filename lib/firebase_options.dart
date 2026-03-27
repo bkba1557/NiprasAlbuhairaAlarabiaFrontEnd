@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCBv4UoP6mT2XGsXd3cT9wULDpP-PX7YGA',
-    appId: '1:843078322062:android:196170ada743345bb686df',
+    appId: '1:843078322062:android:1634bddd9b5fde20b686df',
     messagingSenderId: '843078322062',
     projectId: 'albuhairaalarabia2026',
     storageBucket: 'albuhairaalarabia2026.firebasestorage.app',
@@ -60,11 +60,11 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyBH-pW2B9_C5xRAimhUPKwey2BTH4q3_TQ',
-    appId: '1:843078322062:ios:cd70a5581a467784b686df',
+    appId: '1:843078322062:ios:64ffa7f80dc4b4d4b686df',
     messagingSenderId: '843078322062',
     projectId: 'albuhairaalarabia2026',
     storageBucket: 'albuhairaalarabia2026.firebasestorage.app',
-    iosBundleId: 'com.example.orderTracker',
+    iosBundleId: 'com.albuhaira.nipras',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(

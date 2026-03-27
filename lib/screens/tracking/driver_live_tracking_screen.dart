@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -11,8 +12,10 @@ import 'package:order_tracker/models/driver_tracking_models.dart';
 import 'package:order_tracker/providers/driver_tracking_provider.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/tracking_directions_service.dart';
+import 'package:order_tracker/widgets/app_surface_card.dart';
 import 'package:order_tracker/widgets/maps/advanced_web_map.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DriverLiveTrackingScreen extends StatefulWidget {
   final String driverId;
@@ -26,6 +29,7 @@ class DriverLiveTrackingScreen extends StatefulWidget {
 
 class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
   static const LatLng _fallbackCenter = LatLng(24.7136, 46.6753);
+  static const Duration _trackingRefreshInterval = Duration(seconds: 6);
 
   Timer? _refreshTimer;
   GoogleMapController? _mapController;
@@ -41,6 +45,10 @@ class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
   BitmapDescriptor? _truckMarkerIcon;
   String? _lastBoundsSignature;
   bool _isFallbackRoute = false;
+  bool _isMapFullscreen = false;
+  bool _followDriver = true;
+  bool _ignoreNextCameraMoveStarted = false;
+  MapType _mapType = MapType.normal;
 
   @override
   void initState() {
@@ -49,7 +57,7 @@ class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _refreshTracking();
       _refreshTimer = Timer.periodic(
-        const Duration(seconds: 12),
+        _trackingRefreshInterval,
         (_) => _refreshTracking(silent: true),
       );
     });
@@ -270,21 +278,20 @@ class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
   }
 
   void _scheduleFitToRoute(List<LatLng> points) {
-    if (kIsWeb || points.isEmpty) return;
+    if (kIsWeb || points.isEmpty || !_followDriver) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fitMapToPoints(points);
     });
   }
 
   Future<void> _fitMapToPoints(List<LatLng> points) async {
-    final controller = _mapController;
-    if (controller == null || points.isEmpty) return;
+    if (_mapController == null || points.isEmpty) return;
 
     final signature = _polylineSignature(points);
     if (_lastBoundsSignature == signature) return;
 
     if (points.length == 1) {
-      await controller.animateCamera(
+      await _animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(target: points.first, zoom: 15),
         ),
@@ -320,17 +327,222 @@ class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
     );
 
     try {
-      await controller.animateCamera(
-        CameraUpdate.newLatLngBounds(bounds, 72),
-      );
+      await _animateCamera(CameraUpdate.newLatLngBounds(bounds, 72));
       _lastBoundsSignature = signature;
     } catch (_) {
-      await controller.animateCamera(
+      await _animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(target: _midpoint(points), zoom: 13),
         ),
       );
       _lastBoundsSignature = signature;
+    }
+  }
+
+  Future<void> _animateCamera(CameraUpdate update) async {
+    final controller = _mapController;
+    if (controller == null) return;
+    _ignoreNextCameraMoveStarted = true;
+    try {
+      await controller.animateCamera(update);
+    } finally {
+      _ignoreNextCameraMoveStarted = false;
+    }
+  }
+
+  void _zoomIn() {
+    _animateCamera(CameraUpdate.zoomIn());
+  }
+
+  void _zoomOut() {
+    _animateCamera(CameraUpdate.zoomOut());
+  }
+
+  Future<void> _resumeFollowDriver(DriverTrackingDetail detail) async {
+    if (!mounted) return;
+    setState(() {
+      _followDriver = true;
+      _lastBoundsSignature = null;
+    });
+
+    if (_routePoints.length >= 2) {
+      await _fitMapToPoints(_routePoints);
+      return;
+    }
+
+    final lastLocation = detail.summary.lastLocation;
+    if (lastLocation == null) return;
+
+    await _animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(lastLocation.latitude, lastLocation.longitude),
+          zoom: 15,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _centerOnOwner() async {
+    final ownerLocation = _ownerLocation;
+    if (ownerLocation == null) return;
+
+    if (!mounted) return;
+    setState(() => _followDriver = false);
+
+    await _animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: ownerLocation, zoom: 15),
+      ),
+    );
+  }
+
+  Future<void> _centerOnDriver(DriverTrackingDetail detail) async {
+    final lastLocation = detail.summary.lastLocation;
+    if (lastLocation == null) return;
+
+    if (!mounted) return;
+    setState(() => _followDriver = false);
+
+    await _animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(lastLocation.latitude, lastLocation.longitude),
+          zoom: 16,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapControls(DriverTrackingDetail detail) {
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(6),
+      borderRadius: const BorderRadius.all(Radius.circular(18)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PopupMenuButton<MapType>(
+            tooltip: 'نوع الخريطة',
+            onSelected: (value) => setState(() => _mapType = value),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: MapType.normal, child: Text('عادية')),
+              PopupMenuItem(value: MapType.satellite, child: Text('قمر صناعي')),
+              PopupMenuItem(value: MapType.hybrid, child: Text('هجينة')),
+              PopupMenuItem(value: MapType.terrain, child: Text('تضاريس')),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(Icons.layers_rounded),
+            ),
+          ),
+          const Divider(height: 1),
+          IconButton(
+            tooltip: 'تكبير',
+            onPressed: _zoomIn,
+            icon: const Icon(Icons.add),
+          ),
+          IconButton(
+            tooltip: 'تصغير',
+            onPressed: _zoomOut,
+            icon: const Icon(Icons.remove),
+          ),
+          const Divider(height: 1),
+          IconButton(
+            tooltip: 'موقع السائق',
+            onPressed: () => _centerOnDriver(detail),
+            icon: const Icon(Icons.local_shipping_rounded),
+          ),
+          IconButton(
+            tooltip: _followDriver ? 'متابعة السائق' : 'العودة لموقع السائق',
+            onPressed: () => _resumeFollowDriver(detail),
+            icon: Icon(
+              _followDriver
+                  ? Icons.gps_fixed_rounded
+                  : Icons.gps_not_fixed_rounded,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showNavigationOptions(DriverTrackingDetail detail) async {
+    if (detail.summary.lastLocation == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يوجد موقع حديث للسائق')),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'اختيار لغة الإرشادات',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                ListTile(
+                  leading: const Icon(Icons.navigation_rounded),
+                  title: const Text('ملاحة بالعربية'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _startExternalNavigation(detail, languageCode: 'ar');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.navigation_rounded),
+                  title: const Text('Navigation (English)'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _startExternalNavigation(detail, languageCode: 'en');
+                  },
+                ),
+                Text(
+                  'ملاحظة: صوت الإرشادات يعتمد على إعدادات تطبيق الخرائط في جهازك.',
+                  textAlign: TextAlign.start,
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _startExternalNavigation(
+    DriverTrackingDetail detail, {
+    required String languageCode,
+  }) async {
+    final lastLocation = detail.summary.lastLocation;
+    if (lastLocation == null) return;
+
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${lastLocation.latitude},${lastLocation.longitude}&travelmode=driving&dir_action=navigate&hl=$languageCode',
+    );
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذّر فتح تطبيق الخرائط')),
+      );
     }
   }
 
@@ -496,49 +708,62 @@ class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: 320,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: kIsWeb
-                  ? AdvancedWebMap(
-                      center: center,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: kIsWeb
+                ? AdvancedWebMap(
+                    center: center,
+                    zoom: 13,
+                    primaryMarker: webPrimaryMarker,
+                    secondaryMarker: webSecondaryMarker,
+                    primaryMarkerIcon: webPrimaryIcon,
+                    secondaryMarkerIcon: webSecondaryIcon,
+                    polylineOutline: routeAvailable ? polylinePoints : null,
+                    polyline: routeAvailable ? polylinePoints : null,
+                    useMapId: false,
+                  )
+                : GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: center,
                       zoom: 13,
-                      primaryMarker: webPrimaryMarker,
-                      secondaryMarker: webSecondaryMarker,
-                      primaryMarkerIcon: webPrimaryIcon,
-                      secondaryMarkerIcon: webSecondaryIcon,
-                      polylineOutline: routeAvailable ? polylinePoints : null,
-                      polyline: routeAvailable ? polylinePoints : null,
-                      useMapId: false,
-                    )
-                  : GoogleMap(
-                      key: ValueKey(
-                        '${center.latitude}-${center.longitude}-${polylinePoints.length}',
-                      ),
-                      initialCameraPosition: CameraPosition(
-                        target: center,
-                        zoom: 13,
-                      ),
-                      markers: markers,
-                      polylines: polylines,
-                      zoomControlsEnabled: false,
-                      myLocationButtonEnabled: false,
-                      compassEnabled: true,
-                      mapToolbarEnabled: false,
-                      onMapCreated: (controller) {
-                        _mapController = controller;
-                        if (routeAvailable) {
-                          _scheduleFitToRoute(polylinePoints);
-                        }
-                      },
                     ),
-            ),
-            PositionedDirectional(
-              top: 12,
-              start: 12,
-              child: Card(
+                    mapType: _mapType,
+                    markers: markers,
+                    polylines: polylines,
+                    zoomControlsEnabled: false,
+                    myLocationEnabled: _ownerLocation != null,
+                    myLocationButtonEnabled: false,
+                    compassEnabled: true,
+                    mapToolbarEnabled: false,
+                    rotateGesturesEnabled: true,
+                    scrollGesturesEnabled: true,
+                    tiltGesturesEnabled: true,
+                    zoomGesturesEnabled: true,
+                    gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                      Factory<OneSequenceGestureRecognizer>(
+                        () => EagerGestureRecognizer(),
+                      ),
+                    },
+                    onCameraMoveStarted: () {
+                      if (_ignoreNextCameraMoveStarted) return;
+                      if (!_followDriver) return;
+                      setState(() => _followDriver = false);
+                    },
+                    onMapCreated: (controller) {
+                      _mapController = controller;
+                      if (routeAvailable) {
+                        _scheduleFitToRoute(polylinePoints);
+                      }
+                    },
+                  ),
+          ),
+          PositionedDirectional(
+            top: 12,
+            start: 12,
+            child: Card(
+              child: InkWell(
+                onTap: _centerOnOwner,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -581,23 +806,31 @@ class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
                 ),
               ),
             ),
-            if (_isRouteLoading)
-              const Positioned(
-                top: 12,
-                right: 12,
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(8),
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          PositionedDirectional(
+            top: 12,
+            end: 12,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildMapControls(detail),
+                if (_isRouteLoading) ...[
+                  const SizedBox(height: 10),
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(8),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     ),
                   ),
-                ),
-              ),
-          ],
-        ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -825,6 +1058,18 @@ class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
                     : () => _refreshTracking(),
                 icon: const Icon(Icons.refresh),
               ),
+              IconButton(
+                tooltip: _isMapFullscreen ? 'إظهار البيانات' : 'عرض الخريطة كاملة',
+                onPressed: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() => _isMapFullscreen = !_isMapFullscreen);
+                },
+                icon: Icon(
+                  _isMapFullscreen
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                ),
+              ),
             ],
           ),
           body: provider.isLoading && detail == null
@@ -839,115 +1084,213 @@ class _DriverLiveTrackingScreenState extends State<DriverLiveTrackingScreen> {
                     ),
                   ),
                 )
-              : RefreshIndicator(
-                  onRefresh: () => _refreshTracking(),
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _buildMap(detail),
-                      const SizedBox(height: 16),
-                      _DriverTrackingInfoCard(
-                        title: detail.summary.driver.name,
-                        color: _statusColor(detail.summary),
-                        statusLabel: _statusLabel(detail.summary),
-                        rows: [
-                          _TrackingInfoRow(
-                            label: 'الجوال',
-                            value: detail.summary.driver.phone,
-                          ),
-                          _TrackingInfoRow(
-                            label: 'المركبة',
-                            value:
-                                detail.summary.driver.vehicleNumber ??
-                                'غير محدد',
-                          ),
-                          _TrackingInfoRow(
-                            label: 'نوع المركبة',
-                            value: detail.summary.driver.vehicleType,
-                          ),
-                          _TrackingInfoRow(
-                            label: 'حالة السيارة',
-                            value: _vehicleTrackingLabel(detail.summary),
-                          ),
-                          _TrackingInfoRow(
-                            label: 'آخر تحديث',
-                            value: _formatTimestamp(
-                              detail.summary.lastLocation?.timestamp,
-                            ),
-                          ),
-                          _TrackingInfoRow(
-                            label: 'إحداثيات السائق',
-                            value: _formatCoordinates(
-                              detail.summary.lastLocation,
-                            ),
-                          ),
-                        ],
+              : Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: _buildMap(detail),
                       ),
-                      const SizedBox(height: 12),
-                      _DriverTrackingInfoCard(
-                        title: 'المسار بينك وبين السائق',
-                        color: AppColors.primaryBlue,
-                        statusLabel: _routeStatusLabel(),
-                        rows: _buildRouteRows(),
-                      ),
-                      if (detail.summary.activeOrder != null) ...[
-                        const SizedBox(height: 12),
-                        _DriverTrackingInfoCard(
-                          title: 'الطلب الحالي',
-                          color: AppColors.statusGold,
-                          statusLabel: detail.summary.activeOrder!.status,
-                          rows: _buildOrderRows(detail.summary.activeOrder!),
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'آخر نقاط الحركة',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              const SizedBox(height: 12),
-                              if (detail.history.isEmpty)
-                                const Text('لا يوجد مسار محفوظ حتى الآن')
-                              else
-                                ...detail.history.reversed.take(6).map(
-                                  (point) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: Row(
+                    ),
+                    if (!_isMapFullscreen)
+                      DraggableScrollableSheet(
+                        minChildSize: 0.24,
+                        initialChildSize: 0.52,
+                        maxChildSize: 0.92,
+                        builder: (context, scrollController) {
+                          return SafeArea(
+                            top: false,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                              child: Material(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                borderRadius: BorderRadius.circular(26),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(26),
+                                  child: RefreshIndicator(
+                                    onRefresh: () => _refreshTracking(),
+                                    child: ListView(
+                                      controller: scrollController,
+                                      physics:
+                                          const AlwaysScrollableScrollPhysics(
+                                        parent: BouncingScrollPhysics(),
+                                      ),
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        12,
+                                        16,
+                                        16,
+                                      ),
                                       children: [
-                                        const Icon(
-                                          Icons.local_shipping_outlined,
-                                          color: AppColors.primaryBlue,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            '${point.latitude.toStringAsFixed(5)}, '
-                                            '${point.longitude.toStringAsFixed(5)}',
+                                        Center(
+                                          child: Container(
+                                            width: 44,
+                                            height: 5,
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.12,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
                                           ),
                                         ),
-                                        Text(
-                                          _formatTimestamp(point.timestamp),
-                                          style: const TextStyle(
-                                            color: AppColors.mediumGray,
-                                            fontSize: 12,
+                                        const SizedBox(height: 12),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton.icon(
+                                            onPressed: () =>
+                                                _showNavigationOptions(detail),
+                                            icon: const Icon(
+                                              Icons.navigation_rounded,
+                                            ),
+                                            label: const Text('ابدأ الملاحة'),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        _DriverTrackingInfoCard(
+                                          title: detail.summary.driver.name,
+                                          color: _statusColor(detail.summary),
+                                          statusLabel: _statusLabel(
+                                            detail.summary,
+                                          ),
+                                          rows: [
+                                            _TrackingInfoRow(
+                                              label: 'الجوال',
+                                              value: detail.summary.driver.phone,
+                                            ),
+                                            _TrackingInfoRow(
+                                              label: 'المركبة',
+                                              value:
+                                                  detail.summary.driver
+                                                      .vehicleNumber ??
+                                                  'غير محدد',
+                                            ),
+                                            _TrackingInfoRow(
+                                              label: 'نوع المركبة',
+                                              value: detail
+                                                  .summary.driver.vehicleType,
+                                            ),
+                                            _TrackingInfoRow(
+                                              label: 'حالة السيارة',
+                                              value: _vehicleTrackingLabel(
+                                                detail.summary,
+                                              ),
+                                            ),
+                                            _TrackingInfoRow(
+                                              label: 'آخر تحديث',
+                                              value: _formatTimestamp(
+                                                detail.summary.lastLocation
+                                                    ?.timestamp,
+                                              ),
+                                            ),
+                                            _TrackingInfoRow(
+                                              label: 'إحداثيات السائق',
+                                              value: _formatCoordinates(
+                                                detail.summary.lastLocation,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        _DriverTrackingInfoCard(
+                                          title: 'المسار بينك وبين السائق',
+                                          color: AppColors.primaryBlue,
+                                          statusLabel: _routeStatusLabel(),
+                                          rows: _buildRouteRows(),
+                                        ),
+                                        if (detail.summary.activeOrder != null)
+                                          ...[
+                                            const SizedBox(height: 12),
+                                            _DriverTrackingInfoCard(
+                                              title: 'الطلب الحالي',
+                                              color: AppColors.statusGold,
+                                              statusLabel: detail
+                                                  .summary.activeOrder!.status,
+                                              rows: _buildOrderRows(
+                                                detail.summary.activeOrder!,
+                                              ),
+                                            ),
+                                          ],
+                                        const SizedBox(height: 12),
+                                        Card(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'آخر نقاط الحركة',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                if (detail.history.isEmpty)
+                                                  const Text(
+                                                    'لا يوجد مسار محفوظ حتى الآن',
+                                                  )
+                                                else
+                                                  ...detail.history.reversed
+                                                      .take(6)
+                                                      .map(
+                                                        (point) => Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .only(
+                                                            bottom: 10,
+                                                          ),
+                                                          child: Row(
+                                                            children: [
+                                                              const Icon(
+                                                                Icons
+                                                                    .local_shipping_outlined,
+                                                                color: AppColors
+                                                                    .primaryBlue,
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 10,
+                                                              ),
+                                                              Expanded(
+                                                                child: Text(
+                                                                  '${point.latitude.toStringAsFixed(5)}, '
+                                                                  '${point.longitude.toStringAsFixed(5)}',
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                _formatTimestamp(
+                                                                  point.timestamp,
+                                                                ),
+                                                                style:
+                                                                    const TextStyle(
+                                                                  color: AppColors
+                                                                      .mediumGray,
+                                                                  fontSize: 12,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
                                 ),
-                            ],
-                          ),
-                        ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                  ],
                 ),
         );
       },

@@ -900,48 +900,88 @@ class _QualificationDashboardScreenState
     int value,
     Color color, {
     required IconData icon,
+    bool compact = false,
   }) {
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(compact ? 12 : 16),
       borderRadius: const BorderRadius.all(Radius.circular(24)),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: compact
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
+                  child: Icon(icon, color: color, size: 20),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 10),
                 Text(
                   value.toString(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: color,
                     fontWeight: FontWeight.w800,
-                    fontSize: 26,
+                    fontSize: 20,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.mediumGray,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    height: 1.15,
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: color),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        value.toString(),
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 26,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -2070,7 +2110,7 @@ class _QualificationDashboardScreenState
         .length;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color.fromARGB(255, 243, 241, 241),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -2098,7 +2138,9 @@ class _QualificationDashboardScreenState
           final isCompact = width < 760;
 
           int statsColumns = 1;
-          if (width >= 1340) {
+          if (isCompact) {
+            statsColumns = 3;
+          } else if (width >= 1340) {
             statsColumns = 5;
           } else if (width >= 1080) {
             statsColumns = 3;
@@ -2106,11 +2148,13 @@ class _QualificationDashboardScreenState
             statsColumns = 2;
           }
 
-          final statsAspectRatio = statsColumns == 1
-              ? 2.5
-              : statsColumns == 2
-              ? 2.0
-              : 2.35;
+          final statsAspectRatio = isCompact
+              ? 1.0
+              : statsColumns == 1
+                  ? 2.5
+                  : statsColumns == 2
+                      ? 2.0
+                      : 2.35;
 
           return RefreshIndicator(
             onRefresh: _loadInspections,
@@ -2151,30 +2195,35 @@ class _QualificationDashboardScreenState
                       inspections.length,
                       AppColors.primaryBlue,
                       icon: Icons.local_gas_station_rounded,
+                      compact: isCompact,
                     ),
                     _buildStatCard(
                       'تحت الدراسة',
                       underReviewCount,
                       Colors.amber.shade700,
                       icon: Icons.hourglass_top_rounded,
+                      compact: isCompact,
                     ),
                     _buildStatCard(
                       'جاري التفاوض',
                       negotiatingCount,
                       Colors.blue.shade700,
                       icon: Icons.handshake_outlined,
+                      compact: isCompact,
                     ),
                     _buildStatCard(
                       'تم الاتفاق',
                       agreedCount,
                       AppColors.successGreen,
                       icon: Icons.verified_rounded,
+                      compact: isCompact,
                     ),
                     _buildStatCard(
                       'لم يتم الاتفاق',
                       notAgreedCount,
                       AppColors.errorRed,
                       icon: Icons.block_rounded,
+                      compact: isCompact,
                     ),
                   ],
                 ),

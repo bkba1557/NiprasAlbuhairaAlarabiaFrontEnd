@@ -10,6 +10,7 @@ class StatsCard extends StatelessWidget {
   final Color color;
   final String subtitle;
   final bool isLargeScreen;
+  final bool compact;
 
   const StatsCard({
     super.key,
@@ -19,6 +20,7 @@ class StatsCard extends StatelessWidget {
     required this.color,
     this.subtitle = '',
     required this.isLargeScreen,
+    this.compact = false,
   });
 
   @override
@@ -26,8 +28,30 @@ class StatsCard extends StatelessWidget {
     final theme = Theme.of(context);
     final radius = BorderRadius.circular(20);
 
+    final iconBoxSize = compact
+        ? 36.0
+        : isLargeScreen
+        ? 46.0
+        : 42.0;
+    final iconSize = compact
+        ? 18.0
+        : isLargeScreen
+        ? 24.0
+        : 22.0;
+    final cardPadding = EdgeInsets.all(
+      compact
+          ? 12
+          : isLargeScreen
+          ? 18
+          : 16,
+    );
+
     final valueStyle = theme.textTheme.headlineSmall?.copyWith(
-      fontSize: isLargeScreen ? 30 : 26,
+      fontSize: compact
+          ? 18
+          : isLargeScreen
+          ? 30
+          : 26,
       fontWeight: FontWeight.w900,
       color: AppColors.appBarWaterDeep,
       height: 1.0,
@@ -36,11 +60,14 @@ class StatsCard extends StatelessWidget {
     final titleStyle = theme.textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.w900,
       color: AppColors.darkGray,
+      fontSize: compact ? 11 : null,
+      height: compact ? 1.1 : null,
     );
 
     final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
       color: AppColors.mediumGray.withValues(alpha: 0.92),
-      height: 1.25,
+      height: compact ? 1.12 : 1.25,
+      fontSize: compact ? 10 : null,
     );
 
     return DecoratedBox(
@@ -75,57 +102,95 @@ class StatsCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: EdgeInsets.all(isLargeScreen ? 18 : 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: isLargeScreen ? 46 : 42,
-                      height: isLargeScreen ? 46 : 42,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(16),
+            padding: cardPadding,
+            child: compact
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: iconBoxSize,
+                        height: iconBoxSize,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(icon, color: color, size: iconSize),
                       ),
-                      child: Icon(
-                        icon,
-                        color: color,
-                        size: isLargeScreen ? 24 : 22,
-                      ),
-                    ),
-                    const Spacer(),
-                    Flexible(
-                      child: FittedBox(
+                      const SizedBox(height: 10),
+                      FittedBox(
                         fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
                         child: Text(
                           value,
                           textDirection: ui.TextDirection.ltr,
                           style: valueStyle,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: titleStyle,
-                ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: subtitleStyle,
+                      const SizedBox(height: 4),
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: titleStyle,
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: subtitleStyle,
+                        ),
+                      ],
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: iconBoxSize,
+                            height: iconBoxSize,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(icon, color: color, size: iconSize),
+                          ),
+                          const Spacer(),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                value,
+                                textDirection: ui.TextDirection.ltr,
+                                style: valueStyle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: titleStyle,
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: subtitleStyle,
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ],
-            ),
           ),
         ],
       ),

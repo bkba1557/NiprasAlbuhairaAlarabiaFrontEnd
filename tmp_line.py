@@ -1,1 +1,0 @@
-﻿# -*- coding: utf-8 -*-\nfrom pathlib import Path\npath = Path('lib/widgets/main_drawer.dart')\ntext = path.read_text(encoding='utf-8').splitlines()\nfor i,line in enumerate(text,1):\n    if 'إدارة محطات الوقود' in line:\n        print(f'{i}: {line.strip()}')

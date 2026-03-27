@@ -949,7 +949,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onPressed: () => Scaffold.of(appBarContext).openDrawer(),
                     tooltip: 'القائمة الجانبية',
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.12),
+                      backgroundColor: Colors.transparent,
                       foregroundColor: Colors.white,
                     ),
                     icon: const Icon(Icons.menu_rounded),
@@ -1031,7 +1031,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 Scaffold.of(bodyContext).openDrawer(),
                           ),
                         ),
-                        const SizedBox(height: 16),
                         // Builder(
                         //   builder: (bodyContext) => _buildMobileSidebarPrompt(
                         //     bodyContext,
@@ -1039,7 +1038,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         //         notificationProvider.unreadCount,
                         //   ),
                         // ),
-                        const SizedBox(height: 24),
 
                         if (!_loadingTimers && _approachingTimers.isNotEmpty)
                           CountdownSection(
@@ -1386,12 +1384,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             colors: [Color(0xFFF8FAFF), Color(0xFFF2F5FC)],
           ),
         ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Container(
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle.light.copyWith(
+            statusBarColor: Colors.transparent,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  18 + MediaQuery.of(context).padding.top,
+                  20,
+                  20,
+                ),
                 decoration: const BoxDecoration(
                   gradient: AppColors.appBarGradient,
                   borderRadius: BorderRadius.only(
@@ -1469,7 +1477,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-              Expanded(
+                Expanded(
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
                   children: [
@@ -1506,7 +1514,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1701,28 +1710,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required IconData icon,
     required String label,
     required Color color,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.20)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+    final borderRadius = BorderRadius.circular(999);
+    final decoration = BoxDecoration(
+      color: color.withValues(alpha: 0.10),
+      borderRadius: borderRadius,
+      border: Border.all(color: color.withValues(alpha: 0.20)),
+    );
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
           ),
-        ],
+        ),
+      ],
+    );
+
+    if (onTap == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),
+        decoration: decoration,
+        child: content,
+      );
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: borderRadius,
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),
+            decoration: decoration,
+            child: content,
+          ),
+        ),
       ),
     );
   }
@@ -6633,7 +6666,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -6653,7 +6686,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                   ),
                 ],
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 // Text(
                 //   'واجهة الجوال أصبحت أخف، والتنقل الآن من القائمة الجانبية بدل شبكة الأيقونات.',
                 //   style: TextStyle(
@@ -6675,6 +6708,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: unreadNotifications > 0
                           ? AppColors.errorRed
                           : AppColors.successGreen,
+                      onTap: unreadNotifications > 0
+                          ? () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.notifications,
+                              )
+                          : null,
                     ),
                  
                   ],
