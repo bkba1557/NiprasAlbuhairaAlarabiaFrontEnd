@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:order_tracker/models/station_models.dart';
+import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/station_provider.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
@@ -37,8 +38,19 @@ class _StationsListScreenState extends State<StationsListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
     final stationProvider = Provider.of<StationProvider>(context);
-    final stations = stationProvider.stations;
+    final isOwnerStation = authProvider.isOwnerStation;
+    final allowedStationIds = <String>{
+      if (authProvider.isOwnerStation) ...authProvider.stationIds,
+      if (authProvider.isStationBoy && authProvider.stationId != null)
+        authProvider.stationId!,
+    };
+    final stations = allowedStationIds.isEmpty
+        ? stationProvider.stations
+        : stationProvider.stations
+              .where((station) => allowedStationIds.contains(station.id))
+              .toList();
     final query = _searchController.text.trim().toLowerCase();
     final filtered = query.isEmpty
         ? stations
@@ -63,22 +75,27 @@ class _StationsListScreenState extends State<StationsListScreen> {
         flexibleSpace: Container(
           decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
         ),
-        title: const Text('المحطات', style: TextStyle(color: Colors.white)),
-        actions: [
-          IconButton(
-            tooltip: 'إضافة محطة',
-            onPressed: () {
-              Navigator.pushNamed(context, '/station/form');
-            },
-            icon: const Icon(Icons.add),
-          ),
-        ],
+        title: Text(
+          isOwnerStation ? 'محطاتي' : 'المحطات',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: isOwnerStation
+            ? const []
+            : [
+                IconButton(
+                  tooltip: 'إضافة محطة',
+                  onPressed: () {
+                    Navigator.pushNamed(context, AppRoutes.stationForm);
+                  },
+                  icon: const Icon(Icons.add),
+                ),
+              ],
       ),
-      floatingActionButton: web
+      floatingActionButton: web || isOwnerStation
           ? null
           : FloatingActionButton(
               onPressed: () {
-                Navigator.pushNamed(context, '/station/form');
+                Navigator.pushNamed(context, AppRoutes.stationForm);
               },
               child: const Icon(Icons.add),
             ),

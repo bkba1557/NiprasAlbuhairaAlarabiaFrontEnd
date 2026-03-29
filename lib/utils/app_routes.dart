@@ -75,6 +75,7 @@ import 'package:order_tracker/screens/stations_mangaments/session_edit_screen.da
 import 'package:order_tracker/screens/stations_mangaments/sessions_list_screen.dart';
 import 'package:order_tracker/screens/stations_mangaments/station_details_screen.dart';
 import 'package:order_tracker/screens/stations_mangaments/station_form_screen.dart';
+import 'package:order_tracker/screens/stations_mangaments/station_warehouses_screen.dart';
 import 'package:order_tracker/screens/stations_mangaments/station_treasury_screen.dart';
 import 'package:order_tracker/screens/stations_mangaments/stations_dashboard_screen.dart';
 import 'package:order_tracker/screens/stations_mangaments/stations_list_screen.dart';
@@ -232,6 +233,7 @@ class AppRoutes {
   static const String inventoryList = '/inventory/list';
   static const String inventoryCreate = '/inventory/create';
   static const String inventoryDetails = '/inventory/details';
+  static const String stationWarehouses = '/stations/warehouses';
   static const String stationTreasury = '/stations/treasury';
   static const String reportsStations = '/reports/stations';
   static const String monthlyStationsReport = '/reports/stations/monthly';
@@ -403,6 +405,7 @@ class AppRoutes {
     closeSession: (context) => const CloseSessionScreen(),
     inventoryList: (context) => const InventoryListScreen(),
     inventoryCreate: (context) => const DailyInventoryScreen(),
+    stationWarehouses: (context) => const StationWarehousesScreen(),
     stationTreasury: (context) => const StationTreasuryScreen(),
     monthlyStationsReport: (context) => const MonthlyStationReportScreen(),
 

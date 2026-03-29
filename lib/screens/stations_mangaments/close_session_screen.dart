@@ -4095,6 +4095,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
 
   Widget _buildWebLayout() {
     final stationProvider = Provider.of<StationProvider>(context);
+    final width = MediaQuery.of(context).size.width;
+    final compactDesktop = width < 1400;
 
     if (_session == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -4104,12 +4106,16 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
       appBar: AppBar(
         title: Text(
           context.tr(loc.AppStrings.closeSessionTitle),
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: compactDesktop ? 19 : 21,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         centerTitle: true,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: EdgeInsets.only(right: compactDesktop ? 12 : 16),
             child: GradientButton(
               onPressed: stationProvider.isLoading ? null : _submitForm,
               text: stationProvider.isLoading
@@ -4117,13 +4123,13 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                   : context.tr(loc.AppStrings.closeSession),
               gradient: AppColors.accentGradient,
               isLoading: stationProvider.isLoading,
-              height: 36,
+              height: compactDesktop ? 34 : 38,
             ),
           ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(compactDesktop ? 12 : 16),
         child: Form(
           key: _formKey,
           child: Column(
@@ -4133,10 +4139,13 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compactDesktop ? 14 : 18,
+                    vertical: compactDesktop ? 12 : 14,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -4146,17 +4155,17 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           children: [
                             Text(
                               'إغلاق يومية ${session.sessionNumber}',
-                              style: const TextStyle(
-                                fontSize: 20,
+                              style: TextStyle(
+                                fontSize: compactDesktop ? 17 : 19,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             Text(
                               'المحطة: ${session.stationName}',
                               style: TextStyle(
                                 color: AppColors.mediumGray,
-                                fontSize: 14,
+                                fontSize: compactDesktop ? 12.5 : 13.5,
                               ),
                             ),
                           ],
@@ -4167,13 +4176,16 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                         children: [
                           Text(
                             'الوردية: ${session.shiftType}',
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: compactDesktop ? 12.5 : 13,
+                            ),
                           ),
                           Text(
                             'تاريخ الفتح: ${DateFormat('yyyy/MM/dd HH:mm').format(session.openingTime)}',
                             style: TextStyle(
                               color: AppColors.mediumGray,
-                              fontSize: 12,
+                              fontSize: compactDesktop ? 11 : 12,
                             ),
                           ),
                         ],
@@ -4183,55 +4195,58 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                 ),
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: compactDesktop ? 12 : 16),
 
               // Main Content
               Expanded(
                 child: Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(compactDesktop ? 14 : 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Table Header
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
+                          padding: EdgeInsets.only(
+                            bottom: compactDesktop ? 12 : 16,
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
                                 'بيانات إغلاق اليومية',
-                                style: const TextStyle(
-                                  fontSize: 18,
+                                style: TextStyle(
+                                  fontSize: compactDesktop ? 16 : 17,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: compactDesktop ? 12 : 16,
+                                  vertical: compactDesktop ? 6 : 8,
                                 ),
                                 decoration: BoxDecoration(
                                   color: AppColors.primaryBlue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(
+                                    Icon(
                                       Icons.timer,
-                                      size: 16,
+                                      size: compactDesktop ? 14 : 16,
                                       color: AppColors.primaryBlue,
                                     ),
-                                    const SizedBox(width: 8),
+                                    SizedBox(width: compactDesktop ? 6 : 8),
                                     Text(
                                       'آخر تحديث: ${DateFormat('HH:mm').format(DateTime.now())}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         color: AppColors.primaryBlue,
                                         fontWeight: FontWeight.w500,
+                                        fontSize: compactDesktop ? 11.5 : 12.5,
                                       ),
                                     ),
                                   ],
@@ -4245,7 +4260,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                         Expanded(
                           child: Container(
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: AppColors.lightGray,
                                 width: 1,
@@ -4256,7 +4271,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                         ),
 
                         // Summary Section
-                        const SizedBox(height: 16),
+                        SizedBox(height: compactDesktop ? 12 : 16),
                         _buildWebSummaryTables(),
                       ],
                     ),
@@ -4280,19 +4295,27 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        final compactTable = width < 1650;
+        final denseFont = compactTable ? 11.5 : 12.5;
+        final dataFont = compactTable ? 12.0 : 13.0;
+        final fieldVerticalPadding = compactTable ? 8.0 : 10.0;
+        final chipHorizontalPadding = compactTable ? 6.0 : 8.0;
+        final chipVerticalPadding = compactTable ? 3.0 : 4.0;
+        final actionHorizontalPadding = compactTable ? 10.0 : 12.0;
+        final actionVerticalPadding = compactTable ? 5.0 : 6.0;
 
         // نسب الأعمدة من عرض الشاشة
-        final pumpW = width * 0.06;
-        final nozzleW = width * 0.06;
-        final fuelW = width * 0.10;
-        final sideW = width * 0.08;
+        final pumpW = width * 0.055;
+        final nozzleW = width * 0.055;
+        final fuelW = width * 0.095;
+        final sideW = width * 0.075;
         final openW = width * 0.09;
         final closeW = width * 0.10;
-        final beforeW = width * 0.08;
+        final beforeW = width * 0.09;
         final literW = width * 0.07;
-        final afterW = width * 0.08;
-        final amountW = width * 0.10;
-        final actionsW = width * 0.18;
+        final afterW = width * 0.09;
+        final amountW = width * 0.09;
+        final actionsW = width * 0.16;
         final columnWidths = _TableColumnWidths(
           pump: pumpW,
           nozzle: nozzleW,
@@ -4314,19 +4337,21 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
             child: DataTable(
               columnSpacing: 0,
               horizontalMargin: 0,
-              headingRowHeight: 48,
-              dataRowHeight: 56,
+              headingRowHeight: compactTable ? 44 : 48,
+              dataRowHeight: compactTable ? 52 : 56,
               dividerThickness: 0,
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+              ),
               headingRowColor: MaterialStateProperty.all(
                 AppColors.primaryBlue.withOpacity(0.05),
               ),
-              headingTextStyle: const TextStyle(
+              headingTextStyle: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 14,
+                fontSize: compactTable ? 12 : 13,
                 color: Colors.black87,
               ),
-              dataTextStyle: const TextStyle(fontSize: 14),
+              dataTextStyle: TextStyle(fontSize: dataFont),
 
               columns: [
                 _header('المضخة', pumpW),
@@ -4383,9 +4408,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                     cells: [
                       _cell(
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: chipHorizontalPadding,
+                            vertical: chipVerticalPadding,
                           ),
                           decoration: BoxDecoration(
                             color: AppColors.primaryBlue.withOpacity(0.1),
@@ -4393,7 +4418,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           ),
                           child: Text(
                             nozzle.pumpNumber,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: denseFont,
+                            ),
                           ),
                         ),
                         pumpW,
@@ -4404,9 +4432,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
 
                       _cell(
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: chipHorizontalPadding,
+                            vertical: chipVerticalPadding,
                           ),
                           decoration: BoxDecoration(
                             color: nozzle.side == 'left'
@@ -4420,7 +4448,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                               color: nozzle.side == 'left'
                                   ? Colors.blue
                                   : Colors.orange,
-                              fontSize: 12,
+                              fontSize: denseFont,
                             ),
                           ),
                         ),
@@ -4442,12 +4470,14 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                               textAlign: TextAlign.center,
                               decoration: InputDecoration(
                                 isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(
+                                contentPadding: EdgeInsets.symmetric(
                                   horizontal: 8,
-                                  vertical: 10,
+                                  vertical: fieldVerticalPadding,
                                 ),
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(
+                                    compactTable ? 10 : 12,
+                                  ),
                                   borderSide: BorderSide(
                                     color:
                                         _showValidationErrors &&
@@ -4458,13 +4488,15 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                   ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(
+                                    compactTable ? 10 : 12,
+                                  ),
                                   borderSide: const BorderSide(
                                     color: AppColors.primaryBlue,
                                   ),
                                 ),
                               ),
-                              style: const TextStyle(fontSize: 13),
+                              style: TextStyle(fontSize: dataFont),
                               keyboardType:
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
@@ -4481,9 +4513,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                       _cell(
                         Text(
                           beforeText,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.darkGray,
+                            fontSize: dataFont,
                           ),
                         ),
                         beforeW,
@@ -4492,9 +4525,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                       _cell(
                         Text(
                           liters.toStringAsFixed(2),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.darkGray,
+                            fontSize: dataFont,
                           ),
                         ),
                         literW,
@@ -4503,9 +4537,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                       _cell(
                         Text(
                           afterText,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.darkGray,
+                            fontSize: dataFont,
                           ),
                         ),
                         afterW,
@@ -4513,9 +4548,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                       _cell(
                         Text(
                           amount.toStringAsFixed(2),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.primaryBlue,
+                            fontSize: dataFont,
                           ),
                         ),
                         amountW,
@@ -4524,32 +4560,39 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                       DataCell(
                         SizedBox(
                           width: actionsW,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: compactTable ? 6 : 8,
+                            runSpacing: 4,
                             children: [
                               ElevatedButton.icon(
                                 onPressed: () => _pickClosingImage(key),
-                                icon: const Icon(Icons.camera_alt, size: 14),
+                                icon: Icon(
+                                  Icons.camera_alt,
+                                  size: compactTable ? 13 : 14,
+                                ),
                                 label: Text(
                                   image == null ? 'صورة' : 'تغيير',
-                                  style: const TextStyle(fontSize: 12),
+                                  style: TextStyle(fontSize: denseFont),
                                 ),
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: actionHorizontalPadding,
+                                    vertical: actionVerticalPadding,
                                   ),
                                   backgroundColor: AppColors.primaryBlue,
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
                               ),
                               if (image != null) ...[
-                                const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.all(4),
+                                  padding: EdgeInsets.all(
+                                    compactTable ? 3.5 : 4,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: AppColors.successGreen.withOpacity(
                                       0.1,
@@ -4567,14 +4610,18 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                       Icon(
                                         Icons.check_circle,
                                         color: AppColors.successGreen,
-                                        size: 12,
+                                        size: compactTable ? 11 : 12,
                                       ),
-                                      const SizedBox(width: 4),
                                       SizedBox(
-                                        width: 60,
+                                        width: compactTable ? 3 : 4,
+                                      ),
+                                      SizedBox(
+                                        width: compactTable ? 50 : 60,
                                         child: Text(
                                           image.name,
-                                          style: const TextStyle(fontSize: 10),
+                                          style: TextStyle(
+                                            fontSize: compactTable ? 9 : 10,
+                                          ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -4609,8 +4656,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           child: Center(
                             child: Text(
                               e.type,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w500,
+                                fontSize: dataFont,
                               ),
                             ),
                           ),
@@ -4623,7 +4671,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             child: Text(
                               e.notes?.isNotEmpty == true ? e.notes! : '-',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: denseFont,
                                 color: AppColors.mediumGray,
                               ),
                             ),
@@ -4683,7 +4731,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           child: Text(
                             'إضافة',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
                           ),
@@ -4697,7 +4745,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           child: Text(
                             'مصروف',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
                           ),
@@ -4714,21 +4762,21 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             isDense: true,
                             hintText: 'النوع',
                             hintStyle: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 4,
-                              vertical: 8,
+                              vertical: compactTable ? 7 : 8,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
                                 color: AppColors.lightGray,
                               ),
                             ),
                           ),
-                          style: const TextStyle(fontSize: 12),
+                          style: TextStyle(fontSize: denseFont),
                         ),
                       ),
                     ),
@@ -4742,21 +4790,21 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             isDense: true,
                             hintText: 'ملاحظات',
                             hintStyle: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 4,
-                              vertical: 8,
+                              vertical: compactTable ? 7 : 8,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
                                 color: AppColors.lightGray,
                               ),
                             ),
                           ),
-                          style: const TextStyle(fontSize: 12),
+                          style: TextStyle(fontSize: denseFont),
                         ),
                       ),
                     ),
@@ -4772,22 +4820,22 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             isDense: true,
                             hintText: 'المبلغ',
                             hintStyle: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 4,
-                              vertical: 8,
+                              vertical: compactTable ? 7 : 8,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
                                 color: AppColors.lightGray,
                               ),
                             ),
                           ),
                           keyboardType: TextInputType.number,
-                          style: const TextStyle(fontSize: 12),
+                          style: TextStyle(fontSize: denseFont),
                         ),
                       ),
                     ),
@@ -4823,20 +4871,20 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                 _recalculateTotals();
                               });
                             },
-                            icon: const Icon(Icons.add, size: 14),
-                            label: const Text(
+                            icon: Icon(Icons.add, size: compactTable ? 13 : 14),
+                            label: Text(
                               'إضافة',
-                              style: TextStyle(fontSize: 12),
+                              style: TextStyle(fontSize: denseFont),
                             ),
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: actionHorizontalPadding,
+                                vertical: actionVerticalPadding,
                               ),
                               backgroundColor: AppColors.successGreen,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                           ),
@@ -4856,9 +4904,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                         child: Center(
                           child: Text(
                             'إجمالي المصروفات',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                              fontSize: denseFont,
                             ),
                           ),
                         ),
@@ -4878,9 +4926,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                         child: Center(
                           child: Text(
                             '${_expensesTotal.toStringAsFixed(2)} ريال',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w700,
                               color: AppColors.warningOrange,
+                              fontSize: dataFont,
                             ),
                           ),
                         ),
@@ -4921,7 +4970,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                   ? entry.reason!
                                   : '-',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: denseFont,
                                 color: AppColors.mediumGray,
                               ),
                             ),
@@ -4936,8 +4985,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           child: Center(
                             child: Text(
                               entry.quantity.toStringAsFixed(2),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w600,
+                                fontSize: dataFont,
                               ),
                             ),
                           ),
@@ -4951,9 +5001,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           child: Center(
                             child: Text(
                               '${amount.toStringAsFixed(2)} ريال',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.warningOrange,
+                                fontSize: dataFont,
                               ),
                             ),
                           ),
@@ -4967,7 +5018,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                               icon: const Icon(
                                 Icons.delete,
                                 color: Colors.red,
-                                size: 18,
+                                size: 16,
                               ),
                               onPressed: () {
                                 setState(() {
@@ -4991,7 +5042,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           child: Text(
                             'إضافة',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
                           ),
@@ -5005,7 +5056,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           child: Text(
                             'إرجاع',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
                           ),
@@ -5023,7 +5074,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                   value: fuel,
                                   child: Text(
                                     fuel,
-                                    style: const TextStyle(fontSize: 12),
+                                    style: TextStyle(fontSize: denseFont),
                                   ),
                                 ),
                               )
@@ -5035,12 +5086,12 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           },
                           decoration: InputDecoration(
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 8,
-                              vertical: 8,
+                              vertical: compactTable ? 7 : 8,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
                                 color: AppColors.lightGray,
                               ),
@@ -5060,21 +5111,21 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             isDense: true,
                             hintText: 'سبب الإرجاع',
                             hintStyle: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 4,
-                              vertical: 8,
+                              vertical: compactTable ? 7 : 8,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
                                 color: AppColors.lightGray,
                               ),
                             ),
                           ),
-                          style: const TextStyle(fontSize: 12),
+                          style: TextStyle(fontSize: denseFont),
                         ),
                       ),
                     ),
@@ -5090,15 +5141,15 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             isDense: true,
                             hintText: 'الكمية',
                             hintStyle: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 4,
-                              vertical: 8,
+                              vertical: compactTable ? 7 : 8,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
                                 color: AppColors.lightGray,
                               ),
@@ -5107,7 +5158,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-                          style: const TextStyle(fontSize: 12),
+                          style: TextStyle(fontSize: denseFont),
                         ),
                       ),
                     ),
@@ -5144,20 +5195,20 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                 _recalculateTotals();
                               });
                             },
-                            icon: const Icon(Icons.add, size: 14),
-                            label: const Text(
+                            icon: Icon(Icons.add, size: compactTable ? 13 : 14),
+                            label: Text(
                               'إضافة',
-                              style: TextStyle(fontSize: 12),
+                              style: TextStyle(fontSize: denseFont),
                             ),
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: actionHorizontalPadding,
+                                vertical: actionVerticalPadding,
                               ),
                               backgroundColor: AppColors.successGreen,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                           ),
@@ -5184,7 +5235,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                           child: Text(
                             'رصيد مرحّل',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: denseFont,
                               color: AppColors.mediumGray,
                             ),
                           ),
@@ -5206,19 +5257,21 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             decoration: InputDecoration(
                               isDense: true,
                               hintText: '0',
-                              contentPadding: const EdgeInsets.symmetric(
+                              contentPadding: EdgeInsets.symmetric(
                                 horizontal: 8,
-                                vertical: 10,
+                                vertical: fieldVerticalPadding,
                               ),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(
+                                  compactTable ? 10 : 12,
+                                ),
                                 borderSide: BorderSide(
                                   color: AppColors.lightGray,
                                 ),
                               ),
                             ),
                             keyboardType: TextInputType.number,
-                            style: const TextStyle(fontSize: 13),
+                            style: TextStyle(fontSize: dataFont),
                           ),
                         ),
                       ),
@@ -5237,19 +5290,21 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             decoration: InputDecoration(
                               isDense: true,
                               hintText: 'ملاحظات إضافية...',
-                              contentPadding: const EdgeInsets.symmetric(
+                              contentPadding: EdgeInsets.symmetric(
                                 horizontal: 8,
-                                vertical: 10,
+                                vertical: fieldVerticalPadding,
                               ),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(
+                                  compactTable ? 10 : 12,
+                                ),
                                 borderSide: BorderSide(
                                   color: AppColors.lightGray,
                                 ),
                               ),
                             ),
                             maxLines: 2,
-                            style: const TextStyle(fontSize: 12),
+                            style: TextStyle(fontSize: denseFont),
                           ),
                         ),
                       ),
@@ -5269,7 +5324,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             child: Text(
                               'المبلغ',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: denseFont,
                                 color: AppColors.mediumGray,
                               ),
                             ),
@@ -5291,19 +5346,21 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                               decoration: InputDecoration(
                                 isDense: true,
                                 hintText: 'مبلغ العجز',
-                                contentPadding: const EdgeInsets.symmetric(
+                                contentPadding: EdgeInsets.symmetric(
                                   horizontal: 8,
-                                  vertical: 10,
+                                  vertical: fieldVerticalPadding,
                                 ),
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(
+                                    compactTable ? 10 : 12,
+                                  ),
                                   borderSide: BorderSide(
                                     color: AppColors.lightGray,
                                   ),
                                 ),
                               ),
                               keyboardType: TextInputType.number,
-                              style: const TextStyle(fontSize: 13),
+                              style: TextStyle(fontSize: dataFont),
                               onChanged: (v) =>
                                   _shortageAmount = double.tryParse(v) ?? 0,
                             ),
@@ -5319,18 +5376,20 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             decoration: InputDecoration(
                               isDense: true,
                               hintText: 'السبب',
-                              contentPadding: const EdgeInsets.symmetric(
+                              contentPadding: EdgeInsets.symmetric(
                                 horizontal: 8,
-                                vertical: 10,
+                                vertical: fieldVerticalPadding,
                               ),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(
+                                  compactTable ? 10 : 12,
+                                ),
                                 borderSide: BorderSide(
                                   color: AppColors.lightGray,
                                 ),
                               ),
                             ),
-                            style: const TextStyle(fontSize: 12),
+                            style: TextStyle(fontSize: denseFont),
                             onChanged: (v) => _shortageReason = v,
                           ),
                         ),
@@ -5371,20 +5430,23 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
 
                                 _recalculateTotals();
                               },
-                              icon: const Icon(Icons.check_circle, size: 14),
-                              label: const Text(
+                              icon: Icon(
+                                Icons.check_circle,
+                                size: compactTable ? 13 : 14,
+                              ),
+                              label: Text(
                                 'اعتماد العجز',
-                                style: TextStyle(fontSize: 12),
+                                style: TextStyle(fontSize: denseFont),
                               ),
                               style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: actionHorizontalPadding,
+                                  vertical: actionVerticalPadding,
                                 ),
                                 backgroundColor: AppColors.successGreen,
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
                             ),
@@ -5406,8 +5468,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isStacked = constraints.maxWidth < 980;
+        final compactSummary = constraints.maxWidth < 1280;
 
         final totalsCard = _buildSummaryCard(
+          compact: compactSummary,
           title: 'الإجماليات',
           rows: [
             _buildSummaryRow(
@@ -5443,6 +5507,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         );
 
         final paymentsCard = _buildSummaryCard(
+          compact: compactSummary,
           title: 'التحصيل النقدي',
           rows: [
             _buildSummaryWidgetRow('نقدي', _buildSummaryInput(_cashController)),
@@ -5459,14 +5524,18 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
 
         if (isStacked) {
           return Column(
-            children: [totalsCard, const SizedBox(height: 16), paymentsCard],
+            children: [
+              totalsCard,
+              SizedBox(height: compactSummary ? 12 : 16),
+              paymentsCard,
+            ],
           );
         }
 
         return Row(
           children: [
             Expanded(child: totalsCard),
-            const SizedBox(width: 16),
+            SizedBox(width: compactSummary ? 12 : 16),
             Expanded(child: paymentsCard),
           ],
         );
@@ -5477,10 +5546,11 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   Widget _buildSummaryCard({
     required String title,
     required List<TableRow> rows,
+    bool compact = false,
   }) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.lightGray),
         color: Colors.white,
       ),
@@ -5488,19 +5558,22 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+            padding: EdgeInsets.symmetric(
+              vertical: compact ? 8 : 10,
+              horizontal: compact ? 12 : 14,
+            ),
             decoration: BoxDecoration(
               color: AppColors.backgroundGray.withOpacity(0.6),
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(8),
+                top: Radius.circular(16),
               ),
             ),
             child: Center(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                  fontSize: compact ? 11.5 : 12.5,
                 ),
               ),
             ),
@@ -5520,13 +5593,14 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   TableRow _buildSummaryRow(String label, String value) {
+    final compact = MediaQuery.of(context).size.width < 1280;
     return _buildSummaryWidgetRow(
       label,
       Text(
         value,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.bold,
-          fontSize: 12,
+          fontSize: compact ? 11.5 : 12.5,
           color: AppColors.darkGray,
         ),
       ),
@@ -5534,12 +5608,16 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   TableRow _buildSummaryWidgetRow(String label, Widget value) {
+    final compact = MediaQuery.of(context).size.width < 1280;
     return TableRow(
       children: [
         _summaryCell(
           Text(
             label,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: compact ? 11.5 : 12.5,
+            ),
           ),
         ),
         _summaryCell(value),
@@ -5548,6 +5626,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   TableRow _buildDifferenceSummaryRow() {
+    final compact = MediaQuery.of(context).size.width < 1280;
     final isPositive = _calculatedDifference >= 0;
     final shortageResolved = _calculatedDifference < 0 && _shortageResolved;
 
@@ -5564,7 +5643,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     return _buildSummaryWidgetRow(
       label,
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 10,
+          vertical: compact ? 3 : 4,
+        ),
         decoration: BoxDecoration(
           color: accentColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(14),
@@ -5574,7 +5656,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
           valueText,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            fontSize: 12,
+            fontSize: compact ? 11.5 : 12.5,
             color: accentColor,
           ),
         ),
@@ -5583,35 +5665,40 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   Widget _summaryCell(Widget child) {
+    final compact = MediaQuery.of(context).size.width < 1280;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 6 : 8,
+        vertical: compact ? 6 : 8,
+      ),
       child: Center(child: child),
     );
   }
 
   Widget _buildSummaryInput(TextEditingController controller) {
+    final compact = MediaQuery.of(context).size.width < 1280;
     return SizedBox(
-      width: 110,
+      width: compact ? 104 : 124,
       child: TextFormField(
         controller: controller,
         textAlign: TextAlign.center,
         decoration: InputDecoration(
           isDense: true,
           hintText: '0',
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 6,
-            vertical: 4,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 8,
+            vertical: compact ? 5 : 6,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(compact ? 8 : 10),
             borderSide: BorderSide(color: AppColors.lightGray),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(compact ? 8 : 10),
             borderSide: const BorderSide(color: AppColors.primaryBlue),
           ),
         ),
-        style: const TextStyle(fontSize: 12),
+        style: TextStyle(fontSize: compact ? 11.5 : 12.5),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         onChanged: (_) => _recalculateTotals(),
       ),
@@ -5990,13 +6077,14 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   DataColumn _header(String title, double width) {
+    final compact = MediaQuery.of(context).size.width < 1400;
     return DataColumn(
       label: SizedBox(
         width: width,
         child: Center(
           child: Text(
             title,
-            style: const TextStyle(fontSize: 13),
+            style: TextStyle(fontSize: compact ? 12 : 13),
             textAlign: TextAlign.center,
           ),
         ),

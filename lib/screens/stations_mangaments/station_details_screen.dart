@@ -367,10 +367,9 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
 
     if (stationProvider.isLoading && station == null) {
       return const Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         body: Stack(
           children: [
-            AppSoftBackground(),
             Center(child: CircularProgressIndicator()),
           ],
         ),
@@ -379,7 +378,7 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
 
     if (station == null) {
       return Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         appBar: AppBar(
           elevation: 0,
           scrolledUnderElevation: 0,
@@ -391,7 +390,6 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
         ),
         body: Stack(
           children: const [
-            AppSoftBackground(),
             Center(
               child: AppSurfaceCard(
                 child: Text(
@@ -421,7 +419,7 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
           }
 
           return Scaffold(
-            backgroundColor: Colors.transparent,
+            backgroundColor: Colors.white,
             appBar: AppBar(
               elevation: 0,
               scrolledUnderElevation: 0,
@@ -626,7 +624,6 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
 
             body: Stack(
               children: [
-                const AppSoftBackground(),
                 Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(

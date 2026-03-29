@@ -1236,7 +1236,6 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
   final Map<String, TextEditingController> _nozzleControllers = {};
   final Map<String, XFile?> _nozzleImages = {};
   final ImagePicker _imagePicker = ImagePicker();
-  final Map<String, double> _lastCalculatedSalesPerNozzle = {};
 
   String? _selectedStationId;
   final List<Pump> _selectedPumps = [];
@@ -1260,8 +1259,6 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
   String? _loadingFuelBalanceStationId;
   final Map<String, double> _fuelPriceLookup = {};
   final Map<String, double> _cachedClosingBalances = {};
-  final Map<String, double> _firstEnteredReading = {};
-  final Map<String, double> _lastDeductedSalesByFuel = {};
   DateTime? _lastInventorySyncAt;
 
   // State for showing nozzle dialog
@@ -1316,6 +1313,18 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
     }
 
     return buffer.toString();
+  }
+
+  double _parseStockNumber(dynamic value) {
+    if (value == null) return 0;
+    if (value is num) return value.toDouble();
+
+    var text = value.toString();
+    text = text.replaceAll(RegExp(r'[\u200E\u200F]'), '');
+    text = _arabicDigitsToWestern(text);
+    text = text.replaceAll(',', '');
+    text = text.replaceAll(RegExp(r'\s+'), '');
+    return double.tryParse(text) ?? 0;
   }
 
   String _fuelTypeFromPump(String pumpId) {
@@ -1449,41 +1458,10 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
       salesTotals = _salesByFuelForDate(stationProvider.sessions, targetDate);
     }
 
-    _lastDeductedSalesByFuel
-      ..clear()
-      ..addAll(salesTotals);
-
     for (final summary in summaries) {
       final key = _normalizeFuelType(summary.fuelType);
       summary.initialSales = salesTotals[key] ?? 0;
     }
-  }
-
-  void _recalculateLiveSales() {
-    // صفر كل المبيعات
-    for (final summary in _fuelStockSummaries) {
-      summary.liveSales = 0;
-    }
-
-    // اجمع مبيعات كل ليّ
-    _lastCalculatedSalesPerNozzle.forEach((key, saleLiters) {
-      // key = pumpId_nozzleId
-      final parts = key.split('_');
-      if (parts.length < 2) return;
-
-      final pumpId = parts.first;
-
-      // نحدد نوع الوقود من المضخة
-      final fuelType = _fuelTypeFromPump(pumpId);
-      if (fuelType.isEmpty) return;
-
-      final summary = _findFuelStockSummary(fuelType);
-      if (summary == null) return;
-
-      summary.liveSales += saleLiters;
-    });
-
-    setState(() {});
   }
 
   List<FuelStockSummary> _summariesFromInventories(
@@ -1709,13 +1687,17 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
     final latestByFuel = <String, FuelStockSummary>{};
 
     double readValue(Map<String, dynamic> item, List<String> keys) {
+      bool sawAnyValue = false;
       for (final key in keys) {
+        if (!item.containsKey(key)) continue;
         final value = item[key];
-        if (value is num) return value.toDouble();
-        final parsed = double.tryParse(value?.toString() ?? '');
-        if (parsed != null) return parsed;
+        if (value == null) continue;
+
+        sawAnyValue = true;
+        final parsed = _parseStockNumber(value);
+        if (parsed.abs() > 0.0001) return parsed;
       }
-      return 0;
+      return sawAnyValue ? 0 : 0;
     }
 
     for (final item in currentStock) {
@@ -1727,6 +1709,8 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
         fuelType: fuelType,
         baseStock: readValue(item, const [
           'currentBalance',
+          'quantity',
+          'remaining',
           'inventoryReferenceBalance',
           'balance',
           'availableStock',
@@ -1774,6 +1758,10 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
       summaries = _buildFuelStockSummariesFromCurrentStock(
         stationProvider.currentStock,
       );
+      if (summaries.isNotEmpty &&
+          !summaries.any((s) => s.baseStock.abs() > 0.0001)) {
+        summaries = [];
+      }
     } catch (e) {
       error = e.toString();
     }
@@ -1806,8 +1794,6 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
         );
       }
       _applySalesDeductionsToSummaries(finalSummaries, targetDate);
-    } else {
-      _lastDeductedSalesByFuel.clear();
     }
 
     if (!mounted) return;
@@ -2177,34 +2163,7 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
         }
       }
 
-      // =========================
-      // ❌ شرط المخزون (التعديل المهم)
-      // =========================
-      // await stationProvider.fetchCurrentStock(finalStationId);
-
-      // final Map<String, double> fuelStockMap = {
-      //   for (final item in stationProvider.currentStock)
-      //     (item['fuelType'] as String).trim():
-      //         (item['quantity'] as num?)?.toDouble() ?? 0,
-      // };
-
-      for (final fuel in fuelTypesInSession) {
-        final summary = _findFuelStockSummary(fuel);
-
-        final available = summary?.availableStock ?? 0;
-
-        if (available <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'لا يمكن فتح الجلسة — لا يوجد مخزون متاح من ($fuel)',
-              ),
-              backgroundColor: AppColors.errorRed,
-            ),
-          );
-          return;
-        }
-      }
+      // ملاحظة: لا نمنع فتح الجلسة في حالة عدم وجود مخزون.
 
       // =========================
       // 🔹 إنشاء الجلسة
@@ -3222,23 +3181,6 @@ class _OpenSessionScreenState extends State<OpenSessionScreen> {
               filled: true,
               fillColor: Colors.grey[50],
             ),
-
-            /// 🔥 هنا السحر
-            onChanged: (value) {
-              final entered = double.tryParse(value);
-              if (entered == null) return;
-
-              _firstEnteredReading.putIfAbsent(key, () => entered);
-              final opening = _firstEnteredReading[key]!;
-
-              if (entered <= opening) return;
-
-              final currentSale = entered - opening;
-              _lastCalculatedSalesPerNozzle[key] = currentSale;
-
-              // ✅ إعادة حساب شاملة
-              _recalculateLiveSales();
-            },
 
             validator: _showValidationErrors
                 ? (v) {

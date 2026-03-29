@@ -12,6 +12,39 @@ import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:provider/provider.dart';
 
+bool _canOwnerStationChatWithRole(String role) {
+  final normalized = role.trim().toLowerCase();
+  return normalized == 'owner' || normalized == 'admin';
+}
+
+List<ChatUser> _visibleChatUsersForCurrentUser(
+  BuildContext context,
+  List<ChatUser> users,
+) {
+  final auth = context.read<AuthProvider>();
+  if (!auth.isOwnerStation) {
+    return users;
+  }
+
+  return users
+      .where((user) => _canOwnerStationChatWithRole(user.role))
+      .toList();
+}
+
+String _userPickerEmptyMessage(
+  BuildContext context, {
+  required bool hasSearch,
+}) {
+  final auth = context.read<AuthProvider>();
+  if (!auth.isOwnerStation) {
+    return 'لا يوجد مستخدمون مطابقون';
+  }
+
+  return hasSearch
+      ? 'لا يوجد مالك أو مدير عام مطابق لبحثك'
+      : 'يظهر هنا فقط المالك والمدير العام';
+}
+
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
@@ -1305,7 +1338,10 @@ class _ChatUserPickerState extends State<_ChatUserPicker> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ChatProvider>();
-    final source = provider.users;
+    final isOwnerStation = context.select<AuthProvider, bool>(
+      (auth) => auth.isOwnerStation,
+    );
+    final source = _visibleChatUsersForCurrentUser(context, provider.users);
 
     final filtered = source.where((user) {
       if (_search.trim().isEmpty) return true;
@@ -1326,10 +1362,10 @@ class _ChatUserPickerState extends State<_ChatUserPicker> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Align(
+            Align(
               alignment: Alignment.centerRight,
               child: Text(
-                'اختر مستخدم',
+                isOwnerStation ? 'اختر المالك أو المدير العام' : 'اختر مستخدم',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
             ),
@@ -1337,9 +1373,11 @@ class _ChatUserPickerState extends State<_ChatUserPicker> {
             TextField(
               controller: _searchController,
               onChanged: (value) => setState(() => _search = value),
-              decoration: const InputDecoration(
-                hintText: 'بحث بالاسم أو البريد',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: isOwnerStation
+                    ? 'بحث باسم المالك أو المدير العام'
+                    : 'بحث بالاسم أو البريد',
+                prefixIcon: const Icon(Icons.search),
               ),
             ),
             const SizedBox(height: 10),
@@ -1349,9 +1387,14 @@ class _ChatUserPickerState extends State<_ChatUserPicker> {
                 child: CircularProgressIndicator(),
               )
             else if (filtered.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('لا يوجد مستخدمون مطابقون'),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  _userPickerEmptyMessage(
+                    context,
+                    hasSearch: _search.trim().isNotEmpty,
+                  ),
+                ),
               )
             else
               Flexible(

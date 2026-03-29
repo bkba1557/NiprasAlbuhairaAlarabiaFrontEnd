@@ -3471,9 +3471,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _requestTypeMatches(requestType, _transportRequestTypeKeywords);
   }
 
-  PdfColor _pdfColorWithOpacity(PdfColor color, double opacity) {
-    final alpha = opacity.clamp(0.0, 1.0).toDouble();
-    return PdfColor(color.red, color.green, color.blue, alpha);
+  String _dashboardRequestTypeCategory(Order order) {
+    final requestType = order.effectiveRequestType.trim();
+    if (requestType == 'شراء') return 'purchase';
+    if (requestType == 'نقل') return 'transport';
+    return '';
   }
 
   List<OrderTimer> _filterOrderTimersByType(
@@ -3672,52 +3674,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  List<Order> _filterOrdersByExportPeriod(List<Order> orders) {
+  bool _matchesExportPeriodForDate(DateTime date) {
     final today = _dateOnly(DateTime.now());
     switch (_exportDateFilter) {
       case 'daily':
-        return orders
-            .where((order) => _isSameDay(order.orderDate, _exportSelectedDate))
-            .toList();
+        return _isSameDay(date, _exportSelectedDate);
       case 'monthly':
-        return orders
-            .where(
-              (order) =>
-                  order.orderDate.year == _exportSelectedYear &&
-                  order.orderDate.month == _exportSelectedMonth,
-            )
-            .toList();
+        return date.year == _exportSelectedYear &&
+            date.month == _exportSelectedMonth;
       case 'yearly':
-        return orders
-            .where((order) => order.orderDate.year == _exportSelectedYear)
-            .toList();
+        return date.year == _exportSelectedYear;
       default:
-        return orders
-            .where((order) => _isSameDay(order.orderDate, today))
-            .toList();
+        return _isSameDay(date, today);
     }
   }
 
+  List<Order> _filterOrdersByExportPeriod(
+    List<Order> orders, {
+    DateTime Function(Order order)? dateSelector,
+  }) {
+    final resolvedDateSelector = dateSelector ?? ((order) => order.arrivalDate);
+    return orders
+        .where((order) => _matchesExportPeriodForDate(resolvedDateSelector(order)))
+        .toList();
+  }
+
+  bool _isPdfCompletedOrder(Order order) {
+    return _isFinalStatus(order.status) && !_isCanceledStatus(order.status);
+  }
+
   List<Order> _filterOrdersForPdf(List<Order> orders) {
-    final filtered = _filterOrdersByExportPeriod(orders);
     switch (_exportPdfScope) {
       case 'customers':
-        return filtered
+        return _filterOrdersByExportPeriod(orders)
             .where((order) => _isCustomerSource(order.orderSource))
             .toList();
       case 'suppliers':
-        return filtered
+        return _filterOrdersByExportPeriod(orders)
             .where((order) => _isSupplierSource(order.orderSource))
             .toList();
       case 'completed':
       default:
-        return filtered
+        return _filterOrdersByExportPeriod(orders)
             .where(
-              (order) =>
-                  _isCompletedStatus(order.status) &&
-                  !_isCanceledStatus(order.status),
+              (order) => _isPdfCompletedOrder(order),
             )
             .toList();
+    }
+  }
+
+  List<Order> _filterOrdersForPdfStats(List<Order> orders) {
+    final periodOrders = _filterOrdersByExportPeriod(orders);
+    switch (_exportPdfScope) {
+      case 'customers':
+        return periodOrders
+            .where((order) => _isCustomerSource(order.orderSource))
+            .toList();
+      case 'suppliers':
+        return periodOrders
+            .where((order) => _isSupplierSource(order.orderSource))
+            .toList();
+      case 'completed':
+      default:
+        return periodOrders.where(_isPdfCompletedOrder).toList();
     }
   }
 
@@ -4372,9 +4391,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final filteredOrders = _filterOrdersForPdf(orderProvider.orders);
-      final monthlyStatsOrders = _filterOrdersForStatsMonth(
-        orderProvider.orders,
-      );
+      final pdfStatsOrders = _filterOrdersForPdfStats(orderProvider.orders);
       if (filteredOrders.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -4418,7 +4435,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           build: (_) => [
             _buildOrdersPdfTable(filteredOrders),
             pw.NewPage(),
-            ..._buildOrdersPdfStatsWidgets(monthlyStatsOrders),
+            ..._buildOrdersPdfStatsWidgets(pdfStatsOrders),
           ],
         ),
       );
@@ -4703,73 +4720,118 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Navigator.of(context, rootNavigator: true).pop();
   }
 
-  String _pdfStatsTotalLabel() {
-    return _exportPdfScope == 'completed'
-        ? '\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0643\u062a\u0645\u0644'
-        : '\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0637\u0644\u0628\u0627\u062a';
-  }
-
-  DateTime _statsMonthReferenceDate() {
+  String _pdfStatsTitle() {
     switch (_exportDateFilter) {
       case 'daily':
-        return DateTime(_exportSelectedDate.year, _exportSelectedDate.month, 1);
+        return 'إحصائيات يوم ${DateFormat('yyyy/MM/dd').format(_exportSelectedDate)}';
       case 'monthly':
+        return 'إحصائيات شهر ${_arabicMonths[_exportSelectedMonth - 1]} $_exportSelectedYear';
       case 'yearly':
+        return 'إحصائيات سنة $_exportSelectedYear';
       default:
-        return DateTime(_exportSelectedYear, _exportSelectedMonth, 1);
+        return 'إحصائيات ${_exportPeriodLabel()}';
     }
   }
 
-  String _statsMonthLabel() {
-    final ref = _statsMonthReferenceDate();
-    return '${_arabicMonths[ref.month - 1]} ${ref.year}';
+  bool _includeOrderInSupplierPdfStats(Order order) {
+    if (_exportPdfScope == 'completed') {
+      return _pdfSupplierDisplayName(order).isNotEmpty;
+    }
+    return _isSupplierSource(order.orderSource);
   }
 
-  List<Order> _filterOrdersForStatsMonth(List<Order> orders) {
-    final ref = _statsMonthReferenceDate();
-    return orders
-        .where(
-          (order) =>
-              order.orderDate.year == ref.year &&
-              order.orderDate.month == ref.month,
-        )
-        .toList();
+  bool _includeOrderInCustomerPdfStats(Order order) {
+    if (_exportPdfScope == 'completed') {
+      return _pdfCustomerDisplayName(order).isNotEmpty;
+    }
+    return _isCustomerSource(order.orderSource);
   }
 
-  pw.Widget _buildOrdersPdfStatsPage(List<Order> orders) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: _buildOrdersPdfStatsWidgets(orders),
+  bool _includeOrderInRequestTypePdfStats(Order order) {
+    if (_exportPdfScope == 'completed') {
+      return order.isCustomerOrder || order.isMergedOrder;
+    }
+    if (_exportPdfScope == 'suppliers') {
+      return false;
+    }
+    return _isCustomerSource(order.orderSource);
+  }
+
+  String _pdfSupplierDisplayName(Order order) {
+    final directName = _sanitizePdfText(order.supplierName);
+    if (directName.isNotEmpty) {
+      return directName;
+    }
+
+    final nestedName = _sanitizePdfText(order.supplier?.name);
+    if (nestedName.isNotEmpty) {
+      return nestedName;
+    }
+
+    final mergedName = _sanitizePdfText(
+      order.mergedWithInfo?['supplierName']?.toString(),
     );
+    if (mergedName.isNotEmpty) {
+      return mergedName;
+    }
+
+    return '';
+  }
+
+  String _pdfCustomerDisplayName(Order order) {
+    final customerName = _sanitizePdfText(order.customer?.name);
+    if (customerName.isNotEmpty) {
+      return customerName;
+    }
+
+    final mergedName = _sanitizePdfText(
+      order.mergedWithInfo?['customerName']?.toString(),
+    );
+    if (mergedName.isNotEmpty) {
+      return mergedName;
+    }
+
+    final customerAddress = _sanitizePdfText(order.customerAddress);
+    if (customerAddress.isNotEmpty) {
+      return customerAddress;
+    }
+
+    return '';
   }
 
   List<pw.Widget> _buildOrdersPdfStatsWidgets(List<Order> orders) {
-    final monthLabel = _statsMonthLabel();
+    final statsTitle = _pdfStatsTitle();
     final activeOrders = orders
         .where((order) => !_isCanceledStatus(order.status))
         .toList();
-    final completedCount = activeOrders
-        .where((order) => _isCompletedStatus(order.status))
-        .length;
+    final completedCount = _exportPdfScope == 'completed'
+        ? activeOrders.length
+        : activeOrders.where((order) => _isCompletedStatus(order.status)).length;
     final purchaseCount = activeOrders
-        .where((order) => _isPurchaseRequestType(order.effectiveRequestType))
+        .where(
+          (order) =>
+              _includeOrderInRequestTypePdfStats(order) &&
+              _dashboardRequestTypeCategory(order) == 'purchase',
+        )
         .length;
     final transportCount = activeOrders
-        .where((order) => _isTransportRequestType(order.effectiveRequestType))
+        .where(
+          (order) =>
+              _includeOrderInRequestTypePdfStats(order) &&
+              _dashboardRequestTypeCategory(order) == 'transport',
+        )
         .length;
 
     final Map<String, int> supplierCounts = {};
     final Map<String, int> customerCounts = {};
     for (final order in activeOrders) {
-      final supplier = _sanitizePdfText(order.supplierName);
-      if (supplier.isNotEmpty) {
+      final supplier = _pdfSupplierDisplayName(order);
+      if (supplier.isNotEmpty && _includeOrderInSupplierPdfStats(order)) {
         supplierCounts[supplier] = (supplierCounts[supplier] ?? 0) + 1;
       }
 
-      final customer = _sanitizePdfText(
-        order.customer?.name ?? order.customerAddress,
-      );
-      if (customer.isNotEmpty) {
+      final customer = _pdfCustomerDisplayName(order);
+      if (customer.isNotEmpty && _includeOrderInCustomerPdfStats(order)) {
         customerCounts[customer] = (customerCounts[customer] ?? 0) + 1;
       }
     }
@@ -4781,7 +4843,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return [
       pw.Text(
-        'إحصائيات شهر $monthLabel',
+        statsTitle,
         style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
       ),
       pw.SizedBox(height: 6),
@@ -4806,19 +4868,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       pw.SizedBox(height: 8),
-      pw.Text(
-        'الموردين وعدد طلباتهم للشهر',
-        style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+      ..._buildSplitNamedCountSections(
+        customerRows: customerRows,
+        supplierRows: supplierRows,
       ),
-      pw.SizedBox(height: 3),
-      _buildNamedCountTable(nameHeader: 'المورد', rows: supplierRows),
-      pw.SizedBox(height: 8),
-      pw.Text(
-        'العملاء وعدد طلباتهم للشهر',
-        style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
-      ),
-      pw.SizedBox(height: 3),
-      _buildNamedCountTable(nameHeader: 'العميل', rows: customerRows),
     ];
   }
 
@@ -4827,31 +4880,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String value,
     required PdfColor color,
   }) {
-    final fillColor = _pdfColorWithOpacity(color, 0.08);
-    final borderColor = _pdfColorWithOpacity(color, 0.4);
     return pw.Expanded(
       child: pw.Container(
         margin: const pw.EdgeInsets.symmetric(horizontal: 2),
-        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         decoration: pw.BoxDecoration(
-          color: fillColor,
+          color: color,
           borderRadius: pw.BorderRadius.circular(6),
-          border: pw.Border.all(color: borderColor, width: 0.6),
         ),
         child: pw.Column(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
           children: [
             pw.Text(
               value,
               style: pw.TextStyle(
-                fontSize: 9,
+                fontSize: 16,
                 fontWeight: pw.FontWeight.bold,
-                color: color,
+                color: PdfColors.white,
               ),
             ),
-            pw.SizedBox(height: 2),
+            pw.SizedBox(height: 4),
             pw.Text(
               label,
-              style: const pw.TextStyle(fontSize: 6),
+              style: pw.TextStyle(
+                fontSize: 6.8,
+                color: PdfColors.white,
+                fontWeight: pw.FontWeight.bold,
+              ),
               textAlign: pw.TextAlign.center,
             ),
           ],
@@ -4860,54 +4915,180 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  pw.Widget _buildNamedCountTable({
-    required String nameHeader,
-    required List<MapEntry<String, int>> rows,
+  pw.Widget _buildSplitNamedCountTable({
+    required List<MapEntry<String, int>> customerRows,
+    required List<MapEntry<String, int>> supplierRows,
   }) {
-    final data = rows.isEmpty
-        ? [
-            [nameHeader, '0'],
-          ]
-        : rows.map((entry) => [entry.key, entry.value.toString()]).toList();
+    final totalRows = math.max(customerRows.length, supplierRows.length);
+    final data = List<List<String>>.generate(totalRows == 0 ? 1 : totalRows, (
+      index,
+    ) {
+      final customer = index < customerRows.length ? customerRows[index] : null;
+      final supplier = index < supplierRows.length ? supplierRows[index] : null;
 
-    return pw.Table.fromTextArray(
-      headers: [nameHeader, 'عدد الطلبات'],
-      data: data,
-      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 6.2),
-      cellStyle: const pw.TextStyle(fontSize: 6),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-      cellAlignment: pw.Alignment.center,
-      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-      columnWidths: {
-        0: const pw.FlexColumnWidth(2.5),
-        1: const pw.FlexColumnWidth(0.8),
-      },
-    );
-  }
+      return [
+        customer?.key ?? '-',
+        customer?.value.toString() ?? '0',
+        supplier?.key ?? '-',
+        supplier?.value.toString() ?? '0',
+      ];
+    });
 
-  pw.Widget _buildSupplierStatsTable(List<MapEntry<String, int>> rows) {
-    final data = rows.isEmpty
-        ? [
-            ['المورد', '0'],
-          ]
-        : rows.map((entry) => [entry.key, entry.value.toString()]).toList();
-
-    return pw.Table.fromTextArray(
-      headers: const ['المورد', 'عدد الطلبات'],
-      data: data,
-      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7),
-      cellStyle: const pw.TextStyle(fontSize: 7),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-      cellAlignment: pw.Alignment.center,
-      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-      columnWidths: {
-        0: const pw.FlexColumnWidth(2.5),
-        1: const pw.FlexColumnWidth(0.8),
-      },
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Text(
+          'العملاء وطلباتهم / الموردين وطلباتهم',
+          style: pw.TextStyle(fontSize: 8.8, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 3),
+        pw.Table.fromTextArray(
+          headers: const [
+            'العميل',
+            'عدد الطلبات',
+            'المورد',
+            'عدد الطلبات',
+          ],
+          data: data,
+          headerStyle: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 6.4,
+          ),
+          cellStyle: const pw.TextStyle(fontSize: 6.1),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          cellAlignment: pw.Alignment.center,
+          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+          columnWidths: {
+            0: const pw.FlexColumnWidth(2.3),
+            1: const pw.FlexColumnWidth(0.7),
+            2: const pw.FlexColumnWidth(2.3),
+            3: const pw.FlexColumnWidth(0.7),
+          },
+        ),
+      ],
     );
   }
 
   // دالة مساعدة لتنسيق مدة التأخير
+  List<pw.Widget> _buildSplitNamedCountSections({
+    required List<MapEntry<String, int>> customerRows,
+    required List<MapEntry<String, int>> supplierRows,
+  }) {
+    const rowsPerSection = 18;
+    final sectionCount = math.max(
+      (customerRows.length / rowsPerSection).ceil(),
+      (supplierRows.length / rowsPerSection).ceil(),
+    );
+
+    if (sectionCount == 0) {
+      return [
+        _buildSplitNamedCountSection(
+          customerRows: const <MapEntry<String, int>>[],
+          supplierRows: const <MapEntry<String, int>>[],
+        ),
+      ];
+    }
+
+    return List.generate(sectionCount, (index) {
+      final customerStart = index * rowsPerSection;
+      final supplierStart = index * rowsPerSection;
+      final customerEnd = math.min(
+        customerStart + rowsPerSection,
+        customerRows.length,
+      );
+      final supplierEnd = math.min(
+        supplierStart + rowsPerSection,
+        supplierRows.length,
+      );
+
+      return pw.Padding(
+        padding: pw.EdgeInsets.only(top: index == 0 ? 0 : 8),
+        child: _buildSplitNamedCountSection(
+          customerRows: customerStart < customerRows.length
+              ? customerRows.sublist(customerStart, customerEnd)
+              : const <MapEntry<String, int>>[],
+          supplierRows: supplierStart < supplierRows.length
+              ? supplierRows.sublist(supplierStart, supplierEnd)
+              : const <MapEntry<String, int>>[],
+          sectionIndex: index,
+        ),
+      );
+    });
+  }
+
+  pw.Widget _buildSplitNamedCountSection({
+    required List<MapEntry<String, int>> customerRows,
+    required List<MapEntry<String, int>> supplierRows,
+    int sectionIndex = 0,
+  }) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(
+          child: _buildNamedCountTable(
+            title: sectionIndex == 0
+                ? 'العملاء وعدد طلباتهم للشهر'
+                : 'العملاء وعدد طلباتهم للشهر (${sectionIndex + 1})',
+            nameHeader: 'العميل',
+            rows: customerRows,
+          ),
+        ),
+        pw.SizedBox(width: 8),
+        pw.Expanded(
+          child: _buildNamedCountTable(
+            title: sectionIndex == 0
+                ? 'الموردين وعدد طلباتهم للشهر'
+                : 'الموردين وعدد طلباتهم للشهر (${sectionIndex + 1})',
+            nameHeader: 'المورد',
+            rows: supplierRows,
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildNamedCountTable({
+    required String title,
+    required String nameHeader,
+    required List<MapEntry<String, int>> rows,
+  }) {
+    final data = rows.isEmpty
+        ? const [
+            ['-', '0'],
+          ]
+        : rows
+              .map((entry) => [entry.key, entry.value.toString()])
+              .toList();
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontSize: 8.2, fontWeight: pw.FontWeight.bold),
+          textAlign: pw.TextAlign.right,
+        ),
+        pw.SizedBox(height: 3),
+        pw.Table.fromTextArray(
+          headers: [nameHeader, 'عدد الطلبات'],
+          data: data,
+          headerStyle: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 6.4,
+          ),
+          cellStyle: const pw.TextStyle(fontSize: 6.1),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          cellAlignment: pw.Alignment.center,
+          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+          columnWidths: {
+            0: const pw.FlexColumnWidth(2.4),
+            1: const pw.FlexColumnWidth(0.8),
+          },
+        ),
+      ],
+    );
+  }
+
   pw.Widget _buildOrdersPdfHeader(pw.MemoryImage logoImage, User? user) {
     final companyName = _sanitizePdfText(
       user?.company ??
@@ -7365,12 +7546,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       if (order.isCustomerOrder || order.isMergedOrder) {
-        final requestType = order.effectiveRequestType;
-        if (requestType == 'نقل') {
+        final requestTypeCategory = _dashboardRequestTypeCategory(order);
+        if (requestTypeCategory == 'transport') {
           transport++;
           continue;
         }
-        if (requestType == 'شراء') {
+        if (requestTypeCategory == 'purchase') {
           purchase++;
           continue;
         }

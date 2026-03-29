@@ -59,7 +59,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     final bool wideAppBar = media.size.width >= 900;
 
     final int gridColumns = isDesktop ? 4 : (tablet ? 3 : 2);
-    final double horizontalPadding = isDesktop ? 18 : (isPhone ? 10 : 14);
+    final double horizontalPadding = isDesktop ? 18 : (isPhone ? 8 : 14);
 
     final services = <Widget>[
       _service(
@@ -68,26 +68,36 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         'إدارة محطات الوقود والمبيعات',
         Icons.local_gas_station_rounded,
         [AppColors.secondaryTeal, const Color(0xFF1D976C)],
-        '/stations/dashboard',
+        AppRoutes.stationsDashboard,
         compact: isPhone,
       ),
-      if (!isOwnerStation)
-        _service(
-          context,
-          'إدارة المحطات',
-          'إضافة وتعديل محطات الوقود',
-          Icons.apartment_rounded,
-          [AppColors.warningOrange, const Color(0xFFFF6B00)],
-          '/stations/list',
-          compact: isPhone,
-        ),
+      _service(
+        context,
+        'إدارة المحطات',
+        isOwnerStation
+            ? 'عرض المحطات المرتبطة بحسابك'
+            : 'إضافة وتعديل محطات الوقود',
+        Icons.apartment_rounded,
+        [AppColors.warningOrange, const Color(0xFFFF6B00)],
+        AppRoutes.stationsList,
+        compact: isPhone,
+      ),
       _service(
         context,
         'قراءات المضخات',
         'فتح وإغلاق قراءات المبيعات',
         Icons.gas_meter_rounded,
         [AppColors.successGreen, const Color(0xFF16A34A)],
-        '/sessions/list',
+        AppRoutes.sessionsList,
+        compact: isPhone,
+      ),
+      _service(
+        context,
+        'المخازن',
+        'عرض الوقود المتاح حسب المحطة',
+        Icons.warehouse_rounded,
+        [const Color(0xFF0F766E), const Color(0xFF14B8A6)],
+        AppRoutes.stationWarehouses,
         compact: isPhone,
       ),
       _service(
@@ -96,7 +106,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         'متابعة مخزون الوقود',
         Icons.inventory_2_rounded,
         [AppColors.infoBlue, const Color(0xFF2563EB)],
-        '/inventory/list',
+        AppRoutes.inventoryList,
         compact: isPhone,
       ),
       _service(
@@ -243,9 +253,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     sliver: SliverGrid(
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: gridColumns,
-                        crossAxisSpacing: isPhone ? 10 : 14,
+                        crossAxisSpacing: isPhone ? 8 : 14,
                         mainAxisSpacing: isPhone ? 10 : 14,
-                        mainAxisExtent: isDesktop ? 148 : (isPhone ? 122 : 156),
+                        mainAxisExtent: isDesktop ? 148 : (isPhone ? 114 : 156),
                       ),
                       delegate: SliverChildListDelegate(services),
                     ),

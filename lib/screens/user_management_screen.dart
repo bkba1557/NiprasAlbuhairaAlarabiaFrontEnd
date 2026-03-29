@@ -233,7 +233,7 @@ class _UserManagementViewState extends State<_UserManagementView> {
     await showModalBottomSheet(
       isScrollControlled: true,
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color.fromARGB(0, 241, 240, 240),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -564,9 +564,7 @@ class _UserManagementViewState extends State<_UserManagementView> {
                               Expanded(
                                 child: Text(
                                   'صلاحيات العرض والتحكم',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
+                                  style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(
                                         fontWeight: FontWeight.bold,
                                         color: AppColors.primaryBlue,
@@ -578,7 +576,9 @@ class _UserManagementViewState extends State<_UserManagementView> {
                                   setModalState(() {
                                     selectedPermissions
                                       ..clear()
-                                      ..addAll(defaultPermissionsForRole(roleValue));
+                                      ..addAll(
+                                        defaultPermissionsForRole(roleValue),
+                                      );
                                   });
                                 },
                                 icon: const Icon(Icons.restart_alt),
@@ -613,15 +613,17 @@ class _UserManagementViewState extends State<_UserManagementView> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          ...permissionSections.expand((section) => [
-                            _buildPermissionSection(
-                              title: section.title,
-                              permissions: section.permissions,
-                              selectedPermissions: selectedPermissions,
-                              setModalState: setModalState,
-                            ),
-                            const SizedBox(height: 12),
-                          ]),
+                          ...permissionSections.expand(
+                            (section) => [
+                              _buildPermissionSection(
+                                title: section.title,
+                                permissions: section.permissions,
+                                selectedPermissions: selectedPermissions,
+                                setModalState: setModalState,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                          ),
                           const SizedBox(height: 16),
 
                           // ================= كلمة المرور =================
@@ -667,6 +669,103 @@ class _UserManagementViewState extends State<_UserManagementView> {
 
                                       if (!formKey.currentState!.validate())
                                         return;
+
+                                      if (roleValue == 'station_boy' ||
+                                          roleValue == 'owner_station') {
+                                        await stationProvider.fetchStations(
+                                          limit: 0,
+                                        );
+
+                                        final availableStationIds =
+                                            stationProvider.stations
+                                                .map((s) => s.id)
+                                                .toSet();
+
+                                        if (roleValue == 'station_boy') {
+                                          final normalizedStationId =
+                                              selectedStationId?.trim();
+                                          if (normalizedStationId == null ||
+                                              normalizedStationId.isEmpty) {
+                                            return;
+                                          }
+
+                                          if (!availableStationIds.contains(
+                                            normalizedStationId,
+                                          )) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'المحطة المختارة غير موجودة، يرجى اختيار محطة من القائمة.',
+                                                ),
+                                              ),
+                                            );
+                                            setModalState(() {
+                                              selectedStationId = null;
+                                            });
+                                            return;
+                                          }
+
+                                          selectedStationId =
+                                              normalizedStationId;
+                                        }
+
+                                        if (roleValue == 'owner_station') {
+                                          final cleanedStationIds =
+                                              selectedStationIds
+                                                  .map((id) => id.trim())
+                                                  .where((id) => id.isNotEmpty)
+                                                  .where(
+                                                    availableStationIds
+                                                        .contains,
+                                                  )
+                                                  .toSet();
+
+                                          if (cleanedStationIds.isEmpty) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'يرجى اختيار محطة واحدة على الأقل',
+                                                ),
+                                              ),
+                                            );
+                                            setModalState(() {
+                                              selectedStationIds
+                                                ..clear()
+                                                ..addAll(cleanedStationIds);
+                                            });
+                                            return;
+                                          }
+
+                                          if (cleanedStationIds.length !=
+                                              selectedStationIds.length) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'تم حذف بعض المحطات المختارة لأنها لم تعد متاحة. يرجى إعادة الاختيار.',
+                                                ),
+                                              ),
+                                            );
+                                            setModalState(() {
+                                              selectedStationIds
+                                                ..clear()
+                                                ..addAll(cleanedStationIds);
+                                            });
+                                            return;
+                                          }
+
+                                          setModalState(() {
+                                            selectedStationIds
+                                              ..clear()
+                                              ..addAll(cleanedStationIds);
+                                          });
+                                        }
+                                      }
 
                                       final Map<String, dynamic> payload = {
                                         'name': nameController.text.trim(),
@@ -1582,51 +1681,51 @@ class _UserManagementViewState extends State<_UserManagementView> {
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
                     itemBuilder: (context) => [
-                    if (canEditUsers)
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            const Icon(Icons.edit, size: 20),
-                            const SizedBox(width: 8),
-                            const Text('تعديل'),
-                          ],
+                      if (canEditUsers)
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.edit, size: 20),
+                              const SizedBox(width: 8),
+                              const Text('تعديل'),
+                            ],
+                          ),
                         ),
-                      ),
-                    if (canBlockUsers)
-                      PopupMenuItem(
-                        value: 'toggle_block',
-                        child: Row(
-                          children: [
-                            Icon(
-                              user.isBlocked ? Icons.lock_open : Icons.lock,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(user.isBlocked ? 'إلغاء الحظر' : 'حظر'),
-                          ],
+                      if (canBlockUsers)
+                        PopupMenuItem(
+                          value: 'toggle_block',
+                          child: Row(
+                            children: [
+                              Icon(
+                                user.isBlocked ? Icons.lock_open : Icons.lock,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(user.isBlocked ? 'إلغاء الحظر' : 'حظر'),
+                            ],
+                          ),
                         ),
-                      ),
-                    if (canDeleteUsers) ...[
-                      const PopupMenuDivider(),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.delete_outline,
-                              size: 20,
-                              color: Colors.red,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'حذف',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ],
+                      if (canDeleteUsers) ...[
+                        const PopupMenuDivider(),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: Colors.red,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'حذف',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
                     ],
                     onSelected: (value) {
                       switch (value) {
