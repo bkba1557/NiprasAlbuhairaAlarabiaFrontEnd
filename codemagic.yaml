@@ -64,14 +64,20 @@ workflows:
           set -e
 
           PUBSPEC_BUILD_NUMBER=$(grep '^version:' pubspec.yaml | sed -E 's/.*\+([0-9]+)$/\1/')
+          PUBSPEC_BUILD_NUMBER="${PUBSPEC_BUILD_NUMBER:-1}"
           LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || true)
 
-          if [ -n "$LATEST_BUILD_NUMBER" ]; then
-            NEXT_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
-          else
-            NEXT_BUILD_NUMBER="${PUBSPEC_BUILD_NUMBER:-1}"
+          NEXT_BUILD_NUMBER="$PUBSPEC_BUILD_NUMBER"
+
+          if [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            ASC_NEXT_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
+            if [ "$ASC_NEXT_BUILD_NUMBER" -gt "$NEXT_BUILD_NUMBER" ]; then
+              NEXT_BUILD_NUMBER="$ASC_NEXT_BUILD_NUMBER"
+            fi
           fi
 
+          echo "Pubspec build number: $PUBSPEC_BUILD_NUMBER"
+          echo "Latest App Store Connect build number: ${LATEST_BUILD_NUMBER:-none}"
           echo "Using iOS build number: $NEXT_BUILD_NUMBER"
 
           flutter build ipa --release \
