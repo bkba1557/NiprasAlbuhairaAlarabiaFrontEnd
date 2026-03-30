@@ -651,6 +651,8 @@ class ApiEndpoints {
   static const String logoutAllAuthDevices = '/auth/devices/logout-all';
   static const String blockedDevices = '/auth/blocked-devices';
   static const String orders = '/orders';
+  static const String orderAutofillDocument = '/orders/autofill/document';
+  static const String orderImportDocuments = '/orders/import/documents';
   static const String tankers = '/tankers';
   static const String trackingDrivers = '/tracking/drivers';
   static const String driverLocations = '/driver-locations';

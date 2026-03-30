@@ -30,6 +30,7 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
 
   bool _isEditingMergedOrder = false;
   Order? _mergedOrder;
+  bool _hasMergedOrders = false;
 
   // ============================================
   // 📌 بيانات التصفية
@@ -87,6 +88,11 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
     _quantityFilter = 'جميع الكميات';
   }
 
+  void _closeForm({bool changed = false}) {
+    if (!mounted) return;
+    Navigator.pop(context, changed ? true : null);
+  }
+
   PreferredSizeWidget _buildDesktopAppBar() {
     final title = _isEditingMergedOrder ? 'تعديل الطلب المدمج' : 'دمج الطلبات';
 
@@ -107,7 +113,7 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
         icon: const Icon(Icons.arrow_back_ios_new),
         tooltip: 'رجوع',
         color: Colors.white,
-        onPressed: () => Navigator.pop(context),
+        onPressed: () => _closeForm(changed: _hasMergedOrders),
       ),
       title: Text(
         title,
@@ -275,7 +281,7 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
         ),
       );
 
-      Navigator.pop(context, true);
+      _closeForm(changed: true);
     }
   }
 
@@ -335,11 +341,7 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
 
         // تحديث البيانات
         await _loadOrders();
-
-        // العودة للشاشة السابقة
-        if (mounted) {
-          Navigator.pop(context, true);
-        }
+        _hasMergedOrders = true;
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -405,7 +407,7 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
             backgroundColor: AppColors.successGreen,
           ),
         );
-        Navigator.pop(context, true);
+        _closeForm(changed: true);
       }
     } catch (e) {
       if (mounted) {
@@ -1401,7 +1403,7 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
           _buildSelectedOrderCard(
             order: order,
             isSupplier: true,
-            onRemove: () {}, // ❌ ممنوع الإزالة
+            onRemove: () {}, 
           ),
 
           const SizedBox(height: 20),
@@ -1459,13 +1461,20 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
     final bool isDesktop = MediaQuery.of(context).size.width > 800;
     final content = isDesktop ? _buildDesktopLayout() : _buildMobileLayout();
 
-    return Scaffold(
-      appBar: _buildDesktopAppBar(),
-      body: Stack(
-        children: [
-          const AppSoftBackground(),
-          Positioned.fill(child: content),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _closeForm(changed: _hasMergedOrders);
+      },
+      child: Scaffold(
+        appBar: _buildDesktopAppBar(),
+        body: Stack(
+          children: [
+            const AppSoftBackground(),
+            Positioned.fill(child: content),
+          ],
+        ),
       ),
     );
   }

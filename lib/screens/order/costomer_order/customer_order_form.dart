@@ -37,6 +37,11 @@ class CustomerOrderFormScreen extends StatefulWidget {
 }
 
 class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
+  static const String _defaultStatus = 'في انتظار إنشاء طلب العميل';
+  static const String _defaultFuelType = 'ديزل';
+  static const String _defaultUnit = 'لتر';
+  static const String _defaultPurchaseType = 'شراء';
+
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -48,9 +53,9 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   DateTime _orderDate = DateTime.now();
   DateTime _arrivalDate = DateTime.now().add(const Duration(days: 1));
 
-  String _status = 'في انتظار إنشاء طلب العميل';
-  String _fuelType = 'ديزل';
-  String _unit = 'لتر';
+  String _status = _defaultStatus;
+  String _fuelType = _defaultFuelType;
+  String _unit = _defaultUnit;
 
   String? _companyLogoPath;
   List<String> _newAttachmentPaths = [];
@@ -70,6 +75,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   String? _selectedDriverId;
   List<Driver> _drivers = [];
   bool get _isEditMode => widget.orderToEdit != null;
+  bool _hasCreatedOrders = false;
 
   late final Future<void> _customersFuture;
   late final Future<void> _driversFuture;
@@ -113,7 +119,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
   final List<String> _purchaseTypes = ['شراء', 'نقل'];
 
-  String _purchaseType = 'شراء'; // القيمة الافتراضية
+  String _purchaseType = _defaultPurchaseType; // القيمة الافتراضية
 
   @override
   void initState() {
@@ -154,7 +160,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
         icon: const Icon(Icons.arrow_back_ios_new),
         tooltip: 'رجوع',
         color: Colors.white,
-        onPressed: () => Navigator.pop(context),
+        onPressed: () => _closeForm(changed: _hasCreatedOrders),
       ),
       title: Text(
         title,
@@ -706,6 +712,41 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     });
   }
 
+  void _closeForm({bool changed = false}) {
+    if (!mounted) return;
+    Navigator.pop(context, changed ? true : null);
+  }
+
+  void _resetFormAfterCreate() {
+    final now = DateTime.now();
+    _formKey.currentState?.reset();
+
+    setState(() {
+      _quantityController.clear();
+      _notesController.clear();
+      _customerSearchController.clear();
+      _customerFilterController.clear();
+
+      _orderDate = now;
+      _arrivalDate = now.add(const Duration(days: 1));
+
+      _status = _defaultStatus;
+      _fuelType = _defaultFuelType;
+      _unit = _defaultUnit;
+      _purchaseType = _defaultPurchaseType;
+
+      _companyLogoPath = null;
+      _newAttachmentPaths.clear();
+
+      _selectedCustomer = null;
+      _selectedCustomerId = null;
+      _selectedCity = null;
+      _selectedRegion = null;
+      _selectedDriver = null;
+      _selectedDriverId = null;
+    });
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -851,8 +892,13 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
         ),
       );
 
-      await Future.delayed(const Duration(milliseconds: 300));
-      Navigator.pop(context, true);
+      if (_isEditMode) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        _closeForm(changed: true);
+      } else {
+        _hasCreatedOrders = true;
+        _resetFormAfterCreate();
+      }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1309,13 +1355,20 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
         ? _buildDesktopLayout(context, orderProvider, screenWidth)
         : _buildMobileLayout(context, orderProvider);
 
-    return Scaffold(
-      appBar: _buildDesktopAppBar(),
-      body: Stack(
-        children: [
-          const AppSoftBackground(),
-          Positioned.fill(child: content),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _closeForm(changed: _hasCreatedOrders);
+      },
+      child: Scaffold(
+        appBar: _buildDesktopAppBar(),
+        body: Stack(
+          children: [
+            const AppSoftBackground(),
+            Positioned.fill(child: content),
+          ],
+        ),
       ),
     );
   }

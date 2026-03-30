@@ -185,6 +185,84 @@ class OrderProvider with ChangeNotifier {
   int get totalPages => _totalPages;
   int get totalOrders => _totalOrders;
 
+  Future<Map<String, dynamic>?> importSupplierOrdersFromDocuments({
+    required List<PlatformFile> files,
+  }) async {
+    _error = null;
+
+    if (files.isEmpty) {
+      _error = 'لم يتم اختيار ملفات للاستيراد';
+      return null;
+    }
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderImportDocuments}',
+        ),
+      );
+
+      request.headers.addAll(_multipartHeaders());
+
+      for (final file in files) {
+        if (file.bytes != null && file.bytes!.isNotEmpty) {
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'documents',
+              file.bytes!,
+              filename: file.name,
+            ),
+          );
+          continue;
+        }
+
+        if (file.path != null && file.path!.isNotEmpty) {
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'documents',
+              file.path!,
+              filename: file.name,
+            ),
+          );
+        }
+      }
+
+      if (request.files.isEmpty) {
+        _error = 'تعذر تجهيز الملفات للاستيراد';
+        return null;
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      final dynamic payload = response.bodyBytes.isNotEmpty
+          ? json.decode(utf8.decode(response.bodyBytes))
+          : null;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = payload is Map ? payload['data'] : null;
+        return data is Map<String, dynamic>
+            ? data
+            : data is Map
+            ? Map<String, dynamic>.from(data)
+            : null;
+      }
+
+      if (payload is Map) {
+        _error =
+            payload['error']?.toString() ??
+            payload['message']?.toString() ??
+            'فشل في استيراد ملفات طلبات المورد';
+      } else {
+        _error = 'فشل في استيراد ملفات طلبات المورد';
+      }
+      return null;
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر: ${e.toString()}';
+      return null;
+    }
+  }
+
   // ============================================
   // 📋 جلب الطلبات مع تحسين الدمج
   // ============================================
@@ -956,6 +1034,81 @@ class OrderProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> extractSupplierOrderDraftFromDocument({
+    required PlatformFile file,
+    String? extractedText,
+  }) async {
+    _error = null;
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderAutofillDocument}',
+        ),
+      );
+
+      request.headers.addAll(_multipartHeaders());
+
+      final normalizedText = extractedText?.trim();
+      if (normalizedText != null && normalizedText.isNotEmpty) {
+        request.fields['extractedText'] = normalizedText.length > 20000
+            ? normalizedText.substring(0, 20000)
+            : normalizedText;
+      }
+
+      if (file.bytes != null && file.bytes!.isNotEmpty) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'document',
+            file.bytes!,
+            filename: file.name,
+          ),
+        );
+      } else if (file.path != null && file.path!.isNotEmpty) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'document',
+            file.path!,
+            filename: file.name,
+          ),
+        );
+      } else if (normalizedText == null || normalizedText.isEmpty) {
+        _error = 'تعذر قراءة الملف محليًا لإرساله إلى الخادم';
+        return null;
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      final dynamic payload = response.body.isNotEmpty
+          ? json.decode(response.body)
+          : null;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = payload is Map ? payload['data'] : null;
+        return data is Map<String, dynamic>
+            ? data
+            : data is Map
+            ? Map<String, dynamic>.from(data)
+            : null;
+      }
+
+      if (payload is Map) {
+        _error =
+            payload['error']?.toString() ??
+            payload['message']?.toString() ??
+            'فشل في استخراج بيانات الطلب من الملف';
+      } else {
+        _error = 'فشل في استخراج بيانات الطلب من الملف';
+      }
+      return null;
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر: ${e.toString()}';
+      return null;
     }
   }
 

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:order_tracker/models/driver_model.dart';
 import 'package:order_tracker/models/tanker_model.dart';
@@ -17,7 +17,14 @@ class TankersTrackingScreen extends StatefulWidget {
 }
 
 class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
-  static const List<String> _statuses = ['تحت الصيانة', 'في طلب', 'فاضي'];
+  static const List<String> _statuses = [
+    'تحت الصيانة',
+    'في طلب',
+    'فاضي',
+    'شغال',
+    'متوقف',
+  ];
+  static const List<String> _fuelTypes = ['بنزين', 'ديزل', 'كيروسين'];
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -43,6 +50,10 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
         return AppColors.statusGold;
       case 'فاضي':
         return AppColors.successGreen;
+      case 'شغال':
+        return AppColors.infoBlue;
+      case 'متوقف':
+        return AppColors.errorRed;
       default:
         return Colors.grey;
     }
@@ -73,22 +84,54 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
     return '$capacity لتر';
   }
 
+  String? _normalizedDigits(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  String? _aramcoStickerLabel(Tanker tanker) {
+    final unifiedSticker = tanker.aramcoUnifiedSticker?.trim() ?? '';
+    if (unifiedSticker.isNotEmpty) {
+      return 'استيكر أرامكو الموحد: $unifiedSticker';
+    }
+
+    final headSticker = tanker.aramcoHeadSticker?.trim() ?? '';
+    final tankerSticker = tanker.aramcoTankerSticker?.trim() ?? '';
+    if (headSticker.isEmpty && tankerSticker.isEmpty) {
+      return null;
+    }
+
+    if (headSticker.isNotEmpty && tankerSticker.isNotEmpty) {
+      return 'استيكرات أرامكو • الرأس: $headSticker • الصهريج: $tankerSticker';
+    }
+
+    if (headSticker.isNotEmpty) {
+      return 'استيكر أرامكو الرأس: $headSticker';
+    }
+
+    return 'استيكر أرامكو الصهريج: $tankerSticker';
+  }
+
   List<Driver> _vehicleOptions(List<Driver> drivers, {Tanker? tanker}) {
-    final items = drivers
-        .where((driver) => (driver.vehicleNumber?.trim().isNotEmpty ?? false))
-        .toList()
-      ..sort((a, b) {
-        final left = a.vehicleNumber?.trim().isNotEmpty == true
-            ? a.vehicleNumber!.trim()
-            : a.name.trim();
-        final right = b.vehicleNumber?.trim().isNotEmpty == true
-            ? b.vehicleNumber!.trim()
-            : b.name.trim();
-        return left.compareTo(right);
-      });
+    final items =
+        drivers
+            .where(
+              (driver) => (driver.vehicleNumber?.trim().isNotEmpty ?? false),
+            )
+            .toList()
+          ..sort((a, b) {
+            final left = a.vehicleNumber?.trim().isNotEmpty == true
+                ? a.vehicleNumber!.trim()
+                : a.name.trim();
+            final right = b.vehicleNumber?.trim().isNotEmpty == true
+                ? b.vehicleNumber!.trim()
+                : b.name.trim();
+            return left.compareTo(right);
+          });
 
     final linkedDriverId = tanker?.linkedDriverId?.trim() ?? '';
-    if (linkedDriverId.isEmpty || items.any((driver) => driver.id == linkedDriverId)) {
+    if (linkedDriverId.isEmpty ||
+        items.any((driver) => driver.id == linkedDriverId)) {
       return items;
     }
 
@@ -151,7 +194,11 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
           (tanker.linkedVehicleNumber ?? '').toLowerCase().contains(query) ||
           (tanker.linkedDriverName ?? '').toLowerCase().contains(query) ||
           (tanker.linkedVehicleType ?? '').toLowerCase().contains(query) ||
-          (tanker.capacityLiters?.toString() ?? '').contains(query);
+          (tanker.fuelType ?? '').toLowerCase().contains(query) ||
+          (tanker.capacityLiters?.toString() ?? '').contains(query) ||
+          (tanker.aramcoUnifiedSticker ?? '').contains(query) ||
+          (tanker.aramcoHeadSticker ?? '').contains(query) ||
+          (tanker.aramcoTankerSticker ?? '').contains(query);
     }).toList();
   }
 
@@ -161,6 +208,15 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
       text: tanker?.capacityLiters?.toString() ?? '',
     );
     final notesController = TextEditingController(text: tanker?.notes ?? '');
+    final aramcoUnifiedStickerController = TextEditingController(
+      text: tanker?.aramcoUnifiedSticker ?? '',
+    );
+    final aramcoHeadStickerController = TextEditingController(
+      text: tanker?.aramcoHeadSticker ?? '',
+    );
+    final aramcoTankerStickerController = TextEditingController(
+      text: tanker?.aramcoTankerSticker ?? '',
+    );
     final driverProvider = context.read<DriverProvider>();
     final provider = context.read<TankerProvider>();
     final vehicleDrivers = _vehicleOptions(
@@ -170,7 +226,9 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
 
     if (!mounted) return;
 
-    String status = _statuses.contains(tanker?.status) ? tanker!.status : 'فاضي';
+    String status = _statuses.contains(tanker?.status)
+        ? tanker!.status
+        : 'فاضي';
     String? linkedDriverId = tanker?.linkedDriverId?.trim().isNotEmpty == true
         ? tanker!.linkedDriverId!.trim()
         : null;
@@ -180,165 +238,443 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
       linkedDriverId = null;
     }
 
+    String? fuelType = _fuelTypes.contains(tanker?.fuelType)
+        ? tanker!.fuelType
+        : null;
+    String aramcoStickerMode =
+        tanker?.aramcoStickerMode == 'منفصل' ||
+            (tanker?.aramcoHeadSticker?.trim().isNotEmpty == true) ||
+            (tanker?.aramcoTankerSticker?.trim().isNotEmpty == true)
+        ? 'منفصل'
+        : 'موحد';
+    bool aramcoStickersExpanded = tanker?.hasAramcoStickerData == true;
     final formKey = GlobalKey<FormState>();
 
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          title: Text(tanker == null ? 'إضافة صهريج' : 'تعديل الصهريج'),
-          content: Form(
-            key: formKey,
-            child: SizedBox(
-              width: 460,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: numberController,
-                      decoration: const InputDecoration(
-                        labelText: 'رقم الصهريج / اللوحة',
-                        prefixIcon: Icon(Icons.confirmation_number_outlined),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'الرقم مطلوب';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String?>(
-                      value: linkedDriverId,
-                      decoration: InputDecoration(
-                        labelText: 'السيارة المرتبطة',
-                        prefixIcon: const Icon(Icons.directions_car_filled_outlined),
-                        helperText: vehicleDrivers.isEmpty
-                            ? 'لا توجد سيارات مسجلة للسائقين حالياً'
-                            : 'اختر السيارة التي يعمل معها هذا الصهريج',
-                      ),
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('بدون ربط حالياً'),
-                        ),
-                        ...vehicleDrivers.map(
-                          (driver) => DropdownMenuItem<String?>(
-                            value: driver.id,
-                            child: Text(
-                              _vehicleOptionLabel(driver),
-                              overflow: TextOverflow.ellipsis,
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              title: Text(tanker == null ? 'إضافة صهريج' : 'تعديل الصهريج'),
+              content: Form(
+                key: formKey,
+                child: SizedBox(
+                  width: 460,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: numberController,
+                          decoration: const InputDecoration(
+                            labelText: 'رقم الصهريج / اللوحة',
+                            prefixIcon: Icon(
+                              Icons.confirmation_number_outlined,
                             ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'الرقم مطلوب';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String?>(
+                          initialValue: linkedDriverId,
+                          decoration: InputDecoration(
+                            labelText: 'السيارة المرتبطة',
+                            prefixIcon: const Icon(
+                              Icons.directions_car_filled_outlined,
+                            ),
+                            helperText: vehicleDrivers.isEmpty
+                                ? 'لا توجد سيارات مسجلة للسائقين حالياً'
+                                : 'اختر السيارة التي يعمل معها هذا الصهريج',
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('بدون ربط حالياً'),
+                            ),
+                            ...vehicleDrivers.map(
+                              (driver) => DropdownMenuItem<String?>(
+                                value: driver.id,
+                                child: Text(
+                                  _vehicleOptionLabel(driver),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            linkedDriverId = value;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: capacityController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'سعة الصهريج باللتر',
+                            prefixIcon: Icon(Icons.local_gas_station_outlined),
+                          ),
+                          validator: (value) {
+                            final capacity = int.tryParse(value?.trim() ?? '');
+                            if (capacity == null || capacity <= 0) {
+                              return 'أدخل سعة صحيحة باللتر';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: fuelType,
+                          decoration: const InputDecoration(
+                            labelText: 'نوع الوقود',
+                            prefixIcon: Icon(Icons.opacity_outlined),
+                          ),
+                          items: _fuelTypes
+                              .map(
+                                (item) => DropdownMenuItem<String>(
+                                  value: item,
+                                  child: Text(item),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            fuelType = value;
+                          },
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'اختر نوع الوقود';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _statuses.contains(status)
+                              ? status
+                              : 'فاضي',
+                          decoration: const InputDecoration(
+                            labelText: 'الحالة',
+                            prefixIcon: Icon(Icons.flag_outlined),
+                          ),
+                          items: _statuses
+                              .map(
+                                (item) => DropdownMenuItem<String>(
+                                  value: item,
+                                  child: Text(item),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            status = value ?? 'فاضي';
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: AppColors.primaryBlue.withValues(
+                                alpha: 0.12,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              InkWell(
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () {
+                                  setDialogState(() {
+                                    aramcoStickersExpanded =
+                                        !aramcoStickersExpanded;
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.local_offer_outlined,
+                                        color: AppColors.primaryBlue,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'استيكرات أرامكو',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF0F172A),
+                                              ),
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              'رقم موحد أو رقمين منفصلين للراس والصهريج',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Color(0xFF64748B),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(
+                                        aramcoStickersExpanded
+                                            ? Icons.expand_less_rounded
+                                            : Icons.expand_more_rounded,
+                                        color: const Color(0xFF475569),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              if (aramcoStickersExpanded) ...[
+                                Divider(
+                                  height: 1,
+                                  color: AppColors.primaryBlue.withValues(
+                                    alpha: 0.10,
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          ChoiceChip(
+                                            label: const Text('رقم موحد'),
+                                            selected:
+                                                aramcoStickerMode == 'موحد',
+                                            onSelected: (_) {
+                                              setDialogState(() {
+                                                aramcoStickerMode = 'موحد';
+                                              });
+                                            },
+                                          ),
+                                          ChoiceChip(
+                                            label: const Text('منفصل'),
+                                            selected:
+                                                aramcoStickerMode == 'منفصل',
+                                            onSelected: (_) {
+                                              setDialogState(() {
+                                                aramcoStickerMode = 'منفصل';
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      if (aramcoStickerMode == 'موحد')
+                                        TextFormField(
+                                          controller:
+                                              aramcoUnifiedStickerController,
+                                          keyboardType: TextInputType.number,
+                                          inputFormatters: [
+                                            FilteringTextInputFormatter
+                                                .digitsOnly,
+                                          ],
+                                          decoration: const InputDecoration(
+                                            labelText: 'استيكر الراس والصهريج',
+                                            prefixIcon: Icon(
+                                              Icons.pin_outlined,
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        Directionality(
+                                          textDirection: TextDirection.rtl,
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: TextFormField(
+                                                  controller:
+                                                      aramcoTankerStickerController,
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  inputFormatters: [
+                                                    FilteringTextInputFormatter
+                                                        .digitsOnly,
+                                                  ],
+                                                  decoration: const InputDecoration(
+                                                    labelText: 'استيكر الصهريج',
+                                                    prefixIcon: Icon(
+                                                      Icons
+                                                          .local_shipping_outlined,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: TextFormField(
+                                                  controller:
+                                                      aramcoHeadStickerController,
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  inputFormatters: [
+                                                    FilteringTextInputFormatter
+                                                        .digitsOnly,
+                                                  ],
+                                                  decoration: const InputDecoration(
+                                                    labelText: 'استيكر الراس',
+                                                    prefixIcon: Icon(
+                                                      Icons
+                                                          .directions_car_filled_outlined,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: notesController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'ملاحظات (اختياري)',
+                            prefixIcon: Icon(Icons.notes_outlined),
                           ),
                         ),
                       ],
-                      onChanged: (value) {
-                        linkedDriverId = value;
-                      },
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: capacityController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: 'سعة الصهريج باللتر',
-                        prefixIcon: Icon(Icons.local_gas_station_outlined),
-                      ),
-                      validator: (value) {
-                        final capacity = int.tryParse(value?.trim() ?? '');
-                        if (capacity == null || capacity <= 0) {
-                          return 'أدخل سعة صحيحة باللتر';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _statuses.contains(status) ? status : 'فاضي',
-                      decoration: const InputDecoration(
-                        labelText: 'الحالة',
-                        prefixIcon: Icon(Icons.flag_outlined),
-                      ),
-                      items: _statuses
-                          .map(
-                            (item) => DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        status = value ?? 'فاضي';
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: notesController,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'ملاحظات (اختياري)',
-                        prefixIcon: Icon(Icons.notes_outlined),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('إلغاء'),
-            ),
-            ElevatedButton.icon(
-              onPressed: provider.isLoading
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) return;
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: provider.isLoading
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
 
-                      final capacityLiters = int.parse(
-                        capacityController.text.trim(),
-                      );
-                      final linkedDriver = _findDriverById(
-                        vehicleDrivers,
-                        linkedDriverId,
-                      );
+                          final aramcoUnifiedSticker = _normalizedDigits(
+                            aramcoUnifiedStickerController.text,
+                          );
+                          final aramcoHeadSticker = _normalizedDigits(
+                            aramcoHeadStickerController.text,
+                          );
+                          final aramcoTankerSticker = _normalizedDigits(
+                            aramcoTankerStickerController.text,
+                          );
 
-                      final payload = Tanker(
-                        id: tanker?.id ?? '',
-                        number: numberController.text.trim(),
-                        status: status,
-                        capacityLiters: capacityLiters,
-                        linkedDriverId: linkedDriverId,
-                        linkedDriverName: linkedDriver?.name,
-                        linkedVehicleNumber: linkedDriver?.vehicleNumber,
-                        linkedVehicleType: linkedDriver?.vehicleType,
-                        notes: notesController.text.trim().isEmpty
-                            ? null
-                            : notesController.text.trim(),
-                        createdAt: tanker?.createdAt ?? DateTime.now(),
-                        updatedAt: DateTime.now(),
-                      );
+                          if (aramcoStickerMode == 'منفصل' &&
+                              ((aramcoHeadSticker == null) !=
+                                  (aramcoTankerSticker == null))) {
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'أدخل استيكر الرأس واستيكر الصهريج معًا أو اتركهما فارغين',
+                                ),
+                                backgroundColor: AppColors.errorRed,
+                              ),
+                            );
+                            return;
+                          }
 
-                      final ok = tanker == null
-                          ? await provider.createTanker(payload)
-                          : await provider.updateTanker(tanker.id, payload);
+                          String? selectedAramcoStickerMode;
+                          String? selectedAramcoUnifiedSticker;
+                          String? selectedAramcoHeadSticker;
+                          String? selectedAramcoTankerSticker;
 
-                      if (!dialogContext.mounted) return;
-                      Navigator.pop(dialogContext, ok);
-                    },
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('حفظ'),
-            ),
-          ],
+                          if (aramcoStickerMode == 'موحد' &&
+                              aramcoUnifiedSticker != null) {
+                            selectedAramcoStickerMode = 'موحد';
+                            selectedAramcoUnifiedSticker = aramcoUnifiedSticker;
+                          } else if (aramcoStickerMode == 'منفصل' &&
+                              aramcoHeadSticker != null &&
+                              aramcoTankerSticker != null) {
+                            selectedAramcoStickerMode = 'منفصل';
+                            selectedAramcoHeadSticker = aramcoHeadSticker;
+                            selectedAramcoTankerSticker = aramcoTankerSticker;
+                          }
+
+                          final capacityLiters = int.parse(
+                            capacityController.text.trim(),
+                          );
+                          final linkedDriver = _findDriverById(
+                            vehicleDrivers,
+                            linkedDriverId,
+                          );
+
+                          final payload = Tanker(
+                            id: tanker?.id ?? '',
+                            number: numberController.text.trim(),
+                            status: status,
+                            capacityLiters: capacityLiters,
+                            fuelType: fuelType,
+                            linkedDriverId: linkedDriverId,
+                            linkedDriverName: linkedDriver?.name,
+                            linkedVehicleNumber: linkedDriver?.vehicleNumber,
+                            linkedVehicleType: linkedDriver?.vehicleType,
+                            aramcoStickerMode: selectedAramcoStickerMode,
+                            aramcoUnifiedSticker: selectedAramcoUnifiedSticker,
+                            aramcoHeadSticker: selectedAramcoHeadSticker,
+                            aramcoTankerSticker: selectedAramcoTankerSticker,
+                            notes: notesController.text.trim().isEmpty
+                                ? null
+                                : notesController.text.trim(),
+                            createdAt: tanker?.createdAt ?? DateTime.now(),
+                            updatedAt: DateTime.now(),
+                          );
+
+                          final ok = tanker == null
+                              ? await provider.createTanker(payload)
+                              : await provider.updateTanker(tanker.id, payload);
+
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext, ok);
+                        },
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('حفظ'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+
+    numberController.dispose();
+    capacityController.dispose();
+    notesController.dispose();
+    aramcoUnifiedStickerController.dispose();
+    aramcoHeadStickerController.dispose();
+    aramcoTankerStickerController.dispose();
 
     if (result == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -401,7 +737,9 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
       builder: (context, provider, _) {
         final allTankers = provider.tankers;
         final items = _applySearch(allTankers);
-        final availableCount = allTankers.where((t) => t.status == 'فاضي').length;
+        final availableCount = allTankers
+            .where((t) => t.status == 'فاضي')
+            .length;
         final busyCount = allTankers.where((t) => t.status == 'في طلب').length;
         final maintenanceCount = allTankers
             .where((t) => t.status == 'تحت الصيانة')
@@ -519,7 +857,8 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
               Expanded(
                 child: TrackingSearchField(
                   controller: _searchController,
-                  hintText: 'ابحث برقم الصهريج أو السيارة أو السعة أو الملاحظات...',
+                  hintText:
+                      'ابحث برقم الصهريج أو السيارة أو السعة أو الملاحظات...',
                   onChanged: (_) => setState(() {}),
                   onClear: () {
                     _searchController.clear();
@@ -634,6 +973,10 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
   Widget _buildTankerCard(TankerProvider provider, Tanker tanker) {
     final color = _statusColor(tanker.status);
     final vehicleText = _vehicleLabel(tanker);
+    final aramcoStickerText = _aramcoStickerLabel(tanker);
+    final fuelTypeText = tanker.fuelType?.trim().isNotEmpty == true
+        ? tanker.fuelType!.trim()
+        : 'غير محدد';
     final notesText = tanker.notes?.trim().isNotEmpty == true
         ? tanker.notes!.trim()
         : 'بدون ملاحظات';
@@ -713,16 +1056,19 @@ class _TankersTrackingScreenState extends State<TankersTrackingScreen> {
             _capacityLabel(tanker),
           ),
           const SizedBox(height: 8),
-          _buildInfoRow(
-            Icons.directions_car_filled_outlined,
-            vehicleText,
-          ),
+          _buildInfoRow(Icons.opacity_outlined, fuelTypeText),
+          const SizedBox(height: 8),
+          _buildInfoRow(Icons.directions_car_filled_outlined, vehicleText),
           if (tanker.linkedVehicleType?.trim().isNotEmpty == true) ...[
             const SizedBox(height: 8),
             _buildInfoRow(
               Icons.category_outlined,
               tanker.linkedVehicleType!.trim(),
             ),
+          ],
+          if (aramcoStickerText != null) ...[
+            const SizedBox(height: 8),
+            _buildInfoRow(Icons.local_offer_outlined, aramcoStickerText),
           ],
           const SizedBox(height: 8),
           _buildInfoRow(Icons.notes_outlined, notesText),

@@ -22,6 +22,7 @@ import 'package:order_tracker/widgets/attachment_item.dart';
 import 'package:order_tracker/widgets/custom_text_field.dart';
 import 'package:order_tracker/widgets/gradient_button.dart';
 import 'package:provider/provider.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 class SupplierOrderFormScreen extends StatefulWidget {
   final Order? orderToEdit;
@@ -34,6 +35,34 @@ class SupplierOrderFormScreen extends StatefulWidget {
 }
 
 class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
+  static const String _defaultLoadingTime = '08:00';
+  static const String _defaultArrivalTime = '10:00';
+  static const String _defaultStatus = 'في انتظار عمل طلب جديد';
+  static const String _defaultFuelType = 'ديزل';
+  static const String _defaultUnit = 'لتر';
+  static const Map<String, String> _arabicDigitMap = {
+    '٠': '0',
+    '١': '1',
+    '٢': '2',
+    '٣': '3',
+    '٤': '4',
+    '٥': '5',
+    '٦': '6',
+    '٧': '7',
+    '٨': '8',
+    '٩': '9',
+    '۰': '0',
+    '۱': '1',
+    '۲': '2',
+    '۳': '3',
+    '۴': '4',
+    '۵': '5',
+    '۶': '6',
+    '۷': '7',
+    '۸': '8',
+    '۹': '9',
+  };
+
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController _supplierOrderNumberController =
@@ -42,24 +71,26 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
   final TextEditingController _notesController = TextEditingController();
 
   final TextEditingController _loadingTimeController = TextEditingController(
-    text: '08:00',
+    text: _defaultLoadingTime,
   );
   final TextEditingController _arrivalTimeController = TextEditingController(
-    text: '10:00',
+    text: _defaultArrivalTime,
   );
 
   DateTime _orderDate = DateTime.now();
   DateTime _loadingDate = DateTime.now().add(const Duration(days: 1));
   DateTime _arrivalDate = DateTime.now().add(const Duration(days: 1));
 
-  String _status = 'في انتظار عمل طلب جديد';
-  String _fuelType = 'ديزل';
-  String _unit = 'لتر';
+  String _status = _defaultStatus;
+  String _fuelType = _defaultFuelType;
+  String _unit = _defaultUnit;
   String? _selectedCity;
   String? _selectedRegion;
 
   String? _companyLogoPath;
   final List<PlatformFile> _newAttachments = [];
+  bool _isAutofillingFromDocument = false;
+  String? _lastAutofillFileName;
 
   Supplier? _selectedSupplier;
   String? _selectedSupplierId;
@@ -73,6 +104,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
 
   String? _selectedArea;
   bool get isEditMode => widget.orderToEdit != null;
+  bool _hasCreatedOrders = false;
 
   List<Supplier> _suppliers = [];
   List<Driver> _drivers = [];
@@ -190,7 +222,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
         icon: const Icon(Icons.arrow_back_ios_new),
         tooltip: 'رجوع',
         color: Colors.white,
-        onPressed: () => Navigator.pop(context),
+        onPressed: () => _closeForm(changed: _hasCreatedOrders),
       ),
       title: Text(
         title,
@@ -553,6 +585,593 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
     }
   }
 
+  void _showAutofillSnackBar(
+    String message, {
+    Color backgroundColor = AppColors.primaryBlue,
+  }) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+      ),
+    );
+  }
+
+  String _normalizeAutofillValue(String value) {
+    final withWesternDigits = value.replaceAllMapped(
+      RegExp(r'[٠-٩۰-۹]'),
+      (match) => _arabicDigitMap[match.group(0)] ?? match.group(0)!,
+    );
+
+    return withWesternDigits
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\u064b-\u065f\u0670]'), '')
+        .replaceAll(RegExp(r'[أإآ]'), 'ا')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ؤ', 'و')
+        .replaceAll('ئ', 'ي')
+        .replaceAll(RegExp(r'[^ء-يa-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String? _matchTextValue(String rawValue, Iterable<String> candidates) {
+    final target = _normalizeAutofillValue(rawValue);
+    if (target.isEmpty) return null;
+
+    String? partialMatch;
+    for (final candidate in candidates) {
+      final normalizedCandidate = _normalizeAutofillValue(candidate);
+      if (normalizedCandidate.isEmpty) continue;
+      if (normalizedCandidate == target) {
+        return candidate;
+      }
+      if (partialMatch == null &&
+          (normalizedCandidate.contains(target) ||
+              target.contains(normalizedCandidate))) {
+        partialMatch = candidate;
+      }
+    }
+
+    return partialMatch;
+  }
+
+  T? _matchEntityByText<T>(
+    String rawValue,
+    List<T> items,
+    List<String?> Function(T item) selectors,
+  ) {
+    final target = _normalizeAutofillValue(rawValue);
+    if (target.isEmpty) return null;
+
+    T? partialMatch;
+    for (final item in items) {
+      final candidates = selectors(item)
+          .whereType<String>()
+          .map(_normalizeAutofillValue)
+          .where((value) => value.isNotEmpty)
+          .toSet();
+
+      if (candidates.any((candidate) => candidate == target)) {
+        return item;
+      }
+
+      if (partialMatch == null &&
+          candidates.any(
+            (candidate) =>
+                candidate.contains(target) || target.contains(candidate),
+          )) {
+        partialMatch = item;
+      }
+    }
+
+    return partialMatch;
+  }
+
+  Supplier? _matchSupplier(String rawValue) {
+    return _matchEntityByText<Supplier>(rawValue, _suppliers, (supplier) {
+      return [
+        supplier.name,
+        supplier.company,
+        supplier.displayName,
+        supplier.contactPerson,
+        supplier.phone,
+      ];
+    });
+  }
+
+  Driver? _matchDriver(String rawValue) {
+    return _matchEntityByText<Driver>(rawValue, _drivers, (driver) {
+      return [
+        driver.name,
+        driver.phone,
+        driver.licenseNumber,
+        driver.vehicleNumber,
+        driver.displayInfo,
+      ];
+    });
+  }
+
+  String? _matchRegion(String rawValue) {
+    return _matchTextValue(rawValue, _saudiRegions);
+  }
+
+  String? _matchCity(String rawValue, {String? region}) {
+    final regionCities = region != null ? saudiCities[region] ?? const [] : null;
+    if (regionCities != null && regionCities.isNotEmpty) {
+      final regionalMatch = _matchTextValue(rawValue, regionCities);
+      if (regionalMatch != null) {
+        return regionalMatch;
+      }
+    }
+
+    final allCities = saudiCities.values.expand((cities) => cities).toSet();
+    return _matchTextValue(rawValue, allCities);
+  }
+
+  String? _findRegionByCity(String rawCity) {
+    for (final entry in saudiCities.entries) {
+      if (_matchTextValue(rawCity, entry.value) != null) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  String? _matchFuelType(dynamic value) {
+    if (value == null) return null;
+    final normalized = _normalizeAutofillValue(value.toString());
+    if (normalized.isEmpty) return null;
+
+    if (normalized.contains('95')) return 'بنزين 95';
+    if (normalized.contains('91')) return 'بنزين 91';
+    if (normalized.contains('ديزل') || normalized.contains('diesel')) {
+      return 'ديزل';
+    }
+    if (normalized.contains('كيروسين') || normalized.contains('kerosene')) {
+      return 'كيروسين';
+    }
+    if (normalized.contains('بنزين') ||
+        normalized.contains('petrol') ||
+        normalized.contains('gasoline')) {
+      return 'بنزين 91';
+    }
+
+    return null;
+  }
+
+  DateTime? _parseAutofillDate(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+
+    final normalized = raw.replaceAllMapped(
+      RegExp(r'[٠-٩۰-۹]'),
+      (match) => _arabicDigitMap[match.group(0)] ?? match.group(0)!,
+    );
+
+    final parsedIso = DateTime.tryParse(normalized);
+    if (parsedIso != null) {
+      return parsedIso;
+    }
+
+    const patterns = [
+      'yyyy-MM-dd',
+      'yyyy/MM/dd',
+      'yyyy.MM.dd',
+      'dd/MM/yyyy',
+      'dd-MM-yyyy',
+      'dd.MM.yyyy',
+    ];
+
+    final candidates = <String>{
+      normalized,
+      normalized.replaceAll('.', '/'),
+      normalized.replaceAll('-', '/'),
+      normalized.replaceAll('.', '-').replaceAll('/', '-'),
+    };
+
+    for (final candidate in candidates) {
+      for (final pattern in patterns) {
+        try {
+          return DateFormat(pattern).parseStrict(candidate);
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  String? _normalizeAutofillTime(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+
+    final normalized = raw
+        .replaceAllMapped(
+          RegExp(r'[٠-٩۰-۹]'),
+          (match) => _arabicDigitMap[match.group(0)] ?? match.group(0)!,
+        )
+        .toLowerCase();
+
+    final directMatch = RegExp(r'(\d{1,2})[:.](\d{1,2})').firstMatch(normalized);
+    if (directMatch != null) {
+      final hours = int.tryParse(directMatch.group(1)!);
+      final minutes = int.tryParse(directMatch.group(2)!);
+      if (hours != null &&
+          minutes != null &&
+          hours >= 0 &&
+          hours <= 23 &&
+          minutes >= 0 &&
+          minutes <= 59) {
+        return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+      }
+    }
+
+    final hourOnlyMatch =
+        RegExp(r'\b(\d{1,2})\b\s*(am|pm|ص|م)?').firstMatch(normalized);
+    if (hourOnlyMatch == null) return null;
+
+    var hours = int.tryParse(hourOnlyMatch.group(1)!);
+    if (hours == null || hours > 23) return null;
+
+    final period = hourOnlyMatch.group(2);
+    if (period == 'pm' || period == 'م') {
+      hours = hours == 12 ? 12 : hours + 12;
+    } else if (period == 'am' || period == 'ص') {
+      hours = hours == 12 ? 0 : hours;
+    }
+
+    if (hours < 0 || hours > 23) return null;
+    return '${hours.toString().padLeft(2, '0')}:00';
+  }
+
+  String? _stringifyAutofillValue(dynamic value) {
+    if (value == null) return null;
+    if (value is num) {
+      return value % 1 == 0 ? value.toInt().toString() : value.toString();
+    }
+
+    final stringValue = value.toString().trim();
+    return stringValue.isEmpty ? null : stringValue;
+  }
+
+  String _extractPdfText(PlatformFile file) {
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      return ' ';
+    }
+
+    final document = PdfDocument(inputBytes: bytes);
+    try {
+      final extractedText = PdfTextExtractor(document).extractText().trim();
+      return extractedText.isEmpty ? ' ' : extractedText;
+    } catch (_) {
+      return ' ';
+    } finally {
+      document.dispose();
+    }
+  }
+
+  int _applyAutofillDraft(Map<String, dynamic> draft) {
+    var appliedFields = 0;
+
+    final supplierOrderNumber = _stringifyAutofillValue(
+      draft['supplierOrderNumber'],
+    );
+    final quantity = _stringifyAutofillValue(draft['quantity']);
+    final notes = _stringifyAutofillValue(draft['notes']);
+    final orderDate = _parseAutofillDate(draft['orderDate']);
+    final loadingDate = _parseAutofillDate(draft['loadingDate']);
+    final arrivalDate = _parseAutofillDate(draft['arrivalDate']);
+    final loadingTime = _normalizeAutofillTime(draft['loadingTime']);
+    final arrivalTime = _normalizeAutofillTime(draft['arrivalTime']);
+    final matchedFuelType = _matchFuelType(draft['fuelType']);
+
+    final rawRegion = _stringifyAutofillValue(draft['region']);
+    final rawCity = _stringifyAutofillValue(draft['city']);
+    var matchedRegion = rawRegion != null ? _matchRegion(rawRegion) : null;
+    var matchedCity = rawCity != null
+        ? _matchCity(rawCity, region: matchedRegion)
+        : null;
+
+    if (matchedRegion == null && rawCity != null) {
+      matchedRegion = _findRegionByCity(rawCity);
+    }
+    if (matchedCity == null && rawCity != null) {
+      matchedCity = _matchCity(rawCity);
+    }
+    if (matchedRegion == null && matchedCity != null) {
+      matchedRegion = _findRegionByCity(matchedCity);
+    }
+
+    final rawSupplierName = _stringifyAutofillValue(draft['supplierName']);
+    final matchedSupplier =
+        !isEditMode && rawSupplierName != null
+        ? _matchSupplier(rawSupplierName)
+        : null;
+
+    final rawDriverName = _stringifyAutofillValue(draft['driverName']);
+    final matchedDriver =
+        rawDriverName != null ? _matchDriver(rawDriverName) : null;
+
+    setState(() {
+      if (supplierOrderNumber != null) {
+        _supplierOrderNumberController.text = supplierOrderNumber;
+        appliedFields += 1;
+      }
+
+      if (quantity != null) {
+        _quantityController.text = quantity;
+        appliedFields += 1;
+      }
+
+      if (notes != null) {
+        _notesController.text = notes;
+        appliedFields += 1;
+      }
+
+      if (orderDate != null) {
+        _orderDate = orderDate;
+        appliedFields += 1;
+      }
+
+      if (loadingDate != null) {
+        _loadingDate = loadingDate;
+        appliedFields += 1;
+      }
+
+      if (arrivalDate != null) {
+        _arrivalDate = arrivalDate;
+        appliedFields += 1;
+      }
+
+      if (loadingTime != null) {
+        _loadingTimeController.text = loadingTime;
+        appliedFields += 1;
+      }
+
+      if (arrivalTime != null) {
+        _arrivalTimeController.text = arrivalTime;
+        appliedFields += 1;
+      }
+
+      if (matchedFuelType != null) {
+        _fuelType = matchedFuelType;
+        appliedFields += 1;
+      }
+
+      if (matchedSupplier != null) {
+        _selectedSupplier = matchedSupplier;
+        _selectedSupplierId = matchedSupplier.id;
+        _selectedSupplierName = matchedSupplier.name;
+        _supplierAddress = matchedSupplier.address;
+        appliedFields += 1;
+      }
+
+      if (matchedDriver != null) {
+        _selectedDriver = matchedDriver;
+        _selectedDriverId = matchedDriver.id;
+        appliedFields += 1;
+      }
+
+      if (!isEditMode && matchedRegion != null) {
+        _selectedRegion = matchedRegion;
+        appliedFields += 1;
+      }
+
+      if (!isEditMode && matchedCity != null) {
+        if (matchedRegion != null) {
+          _selectedRegion = matchedRegion;
+        }
+        _selectedCity = matchedCity;
+        appliedFields += 1;
+      }
+    });
+
+    return appliedFields;
+  }
+
+  Future<void> _importOrdersFromDocuments(List<PlatformFile> files) async {
+    setState(() {
+      _isAutofillingFromDocument = true;
+      _lastAutofillFileName = files.length == 1
+          ? files.first.name
+          : '${files.length} ملفات';
+    });
+
+    try {
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      final response = await orderProvider.importSupplierOrdersFromDocuments(
+        files: files,
+      );
+
+      if (!mounted) return;
+
+      if (response == null) {
+        _showAutofillSnackBar(
+          orderProvider.error ?? 'تعذر استيراد ملفات طلبات المورد',
+          backgroundColor: AppColors.errorRed,
+        );
+        return;
+      }
+
+      final createdCount = (response['createdCount'] as num?)?.toInt() ?? 0;
+      final skippedCount = (response['skippedCount'] as num?)?.toInt() ?? 0;
+      final failedCount = (response['failedCount'] as num?)?.toInt() ?? 0;
+      final results = (response['results'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+
+      final summaryParts = <String>[];
+      if (createdCount > 0) {
+        summaryParts.add('تم إنشاء $createdCount طلب');
+      }
+      if (skippedCount > 0) {
+        summaryParts.add('تم تخطي $skippedCount');
+      }
+      if (failedCount > 0) {
+        summaryParts.add('فشل $failedCount');
+      }
+
+      final firstFailureReason = results
+          .map((item) => item['reason']?.toString().trim())
+          .whereType<String>()
+          .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+
+      if (createdCount > 0) {
+        setState(() {
+          _hasCreatedOrders = true;
+        });
+
+        _showAutofillSnackBar(
+          summaryParts.join(' - '),
+          backgroundColor: failedCount > 0
+              ? AppColors.warningOrange
+              : AppColors.successGreen,
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        if (mounted) {
+          _closeForm(changed: true);
+        }
+        return;
+      }
+
+      final fallbackMessage = firstFailureReason.isNotEmpty
+          ? firstFailureReason
+          : 'لم يتم إنشاء طلبات من الملفات المرفوعة';
+      _showAutofillSnackBar(
+        summaryParts.isNotEmpty
+            ? '${summaryParts.join(' - ')}. $fallbackMessage'
+            : fallbackMessage,
+        backgroundColor: AppColors.warningOrange,
+      );
+    } catch (error) {
+      _showAutofillSnackBar(
+        'تعذر استيراد الملفات: $error',
+        backgroundColor: AppColors.errorRed,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAutofillingFromDocument = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickAutofillDocument() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: !isEditMode,
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    final files = result.files;
+    if (files.length > 1) {
+      await _importOrdersFromDocuments(files);
+      return;
+    }
+
+    final file = files.single;
+    final extension = (file.extension ?? file.name.split('.').last)
+        .toLowerCase()
+        .trim();
+
+    try {
+      String? extractedText;
+      if (extension == 'pdf') {
+        extractedText = _extractPdfText(file);
+        if (extractedText.isEmpty) {
+          _showAutofillSnackBar(
+            'لم يتم العثور على نص داخل ملف PDF. ارفع نسخة تحتوي نصًا واضحًا أو استخدم صورة قابلة للقراءة.',
+            backgroundColor: AppColors.warningOrange,
+          );
+          return;
+        }
+      }
+
+      setState(() {
+        _isAutofillingFromDocument = true;
+      });
+
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      final response = await orderProvider.extractSupplierOrderDraftFromDocument(
+        file: file,
+        extractedText: extractedText,
+      );
+
+      if (!mounted) return;
+
+      if (response == null) {
+        _showAutofillSnackBar(
+          orderProvider.error ?? 'تعذر استخراج بيانات الطلب من الملف',
+          backgroundColor: AppColors.errorRed,
+        );
+        return;
+      }
+
+      final rawDraft = response['draft'];
+      if (rawDraft is! Map) {
+        _showAutofillSnackBar(
+          'لم يرجع الخادم بيانات صالحة للتعبئة',
+          backgroundColor: AppColors.warningOrange,
+        );
+        return;
+      }
+
+      final appliedFields = _applyAutofillDraft(
+        Map<String, dynamic>.from(rawDraft),
+      );
+
+      final warnings = (response['warnings'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList();
+
+      setState(() {
+        _lastAutofillFileName = file.name;
+      });
+
+      if (appliedFields == 0) {
+        _showAutofillSnackBar(
+          'تمت قراءة الملف لكن لم يتم العثور على حقول يمكن تعبئتها مباشرة.',
+          backgroundColor: AppColors.warningOrange,
+        );
+        return;
+      }
+
+      final warningSuffix = warnings.isNotEmpty
+          ? ' راجع الحقول غير الواضحة يدويًا.'
+          : '';
+      _showAutofillSnackBar(
+        'تمت تعبئة $appliedFields حقلًا من الملف.$warningSuffix',
+        backgroundColor: AppColors.successGreen,
+      );
+    } catch (error) {
+      _showAutofillSnackBar(
+        'تعذر معالجة الملف: $error',
+        backgroundColor: AppColors.errorRed,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAutofillingFromDocument = false;
+        });
+      }
+    }
+  }
+
   Future<void> _pickAttachments() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
@@ -585,6 +1204,50 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
     });
   }
 
+  void _closeForm({bool changed = false}) {
+    if (!mounted) return;
+    Navigator.pop(context, changed ? true : null);
+  }
+
+  void _resetFormAfterCreate() {
+    final now = DateTime.now();
+    _formKey.currentState?.reset();
+
+    setState(() {
+      _supplierOrderNumberController.clear();
+      _quantityController.clear();
+      _notesController.clear();
+      _loadingTimeController.text = _defaultLoadingTime;
+      _arrivalTimeController.text = _defaultArrivalTime;
+
+      _orderDate = now;
+      _loadingDate = now.add(const Duration(days: 1));
+      _arrivalDate = now.add(const Duration(days: 1));
+
+      _status = _defaultStatus;
+      _fuelType = _defaultFuelType;
+      _unit = _defaultUnit;
+
+      _selectedCity = null;
+      _selectedRegion = null;
+      _companyLogoPath = null;
+      _newAttachments.clear();
+      _isAutofillingFromDocument = false;
+      _lastAutofillFileName = null;
+
+      _selectedSupplier = null;
+      _selectedSupplierId = null;
+      _selectedSupplierName = null;
+
+      _selectedDriver = null;
+      _selectedDriverId = null;
+      selectedRegion = null;
+      selectedCity = null;
+      _supplierAddress = null;
+      _selectedArea = null;
+    });
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -601,10 +1264,10 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
 
     // ✅ وقت افتراضي لو فاضي
     if (_loadingTimeController.text.trim().isEmpty) {
-      _loadingTimeController.text = '08:00';
+      _loadingTimeController.text = _defaultLoadingTime;
     }
     if (_arrivalTimeController.text.trim().isEmpty) {
-      _arrivalTimeController.text = '10:00';
+      _arrivalTimeController.text = _defaultArrivalTime;
     }
 
     // ✅ التحقق من صحة الأوقات
@@ -755,8 +1418,13 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
         ),
       );
 
-      await Future.delayed(const Duration(milliseconds: 400));
-      Navigator.pop(context, true);
+      if (isEditMode) {
+        await Future.delayed(const Duration(milliseconds: 400));
+        _closeForm(changed: true);
+      } else {
+        _hasCreatedOrders = true;
+        _resetFormAfterCreate();
+      }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -823,13 +1491,20 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
         ? _buildDesktopLayout(context, orderProvider, screenWidth)
         : _buildMobileLayout(context, orderProvider);
 
-    return Scaffold(
-      appBar: _buildDesktopAppBar(),
-      body: Stack(
-        children: [
-          const AppSoftBackground(),
-          Positioned.fill(child: content),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _closeForm(changed: _hasCreatedOrders);
+      },
+      child: Scaffold(
+        appBar: _buildDesktopAppBar(),
+        body: Stack(
+          children: [
+            const AppSoftBackground(),
+            Positioned.fill(child: content),
+          ],
+        ),
       ),
     );
   }
@@ -1838,6 +2513,88 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
     );
   }
 
+  Widget _buildAutofillInfoBanner({required bool isDesktop}) {
+    final subtitle = _isAutofillingFromDocument
+        ? 'جاري قراءة الملف وتجهيز الحقول...'
+        : 'الإدخال اليدوي ثابت دائمًا. ملف واحد يعبّي الفورم الحالي، وإذا رفعت أكثر من ملف يتم إنشاء طلب مورد مستقل لكل ملف تلقائيًا.';
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isDesktop ? 16 : 14),
+      decoration: BoxDecoration(
+        color: AppColors.infoBlue.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.infoBlue.withOpacity(0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, color: AppColors.infoBlue),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'تعبئة من ملف أو صورة',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.infoBlue,
+                    fontSize: isDesktop ? 15 : 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: AppColors.darkGray,
+              height: 1.45,
+              fontSize: isDesktop ? 13.5 : 13,
+            ),
+          ),
+          if (_lastAutofillFileName != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'آخر ملف تمت معالجته: $_lastAutofillFileName',
+              style: TextStyle(
+                color: AppColors.mediumGray,
+                fontSize: isDesktop ? 12.5 : 12,
+              ),
+            ),
+          ],
+          if (_isAutofillingFromDocument) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(minHeight: 4),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachmentActionButtons({required bool isDesktop}) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        OutlinedButton.icon(
+          onPressed: _isAutofillingFromDocument ? null : _pickAutofillDocument,
+          icon: const Icon(Icons.auto_awesome),
+          label: const Text('تعبئة من ملف/صورة'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.infoBlue,
+            side: const BorderSide(color: AppColors.infoBlue),
+            padding: EdgeInsets.symmetric(
+              horizontal: isDesktop ? 18 : 14,
+              vertical: isDesktop ? 12 : 10,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAttachmentsCardMobile(BuildContext context) {
     return Card(
       child: Padding(
@@ -1855,7 +2612,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: _pickAttachments,
+                  onPressed: _isAutofillingFromDocument ? null : _pickAttachments,
                   icon: const Icon(Icons.attach_file),
                   label: const Text('إضافة مرفقات'),
                   style: ElevatedButton.styleFrom(
@@ -1864,6 +2621,10 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            _buildAutofillInfoBanner(isDesktop: false),
+            const SizedBox(height: 14),
+            _buildAttachmentActionButtons(isDesktop: false),
             const SizedBox(height: 16),
             if (_newAttachments.isEmpty)
               Container(
@@ -2879,7 +3640,7 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: _pickAttachments,
+                  onPressed: _isAutofillingFromDocument ? null : _pickAttachments,
                   icon: const Icon(Icons.attach_file),
                   label: const Text('إضافة مرفقات'),
                   style: ElevatedButton.styleFrom(
@@ -2893,6 +3654,10 @@ class _SupplierOrderFormScreenState extends State<SupplierOrderFormScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+            _buildAutofillInfoBanner(isDesktop: true),
+            const SizedBox(height: 16),
+            _buildAttachmentActionButtons(isDesktop: true),
             const SizedBox(height: 20),
             if (_newAttachments.isEmpty)
               Container(
