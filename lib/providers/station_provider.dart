@@ -614,13 +614,13 @@ class StationProvider with ChangeNotifier {
         return true;
       } else {
         final errorData = ApiService.decodeJson(response);
-        _error = errorData['error'] ?? '??? ??? ??????';
+        _error = errorData['error'] ?? 'فشل حذف المحطة';
         _isLoading = false;
         notifyListeners();
         return false;
       }
     } catch (e) {
-      _error = '??? ??? ?? ??????? ????????';
+      _error = 'حدث خطأ في الاتصال بالسيرفر';
       _isLoading = false;
       notifyListeners();
       return false;

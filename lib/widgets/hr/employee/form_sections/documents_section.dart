@@ -58,7 +58,7 @@ class DocumentsSection extends StatelessWidget {
                   )
                 : const Icon(Icons.add),
             label: Text(
-              isUploading ? '???????? ??????????...' : '?????????? ??????????',
+              isUploading ? 'جاري رفع المستند...' : 'إضافة مستند',
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.hrPurple,

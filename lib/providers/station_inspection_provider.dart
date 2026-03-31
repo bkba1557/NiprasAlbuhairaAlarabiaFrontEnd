@@ -76,7 +76,7 @@ class StationInspectionProvider with ChangeNotifier {
           ..addAll(inspections);
       } else {
         final data = ApiService.decodeJson(response);
-        throw Exception(data['error'] ?? '??? ????? ?????????');
+        throw Exception(data['error'] ?? 'فشل جلب سجلات التفتيش');
       }
     } catch (e) {
       _setError(e.toString());
@@ -103,7 +103,7 @@ class StationInspectionProvider with ChangeNotifier {
         return inspection;
       } else {
         final data = ApiService.decodeJson(response);
-        throw Exception(data['error'] ?? '??? ????? ????????');
+        throw Exception(data['error'] ?? 'فشل جلب بيانات التفتيش');
       }
     } catch (e) {
       _setError(e.toString());
@@ -133,7 +133,7 @@ class StationInspectionProvider with ChangeNotifier {
         return created;
       }
       final data = ApiService.decodeJson(response);
-      throw Exception(data['error'] ?? '??? ????? ????????');
+      throw Exception(data['error'] ?? 'فشل إنشاء التفتيش');
     } catch (e) {
       _setError(e.toString());
       return null;
@@ -163,7 +163,7 @@ class StationInspectionProvider with ChangeNotifier {
         return updated;
       }
       final data = ApiService.decodeJson(response);
-      throw Exception(data['error'] ?? '??? ????? ????????');
+      throw Exception(data['error'] ?? 'فشل تحديث التفتيش');
     } catch (e) {
       _setError(e.toString());
       return null;
@@ -194,7 +194,7 @@ class StationInspectionProvider with ChangeNotifier {
         return updated;
       }
       final data = ApiService.decodeJson(response);
-      throw Exception(data['error'] ?? '??? ????? ??????');
+      throw Exception(data['error'] ?? 'فشل تحديث الحالة');
     } catch (e) {
       _setError(e.toString());
       return null;
@@ -219,7 +219,7 @@ class StationInspectionProvider with ChangeNotifier {
         return true;
       }
       final data = ApiService.decodeJson(response);
-      throw Exception(data['error'] ?? '??? ??? ????????');
+      throw Exception(data['error'] ?? 'فشل حذف التفتيش');
     } catch (e) {
       _setError(e.toString());
       return false;
@@ -287,7 +287,7 @@ class StationInspectionProvider with ChangeNotifier {
         return inspection;
       }
       final data = ApiService.decodeJson(response);
-      throw Exception(data['error'] ?? '??? ????? ????????');
+      throw Exception(data['error'] ?? 'فشل إضافة المرفقات');
     } catch (e) {
       _setError(e.toString());
       return null;

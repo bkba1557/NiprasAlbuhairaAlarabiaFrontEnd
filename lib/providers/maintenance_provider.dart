@@ -241,7 +241,7 @@ class MaintenanceProvider with ChangeNotifier {
         if (result['success'] == true) {
           _currentRecord = result['data'];
         } else {
-          throw Exception(result['message'] ?? '??? ?????? ?????');
+          throw Exception(result['message'] ?? 'فشل اعتماد الفحص');
         }
       } else {
         throw Exception('HTTP ${response.statusCode}');
@@ -278,7 +278,7 @@ class MaintenanceProvider with ChangeNotifier {
         if (result['success'] == true) {
           _currentRecord = result['data'];
         } else {
-          throw Exception(result['message'] ?? '??? ??? ?????');
+          throw Exception(result['message'] ?? 'فشل رفض الفحص');
         }
       } else {
         throw Exception('HTTP ${response.statusCode}');

@@ -128,22 +128,22 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
 
   void _selectMergedOrders(List<Order> allOrders) {
     if (_mergedOrder == null) return;
-    if (_mergedOrder!.status == '?? ???????') return;
+    if (_mergedOrder!.status == 'تم التنفيذ') return;
 
     final supplier = allOrders.firstWhere(
-      (o) => o.orderSource == '????' && o.mergedWithOrderId == _mergedOrder!.id,
+      (o) => o.orderSource == 'مورد' && o.mergedWithOrderId == _mergedOrder!.id,
       orElse: () => _selectedSupplierOrder ?? Order.empty(),
     );
     final customer = allOrders.firstWhere(
-      (o) => o.orderSource == '????' && o.mergedWithOrderId == _mergedOrder!.id,
+      (o) => o.orderSource == 'عميل' && o.mergedWithOrderId == _mergedOrder!.id,
       orElse: () => _selectedCustomerOrder ?? Order.empty(),
     );
 
     if (supplier.id.isNotEmpty) {
       _selectedSupplierOrder = supplier;
       _selectedSupplierId = supplier.id;
-      _fuelTypeFilter = supplier.fuelType ?? '???? ???????';
-      _quantityFilter = '???? ???????';
+      _fuelTypeFilter = supplier.fuelType ?? 'جميع الأنواع';
+      _quantityFilter = 'جميع الكميات';
     }
 
     if (customer.id.isNotEmpty) {
@@ -377,7 +377,7 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
     }
 
     if (_mergedOrder == null) return;
-    if (_mergedOrder!.status == '?? ???????') return;
+    if (_mergedOrder!.status == 'تم التنفيذ') return;
 
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 

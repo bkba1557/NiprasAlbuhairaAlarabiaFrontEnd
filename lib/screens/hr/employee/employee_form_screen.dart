@@ -164,12 +164,12 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
       case 'jpg':
       case 'jpeg':
       case 'png':
-        return '????';
+        return 'صورة';
       case 'doc':
       case 'docx':
         return 'Word';
       default:
-        return '?????';
+        return 'ملف';
     }
   }
 
@@ -216,7 +216,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         if (kIsWeb) {
           final bytes = file.bytes;
           if (bytes == null) {
-            throw Exception('???? ????? ?????');
+            throw Exception('لا توجد بيانات للملف');
           }
           url = await FirebaseStorageService.uploadEmployeeDocument(
             employeeKey: _documentUploadKey,
@@ -227,7 +227,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         } else {
           final path = file.path;
           if (path == null) {
-            throw Exception('???? ????? ??? ?????');
+            throw Exception('لم يتم العثور على مسار الملف');
           }
           url = await FirebaseStorageService.uploadEmployeeDocument(
             employeeKey: _documentUploadKey,
@@ -253,7 +253,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('??? ??? ?????????: $error'),
+          content: Text('فشل رفع المستندات: $error'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -648,7 +648,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
             _city.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('???? ??? ???? ?????? ????????'),
+              content: Text('يرجى تعبئة جميع الحقول المطلوبة'),
               backgroundColor: AppColors.errorRed,
             ),
           );
@@ -657,7 +657,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         if (_dateOfBirth == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('????? ??????? ?????'),
+              content: Text('يرجى اختيار التاريخ'),
               backgroundColor: AppColors.errorRed,
             ),
           );
@@ -666,7 +666,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         if (_nationalId.length != 10) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('??? ?????? ??? ?? ???? 10 ?????'),
+              content: Text('رقم الهوية يجب أن يكون 10 أرقام'),
               backgroundColor: AppColors.errorRed,
             ),
           );
@@ -679,7 +679,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
             _employmentType.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('???? ??? ???? ?????? ????????'),
+              content: Text('يرجى تعبئة جميع الحقول المطلوبة'),
               backgroundColor: AppColors.errorRed,
             ),
           );
@@ -688,7 +688,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         if (_hireDate == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('????? ??????? ?????'),
+              content: Text('يرجى اختيار التاريخ'),
               backgroundColor: AppColors.errorRed,
             ),
           );
@@ -697,7 +697,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         if (_contractStartDate == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('????? ????? ??????'),
+              content: Text('يرجى اختيار تاريخ بداية العقد'),
               backgroundColor: AppColors.errorRed,
             ),
           );

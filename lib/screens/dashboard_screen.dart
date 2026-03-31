@@ -1304,6 +1304,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () =>
               _navigateFromMobileDrawer(context, AppRoutes.hrDashboard),
         ),
+      if (canViewHr)
+        _DashboardDrawerItemData(
+          icon: Icons.people_alt_rounded,
+          title: 'الارشيف',
+          color: AppColors.successGreen,
+          onTap: () =>
+              _navigateFromMobileDrawer(context, AppRoutes.archiveDocuments),
+        ),
       if (canViewActivities)
         _DashboardDrawerItemData(
           icon: Icons.local_activity_rounded,

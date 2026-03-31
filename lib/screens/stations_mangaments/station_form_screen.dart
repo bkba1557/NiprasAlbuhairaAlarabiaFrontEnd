@@ -118,27 +118,27 @@ class _StationFormScreenState extends State<StationFormScreen> {
         actions: [
           if (isEditing && isOwner)
             IconButton(
-              tooltip: '?????? ????????????',
+              tooltip: 'حذف المحطة',
               icon: const Icon(Icons.delete),
               onPressed: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('?????????? ??????????'),
+                    title: const Text('تأكيد حذف المحطة'),
                     content: const Text(
-                      '???? ?????? ?????????? ???? ?????? ?????????????? ???? ???????? ?????????????? ???? ?????? ??????????????.',
+                      'هل أنت متأكد أنك تريد حذف هذه المحطة؟ سيتم حذف جميع البيانات المرتبطة بها ولا يمكن التراجع عن هذا الإجراء.',
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
-                        child: const Text('??????????'),
+                        child: const Text('إلغاء'),
                       ),
                       ElevatedButton(
                         onPressed: () => Navigator.pop(context, true),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.errorRed,
                         ),
-                        child: const Text('??????'),
+                        child: const Text('حذف'),
                       ),
                     ],
                   ),
@@ -157,7 +157,7 @@ class _StationFormScreenState extends State<StationFormScreen> {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('???? ?????? ???????????? ??????????'),
+                      content: Text('تم حذف المحطة بنجاح'),
                       backgroundColor: AppColors.successGreen,
                     ),
                   );
@@ -165,7 +165,7 @@ class _StationFormScreenState extends State<StationFormScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        stationProvider.error ?? '?????? ?????? ????????????',
+                        stationProvider.error ?? 'فشل حذف المحطة',
                       ),
                       backgroundColor: AppColors.errorRed,
                     ),
