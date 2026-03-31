@@ -168,7 +168,7 @@ class StationProvider with ChangeNotifier {
         return true;
       }
 
-      final errorData = json.decode(response.body);
+      final errorData = ApiService.decodeJson(response);
       _error = errorData['error'] ?? 'فشل صرف المخزون';
       _isLoading = false;
       notifyListeners();
