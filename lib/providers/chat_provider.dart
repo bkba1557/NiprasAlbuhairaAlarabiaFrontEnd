@@ -84,7 +84,7 @@ class ChatProvider with ChangeNotifier {
       final response = await http.get(uri, headers: ApiService.headers);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final rawUsers = data['users'];
         if (rawUsers is List) {
           _users
@@ -122,7 +122,7 @@ class ChatProvider with ChangeNotifier {
       final response = await http.get(uri, headers: ApiService.headers);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final rawConversations = data['conversations'];
         if (rawConversations is List) {
           _conversations
@@ -159,7 +159,7 @@ class ChatProvider with ChangeNotifier {
       final response = await http.get(uri, headers: ApiService.headers);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['conversation'] is Map<String, dynamic>) {
           final conversation = ChatConversation.fromJson(data['conversation']);
           _upsertConversation(conversation);
@@ -185,7 +185,7 @@ class ChatProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['conversation'] is Map<String, dynamic>) {
           final conversation = ChatConversation.fromJson(data['conversation']);
           _upsertConversation(conversation, pushToTop: true);
@@ -264,7 +264,7 @@ class ChatProvider with ChangeNotifier {
       final response = await http.Response.fromStream(streamed);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['conversation'] is Map<String, dynamic>) {
           final conversation = ChatConversation.fromJson(data['conversation']);
           _upsertConversation(conversation, pushToTop: true);
@@ -277,7 +277,7 @@ class ChatProvider with ChangeNotifier {
 
       String detail = '';
       try {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data is Map<String, dynamic>) {
           detail = (data['error'] ?? data['message'] ?? '').toString().trim();
         }
@@ -641,7 +641,7 @@ class ChatProvider with ChangeNotifier {
       );
       final response = await http.get(uri, headers: ApiService.headers);
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final raw = data['messages'];
         if (raw is List) {
           final parsed = raw
@@ -689,7 +689,7 @@ class ChatProvider with ChangeNotifier {
       );
       Map<String, dynamic>? data;
       try {
-        final decoded = json.decode(response.body);
+        final decoded = ApiService.decodeJson(response);
         if (decoded is Map<String, dynamic>) {
           data = decoded;
         }
@@ -741,7 +741,7 @@ class ChatProvider with ChangeNotifier {
       if (response.statusCode != 200) {
         throw Exception('Failed to load active call (${response.statusCode})');
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       if (data['call'] is! Map<String, dynamic>) return null;
       return ChatCallSession.fromJson(data['call']);
     } catch (e) {
@@ -766,7 +766,7 @@ class ChatProvider with ChangeNotifier {
       if (response.statusCode != 200) {
         throw Exception('Failed to respond to call (${response.statusCode})');
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       if (data['call'] is! Map<String, dynamic>) return null;
       return ChatCallSession.fromJson(data['call']);
     } catch (e) {
@@ -786,7 +786,7 @@ class ChatProvider with ChangeNotifier {
       if (response.statusCode != 200) {
         throw Exception('Failed to end call (${response.statusCode})');
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       if (data['call'] is! Map<String, dynamic>) return null;
       return ChatCallSession.fromJson(data['call']);
     } catch (e) {
@@ -856,7 +856,7 @@ class ChatProvider with ChangeNotifier {
       throw Exception('فشل إرسال الرسالة (${response.statusCode})');
     }
 
-    final data = json.decode(response.body);
+    final data = ApiService.decodeJson(response);
     if (data['message'] is! Map<String, dynamic>) return null;
     return ChatMessage.fromJson(data['message']);
   }
@@ -971,7 +971,7 @@ class ChatProvider with ChangeNotifier {
       throw Exception('فشل إرسال المرفق (${response.statusCode})');
     }
 
-    final data = json.decode(response.body);
+    final data = ApiService.decodeJson(response);
     if (data['message'] is! Map<String, dynamic>) return null;
     return ChatMessage.fromJson(data['message']);
   }

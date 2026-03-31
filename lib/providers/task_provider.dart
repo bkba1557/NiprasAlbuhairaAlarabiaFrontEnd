@@ -36,7 +36,7 @@ class TaskProvider with ChangeNotifier {
 
       final response = await http.get(uri, headers: ApiService.headers);
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final list = (data['tasks'] as List<dynamic>? ?? [])
             .whereType<Map<String, dynamic>>()
             .map(TaskModel.fromJson)
@@ -70,7 +70,7 @@ class TaskProvider with ChangeNotifier {
         body: json.encode(payload),
       );
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final task = TaskModel.fromJson(
           Map<String, dynamic>.from(data['task']),
         );
@@ -93,7 +93,7 @@ class TaskProvider with ChangeNotifier {
         body: json.encode({'code': code}),
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         return TaskModel.fromJson(Map<String, dynamic>.from(data['task']));
       }
     } catch (_) {}
@@ -107,7 +107,7 @@ class TaskProvider with ChangeNotifier {
         headers: ApiService.headers,
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         return TaskModel.fromJson(Map<String, dynamic>.from(data['task']));
       }
     } catch (_) {}
@@ -122,7 +122,7 @@ class TaskProvider with ChangeNotifier {
         body: json.encode({'code': code}),
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         return TaskModel.fromJson(Map<String, dynamic>.from(data['task']));
       }
     } catch (_) {}
@@ -233,7 +233,7 @@ class TaskProvider with ChangeNotifier {
         }),
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         return TaskModel.fromJson(Map<String, dynamic>.from(data['task']));
       }
     } catch (_) {}
@@ -306,7 +306,7 @@ class TaskProvider with ChangeNotifier {
       );
       final response = await http.get(uri, headers: ApiService.headers);
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         return (data['locations'] as List<dynamic>? ?? [])
             .whereType<Map<String, dynamic>>()
             .map(TaskTrackingPoint.fromJson)
@@ -414,7 +414,7 @@ class TaskProvider with ChangeNotifier {
         body: json.encode(body ?? {}),
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         return TaskModel.fromJson(Map<String, dynamic>.from(data['task']));
       }
     } catch (_) {}
@@ -431,7 +431,7 @@ class TaskProvider with ChangeNotifier {
       );
       final response = await http.get(uri, headers: ApiService.headers);
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         return (data['messages'] as List<dynamic>? ?? [])
             .whereType<Map<String, dynamic>>()
             .map(TaskMessage.fromJson)
@@ -449,7 +449,7 @@ class TaskProvider with ChangeNotifier {
         body: json.encode({'text': text}),
       );
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['message'] is Map<String, dynamic>) {
           return TaskMessage.fromJson(
             Map<String, dynamic>.from(data['message']),
@@ -567,7 +567,7 @@ class TaskProvider with ChangeNotifier {
         body: json.encode({'userIds': userIds}),
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['task'] is Map<String, dynamic>) {
           return TaskModel.fromJson(Map<String, dynamic>.from(data['task']));
         }
@@ -585,7 +585,7 @@ class TaskProvider with ChangeNotifier {
         headers: ApiService.headers,
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['task'] is Map<String, dynamic>) {
           return TaskModel.fromJson(Map<String, dynamic>.from(data['task']));
         }

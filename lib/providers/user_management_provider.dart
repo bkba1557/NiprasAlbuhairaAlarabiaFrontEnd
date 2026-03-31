@@ -140,7 +140,7 @@ class UserManagementProvider with ChangeNotifier {
 
     try {
       final response = await ApiService.post('/users', payload);
-      final userData = json.decode(response.body)['user'];
+      final userData = ApiService.decodeJsonMap(response)['user'];
       _users.insert(0, User.fromJson(userData));
       _error = null;
     } catch (e) {
@@ -159,7 +159,7 @@ class UserManagementProvider with ChangeNotifier {
 
     try {
       final response = await ApiService.put('/users/$userId', payload);
-      final userData = json.decode(response.body)['user'];
+      final userData = ApiService.decodeJsonMap(response)['user'];
       final updated = User.fromJson(userData);
       final index = _users.indexWhere((user) => user.id == userId);
       if (index != -1) {
@@ -196,7 +196,7 @@ class UserManagementProvider with ChangeNotifier {
       final response = await ApiService.patch('/users/$userId/block', {
         'block': block,
       });
-      final userData = json.decode(response.body)['user'];
+      final userData = ApiService.decodeJsonMap(response)['user'];
       final updated = User.fromJson(userData);
       final index = _users.indexWhere((user) => user.id == userId);
       if (index != -1) {
@@ -222,6 +222,6 @@ class UserManagementProvider with ChangeNotifier {
       queryBuffer.write('&search=${Uri.encodeQueryComponent(search.trim())}');
     }
     final response = await ApiService.get(queryBuffer.toString());
-    return json.decode(response.body) as Map<String, dynamic>;
+    return ApiService.decodeJsonMap(response);
   }
 }

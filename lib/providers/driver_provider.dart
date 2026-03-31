@@ -45,7 +45,7 @@ class DriverProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         // معالجة مختلف أشكال الاستجابة
         List<dynamic> driversData = [];
@@ -86,7 +86,7 @@ class DriverProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         List<dynamic> driversData = [];
         if (data is List) {
@@ -143,7 +143,7 @@ class DriverProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         Driver newDriver;
         if (data['driver'] != null) {
@@ -161,7 +161,7 @@ class DriverProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error =
             errorData['error'] ?? errorData['message'] ?? 'فشل إنشاء السائق';
         _isLoading = false;
@@ -189,7 +189,7 @@ class DriverProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         Driver updatedDriver;
         if (data['driver'] != null) {
@@ -213,7 +213,7 @@ class DriverProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error =
             errorData['error'] ?? errorData['message'] ?? 'فشل تحديث السائق';
         _isLoading = false;
@@ -247,7 +247,7 @@ class DriverProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         Driver driver;
         if (data['driver'] != null) {
@@ -303,7 +303,7 @@ class DriverProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         List<dynamic> driversData = [];
         if (data is List) {
@@ -359,7 +359,7 @@ class DriverProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? errorData['message'] ?? 'فشل حذف السائق';
         _isLoading = false;
         notifyListeners();

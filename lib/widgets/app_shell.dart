@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/chat_provider.dart';
+import 'package:order_tracker/services/whatsapp_service.dart';
 import 'package:order_tracker/utils/app_navigation.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/widgets/chat_floating_button.dart';
+import 'package:order_tracker/widgets/whatsapp_floating_button.dart';
 import 'package:provider/provider.dart';
 
 class NavigationLoadingObserver extends NavigatorObserver {
@@ -226,7 +228,10 @@ class _AppShellState extends State<AppShell>
                 ? null
                 : (Uri.tryParse(currentRouteName)?.path ?? currentRouteName);
             final showGlobalChatFab = canShowChat;
-            if (!showGlobalChatFab) {
+            final showGlobalWhatsAppFab =
+                auth.isAuthenticated &&
+                WhatsAppService.canAccessForRole(auth.user?.role);
+            if (!showGlobalChatFab && !showGlobalWhatsAppFab) {
               return const SizedBox.shrink();
             }
             double cmToLogicalPx(double cm) {
@@ -244,21 +249,41 @@ class _AppShellState extends State<AppShell>
             final safePadding = MediaQuery.of(context).padding;
             final fabLeft = safePadding.left + offsetPx;
             final fabBottom = safePadding.bottom + offsetPx;
+            final fabRight = safePadding.right + offsetPx;
 
             final isAlreadyInChat =
                 normalizedRoute == AppRoutes.chat ||
                 normalizedRoute == AppRoutes.chatConversation;
 
-            return ChatFloatingButton(
-              heroTag: 'global_chat_fab',
-              draggable: true,
-              persistKey: 'global_chat_fab_v2',
-              initialAlignment: Alignment.bottomLeft,
-              initialMargin: EdgeInsets.only(left: fabLeft, bottom: fabBottom),
-              onPressed: () {
-                if (isAlreadyInChat) return;
-                appNavigatorKey.currentState?.pushNamed(AppRoutes.chat);
-              },
+            return Stack(
+              children: [
+                if (showGlobalChatFab)
+                  ChatFloatingButton(
+                    heroTag: 'global_chat_fab',
+                    draggable: true,
+                    persistKey: 'global_chat_fab_v2',
+                    initialAlignment: Alignment.bottomLeft,
+                    initialMargin: EdgeInsets.only(
+                      left: fabLeft,
+                      bottom: fabBottom,
+                    ),
+                    onPressed: () {
+                      if (isAlreadyInChat) return;
+                      appNavigatorKey.currentState?.pushNamed(AppRoutes.chat);
+                    },
+                  ),
+                if (showGlobalWhatsAppFab)
+                  WhatsAppFloatingButton(
+                    heroTag: 'global_whatsapp_fab',
+                    draggable: true,
+                    persistKey: 'global_whatsapp_fab_v1',
+                    initialAlignment: Alignment.bottomRight,
+                    initialMargin: EdgeInsets.only(
+                      right: fabRight,
+                      bottom: fabBottom + 72,
+                    ),
+                  ),
+              ],
             );
           },
         ),

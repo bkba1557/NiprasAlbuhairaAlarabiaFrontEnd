@@ -71,7 +71,7 @@ class InventoryProvider extends ChangeNotifier {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       _branches = (data['data'] as List<dynamic>? ?? [])
           .map((e) => InventoryBranch.fromJson(e))
           .toList();
@@ -88,7 +88,7 @@ class InventoryProvider extends ChangeNotifier {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       _warehouses = (data['data'] as List<dynamic>? ?? [])
           .map((e) => InventoryWarehouse.fromJson(e))
           .toList();
@@ -105,7 +105,7 @@ class InventoryProvider extends ChangeNotifier {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       _suppliers = (data['data'] as List<dynamic>? ?? [])
           .map((e) => InventorySupplier.fromJson(e))
           .toList();
@@ -146,7 +146,7 @@ class InventoryProvider extends ChangeNotifier {
 
       final response = await http.get(uri, headers: ApiService.headers);
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _stockItems = (data['data'] as List<dynamic>? ?? [])
             .map((e) => InventoryStockItem.fromJson(e))
             .toList();
@@ -171,13 +171,14 @@ class InventoryProvider extends ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final branch = InventoryBranch.fromJson(data['data']);
         _branches = [branch, ..._branches];
         notifyListeners();
         return true;
       }
-      _error = json.decode(response.body)['message'] ?? 'فشل إنشاء الفرع';
+      _error =
+          ApiService.decodeJsonMap(response)['message'] ?? 'فشل إنشاء الفرع';
       return false;
     } catch (e) {
       _error = 'خطأ في الاتصال بالسيرفر';
@@ -198,13 +199,14 @@ class InventoryProvider extends ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final warehouse = InventoryWarehouse.fromJson(data['data']);
         _warehouses = [warehouse, ..._warehouses];
         notifyListeners();
         return true;
       }
-      _error = json.decode(response.body)['message'] ?? 'فشل إنشاء المخزن';
+      _error =
+          ApiService.decodeJsonMap(response)['message'] ?? 'فشل إنشاء المخزن';
       return false;
     } catch (e) {
       _error = 'خطأ في الاتصال بالسيرفر';
@@ -232,13 +234,14 @@ class InventoryProvider extends ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final supplier = InventorySupplier.fromJson(data['data']);
         _suppliers = [supplier, ..._suppliers];
         notifyListeners();
         return true;
       }
-      _error = json.decode(response.body)['message'] ?? 'فشل إنشاء المورد';
+      _error =
+          ApiService.decodeJsonMap(response)['message'] ?? 'فشل إنشاء المورد';
       return false;
     } catch (e) {
       _error = 'خطأ في الاتصال بالسيرفر';
@@ -268,14 +271,15 @@ class InventoryProvider extends ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final invoice = InventoryInvoice.fromJson(data['data']['invoice']);
         _invoices = [invoice, ..._invoices];
         await fetchStock();
         notifyListeners();
         return true;
       }
-      _error = json.decode(response.body)['message'] ?? 'فشل إنشاء الفاتورة';
+      _error =
+          ApiService.decodeJsonMap(response)['message'] ?? 'فشل إنشاء الفاتورة';
       return false;
     } catch (e) {
       _error = 'خطأ في الاتصال بالسيرفر';

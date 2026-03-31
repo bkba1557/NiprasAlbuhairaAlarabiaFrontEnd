@@ -29,7 +29,7 @@ class ReportProvider {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       } else {
         throw Exception('فشل جلب تقرير العملاء');
       }
@@ -62,7 +62,7 @@ class ReportProvider {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       } else {
         throw Exception('فشل جلب تقرير السائقين');
       }
@@ -95,7 +95,7 @@ class ReportProvider {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       } else {
         throw Exception('فشل جلب تقرير الموردين');
       }
@@ -128,7 +128,7 @@ class ReportProvider {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       } else {
         throw Exception('فشل جلب تقرير المستخدمين');
       }
@@ -146,7 +146,7 @@ class ReportProvider {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       } else {
         throw Exception('فشل جلب تقرير الفاتورة');
       }
@@ -206,7 +206,7 @@ class ReportProvider {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       } else {
         throw Exception('فشل جلب خيارات الفلاتر');
       }
@@ -229,7 +229,7 @@ class ReportProvider {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       } else {
         throw Exception('فشل البحث');
       }
@@ -250,7 +250,7 @@ class ReportProvider {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       } else {
         throw Exception('فشل حساب الإحصائيات');
       }

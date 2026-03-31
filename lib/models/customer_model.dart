@@ -1,5 +1,10 @@
 import 'package:intl/intl.dart';
 
+double? _parseCustomerDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '');
+}
+
 class Customer {
   final String id;
   final String name;
@@ -9,12 +14,16 @@ class Customer {
   final String? address;
   final String? city;
   final String? area;
+  final String? street;
+  final String? postalCode;
   final String? contactPerson;
   final String? contactPersonPhone;
   final String? notes;
   final String? company;
   final String? taxNumber;
   final String? commercialRecord;
+  final double? latitude;
+  final double? longitude;
   final bool isActive;
   final String status;
   final String createdById;
@@ -38,12 +47,16 @@ class Customer {
     this.address,
     this.city,
     this.area,
+    this.street,
+    this.postalCode,
     this.contactPerson,
     this.contactPersonPhone,
     this.notes,
     this.company,
     this.taxNumber,
     this.commercialRecord,
+    this.latitude,
+    this.longitude,
     required this.isActive,
     required this.status,
     required this.createdById,
@@ -145,12 +158,16 @@ class Customer {
       address: json['address']?.toString(),
       city: json['city']?.toString(),
       area: json['area']?.toString(),
+      street: json['street']?.toString(),
+      postalCode: json['postalCode']?.toString(),
       contactPerson: json['contactPerson']?.toString(),
       contactPersonPhone: json['contactPersonPhone']?.toString(),
       notes: json['notes']?.toString(),
       company: json['company']?.toString(),
       taxNumber: json['taxNumber']?.toString(),
       commercialRecord: json['commercialRecord']?.toString(),
+      latitude: _parseCustomerDouble(json['latitude']),
+      longitude: _parseCustomerDouble(json['longitude']),
       isActive: isActiveValue,
       status: statusValue,
       createdById: createdById,
@@ -178,12 +195,16 @@ class Customer {
       'address': address,
       'city': city,
       'area': area,
+      'street': street,
+      'postalCode': postalCode,
       'contactPerson': contactPerson,
       'contactPersonPhone': contactPersonPhone,
       'notes': notes,
       'company': company,
       'taxNumber': taxNumber,
       'commercialRecord': commercialRecord,
+      'latitude': latitude,
+      'longitude': longitude,
       'isActive': isActive,
       'status': status,
       if (id.isNotEmpty) '_id': id,
@@ -211,6 +232,15 @@ class Customer {
     if (address?.isNotEmpty == true) parts.add(address!);
     return parts.isEmpty ? 'غير محدد' : parts.join(' - ');
   }
+
+  bool get hasCoordinates => latitude != null && longitude != null;
+
+  String? get googleMapsQueryUrl =>
+      hasCoordinates ? 'https://www.google.com/maps?q=$latitude,$longitude' : null;
+
+  String? get googleMapsDirectionsUrl => hasCoordinates
+      ? 'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude'
+      : null;
 
   String get contactInfo {
     final parts = <String>[];

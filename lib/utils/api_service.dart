@@ -127,7 +127,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> hrGet(String endpoint) async {
     final response = await get(endpoint);
-    return json.decode(utf8.decode(response.bodyBytes));
+    return decodeJsonMap(response);
   }
 
   static Future<Map<String, dynamic>> hrPost(
@@ -135,7 +135,7 @@ class ApiService {
     dynamic data,
   ) async {
     final response = await post(endpoint, data);
-    return json.decode(utf8.decode(response.bodyBytes));
+    return decodeJsonMap(response);
   }
 
   static Future<Map<String, dynamic>> hrPut(
@@ -143,12 +143,24 @@ class ApiService {
     dynamic data,
   ) async {
     final response = await put(endpoint, data);
-    return json.decode(utf8.decode(response.bodyBytes));
+    return decodeJsonMap(response);
   }
 
   static Future<Map<String, dynamic>> hrDelete(String endpoint) async {
     final response = await delete(endpoint);
+    return decodeJsonMap(response);
+  }
+
+  /// Decode JSON responses using UTF-8 bytes (safer for Arabic when the backend
+  /// does not send charset in the Content-Type header).
+  static dynamic decodeJson(http.Response response) {
     return json.decode(utf8.decode(response.bodyBytes));
+  }
+
+  static Map<String, dynamic> decodeJsonMap(http.Response response) {
+    final decoded = decodeJson(response);
+    if (decoded is Map<String, dynamic>) return decoded;
+    return Map<String, dynamic>.from(decoded as Map);
   }
 
   static Future<Map<String, dynamic>> fingerprintPost(
@@ -173,7 +185,7 @@ class ApiService {
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return json.decode(utf8.decode(response.bodyBytes));
+      return decodeJsonMap(response);
     }
 
     if (response.statusCode == 401) {

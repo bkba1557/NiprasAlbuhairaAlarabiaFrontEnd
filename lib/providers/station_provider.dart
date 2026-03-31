@@ -114,7 +114,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
+        final decoded = ApiService.decodeJson(response);
 
         if (decoded is List) {
           _currentStock = decoded
@@ -439,7 +439,7 @@ class StationProvider with ChangeNotifier {
     );
 
     if (response.statusCode == 200) {
-      return json.decode(response.body) as Map<String, dynamic>;
+      return ApiService.decodeJsonMap(response);
     }
 
     throw Exception('فشل في جلب بيانات المحطة');

@@ -426,7 +426,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         Order order;
         if (data['order'] != null) {
@@ -628,7 +628,7 @@ class OrderProvider with ChangeNotifier {
       // ✅ Success
       // =========================
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newOrder = Order.fromJson(data['order'] ?? data);
 
         _orders.insert(0, newOrder);
@@ -642,7 +642,7 @@ class OrderProvider with ChangeNotifier {
       // =========================
       // ❌ Error handling
       // =========================
-      final errorData = json.decode(response.body);
+      final errorData = ApiService.decodeJson(response);
 
       if (errorData['error'] != null &&
           errorData['error'].toString().contains('رقم طلب المورد')) {
@@ -777,7 +777,7 @@ class OrderProvider with ChangeNotifier {
       // ✅ Success
       // =========================
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         Order updatedOrder;
         if (data['order'] != null) {
@@ -818,7 +818,7 @@ class OrderProvider with ChangeNotifier {
       // =========================
       // ❌ Error
       // =========================
-      final errorData = json.decode(response.body);
+      final errorData = ApiService.decodeJson(response);
       _error =
           errorData['error'] ??
           errorData['message'] ??
@@ -865,7 +865,7 @@ class OrderProvider with ChangeNotifier {
         }),
       );
 
-      final data = jsonDecode(response.body);
+      final data = ApiService.decodeJson(response);
 
       if (response.statusCode == 200 && data['success'] == true) {
         // تحديث طلب المورد
@@ -931,7 +931,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         Order updatedOrder;
         if (data['order'] != null) {
@@ -968,7 +968,7 @@ class OrderProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error =
             errorData['error'] ??
             errorData['message'] ??
@@ -1009,7 +1009,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final rawOrder = data['order'] ?? data['data'] ?? data;
         final updatedOrder = Order.fromJson(
           Map<String, dynamic>.from(rawOrder as Map),
@@ -1021,7 +1021,7 @@ class OrderProvider with ChangeNotifier {
         return true;
       }
 
-      final errorData = json.decode(response.body);
+      final errorData = ApiService.decodeJson(response);
       _error =
           errorData['error'] ??
           errorData['message'] ??
@@ -1085,7 +1085,7 @@ class OrderProvider with ChangeNotifier {
       final response = await http.Response.fromStream(streamedResponse);
 
       final dynamic payload = response.body.isNotEmpty
-          ? json.decode(response.body)
+          ? ApiService.decodeJson(response)
           : null;
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -1227,7 +1227,7 @@ class OrderProvider with ChangeNotifier {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         Order updatedOrder;
         if (data['order'] != null) {
@@ -1263,7 +1263,7 @@ class OrderProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error =
             errorData['error'] ?? errorData['message'] ?? 'فشل تحديث الطلب';
         _isLoading = false;
@@ -1308,7 +1308,7 @@ class OrderProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? errorData['message'] ?? 'فشل حذف الطلب';
         _isLoading = false;
         notifyListeners();
@@ -1381,7 +1381,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         List<dynamic> activitiesData = [];
         if (data['activities'] is List) {
@@ -1419,7 +1419,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         List<dynamic> ordersData = [];
         if (data is List) {
@@ -1449,7 +1449,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         List<dynamic> ordersData = [];
         if (data is List) {
@@ -1479,7 +1479,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         List<dynamic> ordersData = [];
         if (data is List) {
@@ -1509,7 +1509,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         List<dynamic> ordersData = [];
         if (data is List) {
@@ -1537,7 +1537,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final Map<String, int> stats = {};
 
         List<dynamic> statsData = [];
@@ -1743,7 +1743,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         List<dynamic> ordersData = [];
         if (data['orders'] is List) {
@@ -1782,7 +1782,7 @@ class OrderProvider with ChangeNotifier {
         }),
       );
 
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
 
       if (response.statusCode == 200 && data['success'] == true) {
         _syncOrdersFromResponse(data);
@@ -1815,7 +1815,7 @@ class OrderProvider with ChangeNotifier {
         headers: ApiService.headers,
       );
 
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
 
       if (response.statusCode == 200 && data['success'] == true) {
         _syncOrdersFromResponse(data);

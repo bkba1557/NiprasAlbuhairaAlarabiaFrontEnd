@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -35,13 +36,7 @@ class PushNotificationService {
       initWebNotificationSound();
     }
 
-    final vapidKey = const String.fromEnvironment(
-      'FCM_VAPID_KEY',
-      defaultValue: '',
-    );
-    final token = await _messaging.getToken(
-      vapidKey: kIsWeb && vapidKey.isNotEmpty ? vapidKey : null,
-    );
+    final token = await _getInitialToken();
 
     if (token != null) {
       debugPrint('FCM token: $token');
@@ -84,6 +79,41 @@ class PushNotificationService {
       sound: true,
       provisional: false,
     );
+  }
+
+  static Future<String?> _getInitialToken() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      final apnsToken = await _waitForApnsToken();
+      if (apnsToken == null || apnsToken.isEmpty) {
+        debugPrint(
+          'APNs token is unavailable on iOS, so initial FCM registration is skipped.',
+        );
+        return null;
+      }
+      debugPrint('APNs token is ready on iOS.');
+    }
+
+    final vapidKey = const String.fromEnvironment(
+      'FCM_VAPID_KEY',
+      defaultValue: '',
+    );
+    return _messaging.getToken(
+      vapidKey: kIsWeb && vapidKey.isNotEmpty ? vapidKey : null,
+    );
+  }
+
+  static Future<String?> _waitForApnsToken() async {
+    for (var attempt = 1; attempt <= 12; attempt++) {
+      final apnsToken = await _messaging.getAPNSToken();
+      if (apnsToken != null && apnsToken.isNotEmpty) {
+        debugPrint('APNs token acquired on attempt $attempt.');
+        return apnsToken;
+      }
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    debugPrint('APNs token did not become available within 6 seconds.');
+    return null;
   }
 
   static String _platformName() {

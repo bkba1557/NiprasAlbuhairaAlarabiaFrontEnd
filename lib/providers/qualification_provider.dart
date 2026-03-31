@@ -71,7 +71,7 @@ class QualificationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final stations = (data['stations'] as List<dynamic>? ?? [])
             .map((e) => QualificationStation.fromJson(e))
             .toList();
@@ -79,7 +79,7 @@ class QualificationProvider with ChangeNotifier {
           ..clear()
           ..addAll(stations);
       } else {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         throw Exception(data['error'] ?? 'تعذر تحميل المحطات');
       }
     } catch (e) {
@@ -100,13 +100,13 @@ class QualificationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final station = QualificationStation.fromJson(data['station']);
         _selectedStation = station;
         _updateLocalStation(station);
         return station;
       } else {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         throw Exception(data['error'] ?? 'تعذر تحميل المحطة');
       }
     } catch (e) {
@@ -131,12 +131,12 @@ class QualificationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final created = QualificationStation.fromJson(data['station']);
         _stations.insert(0, created);
         return created;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'تعذر إنشاء المحطة');
     } catch (e) {
       _setError(e.toString());
@@ -162,13 +162,13 @@ class QualificationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updated = QualificationStation.fromJson(data['station']);
         _selectedStation = updated;
         _updateLocalStation(updated);
         return updated;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'تعذر تحديث المحطة');
     } catch (e) {
       _setError(e.toString());
@@ -202,13 +202,13 @@ class QualificationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updated = QualificationStation.fromJson(data['station']);
         _selectedStation = updated;
         _updateLocalStation(updated);
         return updated;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'تعذر تحديث الحالة');
     } catch (e) {
       _setError(e.toString());
@@ -285,7 +285,7 @@ class QualificationProvider with ChangeNotifier {
         if (_selectedStation?.id == id) _selectedStation = null;
         return true;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'تعذر حذف المحطة');
     } catch (e) {
       _setError(e.toString());

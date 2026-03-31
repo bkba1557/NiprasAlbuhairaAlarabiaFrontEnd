@@ -196,6 +196,93 @@ class FirebaseStorageService {
     }
   }
 
+  static Future<Map<String, dynamic>> uploadCustomerDocument({
+    required String customerKey,
+    required String docType,
+    required PlatformFile file,
+  }) async {
+    final safeName = _sanitizeFileName(file.name);
+    final contentType = _inferContentType(safeName);
+    final ref = _storage.ref(
+      'customers/$customerKey/$docType/${DateTime.now().millisecondsSinceEpoch}_$safeName',
+    );
+
+    try {
+      await _uploadPlatformFile(
+        ref: ref,
+        file: file,
+        contentType: contentType,
+      );
+
+      return {
+        'filename': safeName,
+        'url': await ref.getDownloadURL(),
+        'storagePath': ref.fullPath,
+        'fileType': contentType,
+      };
+    } catch (e) {
+      debugPrint('Customer Firebase upload error: $e');
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadWhatsappAttachment({
+    required String folderKey,
+    required PlatformFile file,
+  }) async {
+    final safeName = _sanitizeFileName(file.name);
+    final contentType = _inferContentType(safeName);
+    final ref = _storage.ref(
+      'whatsapp/$folderKey/${DateTime.now().millisecondsSinceEpoch}_$safeName',
+    );
+
+    try {
+      await _uploadPlatformFile(
+        ref: ref,
+        file: file,
+        contentType: contentType,
+      );
+
+      return {
+        'filename': safeName,
+        'url': await ref.getDownloadURL(),
+        'storagePath': ref.fullPath,
+        'fileType': contentType,
+      };
+    } catch (e) {
+      debugPrint('WhatsApp Firebase upload error: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> _uploadPlatformFile({
+    required Reference ref,
+    required PlatformFile file,
+    String? contentType,
+  }) async {
+    if (kIsWeb) {
+      if (file.bytes == null) {
+        throw Exception('Web file bytes are null');
+      }
+      await ref.putData(file.bytes!, SettableMetadata(contentType: contentType));
+      return;
+    }
+
+    final filePath = file.path;
+    if (filePath == null || filePath.isEmpty) {
+      if (file.bytes == null) {
+        throw Exception('File path is null');
+      }
+      await ref.putData(file.bytes!, SettableMetadata(contentType: contentType));
+      return;
+    }
+
+    await ref.putFile(
+      File(filePath),
+      SettableMetadata(contentType: contentType),
+    );
+  }
+
   static String _sanitizeFileName(String fileName) {
     final collapsed = fileName.trim().replaceAll(RegExp(r'\s+'), '_');
     return collapsed.isEmpty ? 'file' : collapsed;

@@ -38,7 +38,7 @@ class NotificationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final fetched = (data['notifications'] as List)
             .map((e) => NotificationModel.fromJson(e))
             .toList();
@@ -202,7 +202,7 @@ class NotificationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newNotifications = (data['notifications'] as List)
             .map((e) => NotificationModel.fromJson(e))
             .toList();

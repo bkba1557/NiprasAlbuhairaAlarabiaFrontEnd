@@ -80,7 +80,7 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _stations = (data['stations'] as List)
             .map((e) => FuelStation.fromJson(e))
             .toList();
@@ -158,7 +158,7 @@ class FuelStationProvider with ChangeNotifier {
 
         notifyListeners();
       } else {
-        final data = jsonDecode(response.body);
+        final data = ApiService.decodeJson(response);
         throw Exception(data['error'] ?? 'فشل حذف المحطة');
       }
     } catch (e) {
@@ -183,7 +183,7 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _selectedStation = FuelStation.fromJson(data['station']);
         _isLoading = false;
         notifyListeners();
@@ -317,7 +317,7 @@ class FuelStationProvider with ChangeNotifier {
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         try {
-          final data = jsonDecode(response.body);
+          final data = ApiService.decodeJson(response);
           final newStation = FuelStation.fromJson(data['station'] ?? data);
 
           // إضافة المحطة الجديدة للقائمة المحلية (اختياري)
@@ -335,7 +335,7 @@ class FuelStationProvider with ChangeNotifier {
         String errorMsg = 'فشل إنشاء المحطة (${response.statusCode})';
 
         try {
-          final errorData = jsonDecode(response.body);
+          final errorData = ApiService.decodeJson(response);
           errorMsg = errorData['error'] ?? errorData['message'] ?? errorMsg;
         } catch (_) {
           // في حالة عدم وجود json صالح
@@ -392,7 +392,7 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _maintenanceRecords = (data['records'] as List)
             .map((e) => MaintenanceRecord.fromJson(e))
             .toList();
@@ -421,14 +421,14 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newRecord = MaintenanceRecord.fromJson(data['record']);
         _maintenanceRecords.insert(0, newRecord);
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل إنشاء سجل الصيانة';
         _isLoading = false;
         notifyListeners();
@@ -467,7 +467,7 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _technicianReports = (data['reports'] as List)
             .map((e) => TechnicianReport.fromJson(e))
             .toList();
@@ -529,14 +529,14 @@ class FuelStationProvider with ChangeNotifier {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newReport = TechnicianReport.fromJson(data['report']);
         _technicianReports.insert(0, newReport);
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل إنشاء التقرير';
         _isLoading = false;
         notifyListeners();
@@ -572,7 +572,7 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _alerts = (data['alerts'] as List)
             .map((e) => AlertNotification.fromJson(e))
             .toList();
@@ -601,14 +601,14 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newAlert = AlertNotification.fromJson(data['alert']);
         _alerts.insert(0, newAlert);
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل إرسال التحذير';
         _isLoading = false;
         notifyListeners();
@@ -647,7 +647,7 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _approvalRequests = (data['requests'] as List)
             .map((e) => ApprovalRequest.fromJson(e))
             .toList();
@@ -702,14 +702,14 @@ class FuelStationProvider with ChangeNotifier {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newRequest = ApprovalRequest.fromJson(data['request']);
         _approvalRequests.insert(0, newRequest);
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل إنشاء طلب الموافقة';
         _isLoading = false;
         notifyListeners();
@@ -740,7 +740,7 @@ class FuelStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _technicianLocations = (data['locations'] as List)
             .map((e) => TechnicianLocation.fromJson(e))
             .toList();

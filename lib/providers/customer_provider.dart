@@ -1,22 +1,34 @@
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../models/customer_model.dart';
-import '../utils/constants.dart';
-import '../utils/api_service.dart';
+import 'package:order_tracker/models/customer_model.dart';
+import 'package:order_tracker/services/firebase_storage_service.dart';
+import 'package:order_tracker/utils/api_service.dart';
+import 'package:order_tracker/utils/constants.dart';
+
+const Map<String, String> _customerDocumentTypeLabels = {
+  'commercialRecord': 'السجل التجاري',
+  'energyCertificate': 'شهادة الطاقة',
+  'taxCertificate': 'شهادة الضريبة',
+  'safetyCertificate': 'شهادة السلامة',
+  'municipalLicense': 'رخصة بلدي',
+  'additionalDocument': 'مرفق إضافي',
+};
 
 class CustomerProvider with ChangeNotifier {
   List<Customer> _customers = [];
   List<Customer> _filteredCustomers = [];
   Customer? _selectedCustomer;
   bool _isLoading = false;
+  bool _hasSearchFilter = false;
   String? _error;
   int _currentPage = 1;
   int _totalPages = 1;
 
   List<Customer> get customers =>
-      _filteredCustomers.isNotEmpty ? _filteredCustomers : _customers;
+      _hasSearchFilter ? _filteredCustomers : _customers;
   Customer? get selectedCustomer => _selectedCustomer;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -32,18 +44,13 @@ class CustomerProvider with ChangeNotifier {
 
     try {
       if (fetchAll) {
-        final List<Customer> allCustomers = [];
-        int currentPage = page;
-        int totalPages = 1;
+        final allCustomers = <Customer>[];
+        var currentPage = page;
+        var totalPages = 1;
 
         while (currentPage <= totalPages) {
-          String url = '${ApiEndpoints.baseUrl}/customers?page=$currentPage';
-          if (search != null && search.isNotEmpty) {
-            url += '&search=$search';
-          }
-
           final response = await http.get(
-            Uri.parse(url),
+            _customersUri(page: currentPage, search: search),
             headers: ApiService.headers,
           );
 
@@ -51,61 +58,70 @@ class CustomerProvider with ChangeNotifier {
             throw Exception('Failed to fetch customers.');
           }
 
-          final data = json.decode(response.body);
-          final pageCustomers = (data['customers'] as List)
-              .map((e) => Customer.fromJson(e))
+          final data = _decodeMap(response);
+          final pageCustomers = (data['customers'] as List<dynamic>? ?? [])
+              .whereType<Map<String, dynamic>>()
+              .map(Customer.fromJson)
               .toList();
           allCustomers.addAll(pageCustomers);
 
-          totalPages = data['pagination']?['pages'] ?? totalPages;
-          currentPage++;
+          final pagination = data['pagination'] as Map<String, dynamic>?;
+          totalPages = pagination?['pages'] is int
+              ? pagination!['pages'] as int
+              : int.tryParse(pagination?['pages']?.toString() ?? '') ??
+                    totalPages;
+          currentPage += 1;
         }
 
         _customers = allCustomers;
         _currentPage = page;
         _totalPages = totalPages;
       } else {
-        String url = '${ApiEndpoints.baseUrl}/customers?page=$page';
-        if (search != null && search.isNotEmpty) {
-          url += '&search=$search';
-        }
-
         final response = await http.get(
-          Uri.parse(url),
+          _customersUri(page: page, search: search),
           headers: ApiService.headers,
         );
 
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          _customers = (data['customers'] as List)
-              .map((e) => Customer.fromJson(e))
-              .toList();
-          _currentPage = data['pagination']['page'];
-          _totalPages = data['pagination']['pages'];
-        } else {
+        if (response.statusCode != 200) {
           throw Exception('Failed to fetch customers.');
         }
+
+        final data = _decodeMap(response);
+        _customers = (data['customers'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(Customer.fromJson)
+            .toList();
+
+        final pagination = data['pagination'] as Map<String, dynamic>? ?? {};
+        _currentPage = pagination['page'] is int
+            ? pagination['page'] as int
+            : int.tryParse(pagination['page']?.toString() ?? '') ?? page;
+        _totalPages = pagination['pages'] is int
+            ? pagination['pages'] as int
+            : int.tryParse(pagination['pages']?.toString() ?? '') ?? 1;
       }
 
-      _filteredCustomers = _customers;
-      _isLoading = false;
-      notifyListeners();
+      _filteredCustomers = List<Customer>.from(_customers);
+      _hasSearchFilter = false;
     } catch (e) {
       _error = e.toString();
+    } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
   void searchCustomers(String query) {
-    if (query.isEmpty) {
-      _filteredCustomers = _customers;
+    final trimmedQuery = query.trim().toLowerCase();
+    if (trimmedQuery.isEmpty) {
+      _hasSearchFilter = false;
+      _filteredCustomers = List<Customer>.from(_customers);
     } else {
+      _hasSearchFilter = true;
       _filteredCustomers = _customers.where((customer) {
-        return customer.name.toLowerCase().contains(query.toLowerCase()) ||
-            customer.code.toLowerCase().contains(query.toLowerCase()) ||
-            (customer.phone?.toLowerCase().contains(query.toLowerCase()) ??
-                false);
+        return customer.name.toLowerCase().contains(trimmedQuery) ||
+            customer.code.toLowerCase().contains(trimmedQuery) ||
+            (customer.phone?.toLowerCase().contains(trimmedQuery) ?? false);
       }).toList();
     }
     notifyListeners();
@@ -123,27 +139,21 @@ class CustomerProvider with ChangeNotifier {
         body: json.encode(customerData),
       );
 
-      print(response.body);
-
+      final data = _decodeMap(response);
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
         final newCustomer = Customer.fromJson(data['customer']);
-        _customers.insert(0, newCustomer);
-        _isLoading = false;
-        notifyListeners();
+        _upsertCustomer(newCustomer);
         return newCustomer;
-      } else {
-        final errorData = json.decode(response.body);
-        _error = errorData['error'] ?? 'فشل إنشاء العميل';
-        _isLoading = false;
-        notifyListeners();
-        return null;
       }
+
+      _error = data['error']?.toString() ?? 'فشل إنشاء العميل';
+      return null;
     } catch (e) {
       _error = 'حدث خطأ في الاتصال بالسيرفر';
+      return null;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return null;
     }
   }
 
@@ -153,41 +163,138 @@ class CustomerProvider with ChangeNotifier {
   ) async {
     if (documents.isEmpty) return true;
 
-    final uri = Uri.parse(
-      '${ApiEndpoints.baseUrl}${ApiEndpoints.customerDocuments(customerId)}',
-    );
-    final request = http.MultipartRequest('POST', uri);
-    request.headers.addAll(ApiService.headers);
-
-    for (final document in documents) {
-      if (!document.file.existsSync()) continue;
-
-      final multipartFile = await http.MultipartFile.fromPath(
-        document.docType,
-        document.file.path,
-        filename: document.fileName,
-      );
-      request.files.add(multipartFile);
-    }
-
     try {
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-      final responseBody = response.body.isNotEmpty
-          ? json.decode(response.body) as Map<String, dynamic>?
-          : null;
+      final uploadedDocuments = <Map<String, dynamic>>[];
+      for (final document in documents) {
+        final uploaded = await FirebaseStorageService.uploadCustomerDocument(
+          customerKey: customerId,
+          docType: document.docType,
+          file: document.file,
+        );
+        uploadedDocuments.add({
+          'filename': uploaded['filename']?.toString() ?? document.fileName,
+          'url': uploaded['url']?.toString() ?? '',
+          'storagePath': uploaded['storagePath']?.toString() ?? '',
+          'docType': document.docType,
+          'label': _customerDocumentTypeLabels[document.docType],
+        });
+      }
+
+      final response = await http.post(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.customerDocuments(customerId)}',
+        ),
+        headers: ApiService.headers,
+        body: json.encode({'documents': uploadedDocuments}),
+      );
+      final responseBody = _decodeMap(response);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        final customerJson = responseBody['customer'];
+        if (customerJson is Map<String, dynamic>) {
+          _upsertCustomer(Customer.fromJson(customerJson));
+        }
+        notifyListeners();
         return true;
       }
 
-      _error = responseBody?['error'] ?? 'فشل رفع المستندات';
+      _error = responseBody['error']?.toString() ?? 'فشل رفع المستندات';
       notifyListeners();
       return false;
     } catch (e) {
       _error = e.toString();
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<Customer?> replaceCustomerDocument({
+    required String customerId,
+    required CustomerDocument document,
+    required PlatformFile file,
+  }) async {
+    _error = null;
+    notifyListeners();
+
+    try {
+      final uploaded = await FirebaseStorageService.uploadCustomerDocument(
+        customerKey: customerId,
+        docType: document.docType,
+        file: file,
+      );
+
+      final response = await http.put(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.customerDocument(customerId, document.id)}',
+        ),
+        headers: ApiService.headers,
+        body: json.encode({
+          'filename': uploaded['filename']?.toString() ?? file.name,
+          'url': uploaded['url']?.toString() ?? '',
+          'storagePath': uploaded['storagePath']?.toString() ?? '',
+          'docType': document.docType,
+          'label': document.label ?? _customerDocumentTypeLabels[document.docType],
+        }),
+      );
+
+      final responseBody = _decodeMap(response);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final customerJson = responseBody['customer'];
+        if (customerJson is Map<String, dynamic>) {
+          final updatedCustomer = Customer.fromJson(customerJson);
+          _upsertCustomer(updatedCustomer);
+          notifyListeners();
+          return updatedCustomer;
+        }
+        return null;
+      }
+
+      _error =
+          responseBody['error']?.toString() ?? 'فشل استبدال المستند';
+      notifyListeners();
+      return null;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<Customer?> deleteCustomerDocument({
+    required String customerId,
+    required String documentId,
+  }) async {
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.delete(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.customerDocument(customerId, documentId)}',
+        ),
+        headers: ApiService.headers,
+      );
+
+      final responseBody = _decodeMap(response);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final customerJson = responseBody['customer'];
+        if (customerJson is Map<String, dynamic>) {
+          final updatedCustomer = Customer.fromJson(customerJson);
+          _upsertCustomer(updatedCustomer);
+          notifyListeners();
+          return updatedCustomer;
+        }
+        return null;
+      }
+
+      _error =
+          responseBody['error']?.toString() ?? 'فشل حذف المستند';
+      notifyListeners();
+      return null;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return null;
     }
   }
 
@@ -206,34 +313,21 @@ class CustomerProvider with ChangeNotifier {
         body: json.encode(customerData),
       );
 
+      final data = _decodeMap(response);
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
         final updatedCustomer = Customer.fromJson(data['customer']);
-
-        final index = _customers.indexWhere((c) => c.id == id);
-        if (index != -1) {
-          _customers[index] = updatedCustomer;
-        }
-
-        if (_selectedCustomer?.id == id) {
-          _selectedCustomer = updatedCustomer;
-        }
-
-        _isLoading = false;
-        notifyListeners();
+        _upsertCustomer(updatedCustomer);
         return true;
-      } else {
-        final errorData = json.decode(response.body);
-        _error = errorData['error'] ?? 'فشل تحديث العميل';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
+
+      _error = data['error']?.toString() ?? 'فشل تحديث العميل';
+      return false;
     } catch (e) {
       _error = 'حدث خطأ في الاتصال بالسيرفر';
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
@@ -249,15 +343,14 @@ class CustomerProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = _decodeMap(response);
         _selectedCustomer = Customer.fromJson(data['customer']);
-        _isLoading = false;
-        notifyListeners();
       } else {
         throw Exception('فشل في جلب بيانات العميل');
       }
     } catch (e) {
       _error = e.toString();
+    } finally {
       _isLoading = false;
       notifyListeners();
     }
@@ -275,30 +368,23 @@ class CustomerProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200 || response.statusCode == 204) {
-        // إزالة العميل من القائمة
-        _customers.removeWhere((c) => c.id == id);
-        _filteredCustomers.removeWhere((c) => c.id == id);
-
-        // لو العميل المحذوف هو المختار حاليًا
+        _customers.removeWhere((customer) => customer.id == id);
+        _filteredCustomers.removeWhere((customer) => customer.id == id);
         if (_selectedCustomer?.id == id) {
           _selectedCustomer = null;
         }
-
-        _isLoading = false;
-        notifyListeners();
         return true;
-      } else {
-        final data = json.decode(response.body);
-        _error = data['error'] ?? 'فشل حذف العميل';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
+
+      final data = _decodeMap(response);
+      _error = data['error']?.toString() ?? 'فشل حذف العميل';
+      return false;
     } catch (e) {
       _error = 'حدث خطأ في الاتصال بالسيرفر';
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
@@ -309,12 +395,15 @@ class CustomerProvider with ChangeNotifier {
         headers: ApiService.headers,
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as List;
-        return data.map((e) => Customer.fromJson(e)).toList();
-      }
-      return [];
-    } catch (e) {
+      if (response.statusCode != 200) return [];
+
+      final data = json.decode(utf8.decode(response.bodyBytes));
+      if (data is! List) return [];
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map(Customer.fromJson)
+          .toList();
+    } catch (_) {
       return [];
     }
   }
@@ -328,12 +417,53 @@ class CustomerProvider with ChangeNotifier {
     _selectedCustomer = null;
     notifyListeners();
   }
+
+  Uri _customersUri({
+    required int page,
+    String? search,
+  }) {
+    final uri = Uri.parse('${ApiEndpoints.baseUrl}/customers');
+    final query = <String, String>{'page': '$page'};
+    if (search != null && search.trim().isNotEmpty) {
+      query['search'] = search.trim();
+    }
+    return uri.replace(queryParameters: query);
+  }
+
+  Map<String, dynamic> _decodeMap(http.Response response) {
+    final body = utf8.decode(response.bodyBytes).trim();
+    if (body.isEmpty) return <String, dynamic>{};
+    final decoded = json.decode(body);
+    return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+  }
+
+  void _upsertCustomer(Customer customer) {
+    final index = _customers.indexWhere((item) => item.id == customer.id);
+    if (index == -1) {
+      _customers.insert(0, customer);
+    } else {
+      _customers[index] = customer;
+    }
+
+    final filteredIndex = _filteredCustomers.indexWhere(
+      (item) => item.id == customer.id,
+    );
+    if (filteredIndex == -1) {
+      _filteredCustomers.insert(0, customer);
+    } else {
+      _filteredCustomers[filteredIndex] = customer;
+    }
+
+    if (_selectedCustomer?.id == customer.id) {
+      _selectedCustomer = customer;
+    }
+  }
 }
 
 class CustomerDocumentUpload {
   final String docType;
   final String fileName;
-  final File file;
+  final PlatformFile file;
 
   CustomerDocumentUpload({
     required this.docType,

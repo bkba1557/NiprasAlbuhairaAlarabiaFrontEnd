@@ -67,7 +67,7 @@ class StationInspectionProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final inspections = (data['inspections'] as List<dynamic>? ?? [])
             .map((e) => StationInspection.fromJson(e))
             .toList();
@@ -75,7 +75,7 @@ class StationInspectionProvider with ChangeNotifier {
           ..clear()
           ..addAll(inspections);
       } else {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         throw Exception(data['error'] ?? '??? ????? ?????????');
       }
     } catch (e) {
@@ -96,13 +96,13 @@ class StationInspectionProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final inspection = StationInspection.fromJson(data['inspection']);
         _selectedInspection = inspection;
         _updateLocalInspection(inspection);
         return inspection;
       } else {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         throw Exception(data['error'] ?? '??? ????? ????????');
       }
     } catch (e) {
@@ -127,12 +127,12 @@ class StationInspectionProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final created = StationInspection.fromJson(data['inspection']);
         _inspections.insert(0, created);
         return created;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? '??? ????? ????????');
     } catch (e) {
       _setError(e.toString());
@@ -156,13 +156,13 @@ class StationInspectionProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updated = StationInspection.fromJson(data['inspection']);
         _selectedInspection = updated;
         _updateLocalInspection(updated);
         return updated;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? '??? ????? ????????');
     } catch (e) {
       _setError(e.toString());
@@ -187,13 +187,13 @@ class StationInspectionProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updated = StationInspection.fromJson(data['inspection']);
         _selectedInspection = updated;
         _updateLocalInspection(updated);
         return updated;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? '??? ????? ??????');
     } catch (e) {
       _setError(e.toString());
@@ -218,7 +218,7 @@ class StationInspectionProvider with ChangeNotifier {
         if (_selectedInspection?.id == id) _selectedInspection = null;
         return true;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? '??? ??? ????????');
     } catch (e) {
       _setError(e.toString());
@@ -286,7 +286,7 @@ class StationInspectionProvider with ChangeNotifier {
         final inspection = await fetchInspectionById(inspectionId);
         return inspection;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? '??? ????? ????????');
     } catch (e) {
       _setError(e.toString());

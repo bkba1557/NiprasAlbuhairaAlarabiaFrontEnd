@@ -57,7 +57,7 @@ class MaintenanceProvider with ChangeNotifier {
       final response = await ApiService.get(endpoint);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['success'] == true) {
           _maintenanceRecords = data['data'];
         } else {
@@ -86,7 +86,7 @@ class MaintenanceProvider with ChangeNotifier {
       final response = await ApiService.get('/maintenance/$id');
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['success'] == true) {
           _currentRecord = data['data'];
         } else {
@@ -116,7 +116,7 @@ class MaintenanceProvider with ChangeNotifier {
       final response = await ApiService.post('/maintenance', data);
 
       if (response.statusCode == 201) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           // Add to list
           _maintenanceRecords.insert(0, result['data']);
@@ -150,7 +150,7 @@ class MaintenanceProvider with ChangeNotifier {
       final response = await ApiService.put('/maintenance/$id', data);
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           // Update in list
           final index = _maintenanceRecords.indexWhere(
@@ -196,7 +196,7 @@ class MaintenanceProvider with ChangeNotifier {
       ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           // Update current record
           _currentRecord = result['data'];
@@ -237,7 +237,7 @@ class MaintenanceProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           _currentRecord = result['data'];
         } else {
@@ -274,7 +274,7 @@ class MaintenanceProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           _currentRecord = result['data'];
         } else {
@@ -407,7 +407,7 @@ class MaintenanceProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           // تحديث السجل الحالي بعد الاعتماد
           _currentRecord = result['data'];
@@ -442,7 +442,7 @@ class MaintenanceProvider with ChangeNotifier {
       });
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] != true) {
           throw Exception(result['message'] ?? 'فشل إنشاء الشهر');
         }
@@ -471,7 +471,7 @@ class MaintenanceProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['success'] == true) {
           _monthlyStats = data['data'];
         } else {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/customer_model.dart';
 
 enum _CustomerStatusType { active, suspended, banned }
@@ -100,6 +101,14 @@ class CustomerItem extends StatelessWidget {
     this.onDelete,
   });
 
+  Future<void> _openCustomerMap(Customer customer, {bool directions = false}) async {
+    final url = directions
+        ? customer.googleMapsDirectionsUrl
+        : customer.googleMapsQueryUrl;
+    if (url == null || url.trim().isEmpty) return;
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusType = _resolveCustomerStatus(customer);
@@ -198,6 +207,29 @@ class CustomerItem extends StatelessWidget {
                                         style: TextStyle(
                                           color: AppColors.mediumGray,
                                         ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (customer.hasCoordinates)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: () => _openCustomerMap(customer),
+                                        icon: const Icon(Icons.place_outlined, size: 18),
+                                        label: const Text('الموقع'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed: () => _openCustomerMap(
+                                          customer,
+                                          directions: true,
+                                        ),
+                                        icon: const Icon(Icons.directions, size: 18),
+                                        label: const Text('اتجاهات'),
                                       ),
                                     ],
                                   ),

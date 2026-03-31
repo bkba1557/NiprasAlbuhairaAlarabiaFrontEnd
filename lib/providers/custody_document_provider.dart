@@ -38,7 +38,7 @@ class CustodyDocumentProvider with ChangeNotifier {
       final response = await ApiService.get('/custody-documents');
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         if (data['success'] == true) {
           final list = (data['data'] as List<dynamic>? ?? []);
           _documents
@@ -90,7 +90,7 @@ class CustodyDocumentProvider with ChangeNotifier {
 
       final response = await ApiService.post('/custody-documents', payload);
       if (response.statusCode == 201) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           _documents.insert(
             0,
@@ -123,7 +123,7 @@ class CustodyDocumentProvider with ChangeNotifier {
       });
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           final updated = CustodyDocument.fromJson(
             Map<String, dynamic>.from(result['data'] as Map),
@@ -154,7 +154,7 @@ class CustodyDocumentProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           final updated = CustodyDocument.fromJson(
             Map<String, dynamic>.from(result['data'] as Map),
@@ -185,7 +185,7 @@ class CustodyDocumentProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           final updated = CustodyDocument.fromJson(
             Map<String, dynamic>.from(result['data'] as Map),
@@ -224,7 +224,7 @@ class CustodyDocumentProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        final result = ApiService.decodeJson(response);
         if (result['success'] == true) {
           final updated = CustodyDocument.fromJson(
             Map<String, dynamic>.from(result['data'] as Map),

@@ -1011,6 +1011,7 @@ class AppIcons {
   static const String xCircle = 'assets/icons/x-circle.svg';
   static const String alertTriangle = 'assets/icons/alert-triangle.svg';
   static const String infoCircle = 'assets/icons/info-circle.svg';
+  static const String whatsapp = 'assets/icons/whatsapp.svg';
 }
 
 class AppImages {

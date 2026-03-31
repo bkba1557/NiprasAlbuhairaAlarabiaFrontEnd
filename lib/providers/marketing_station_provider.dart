@@ -69,7 +69,7 @@ class MarketingStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final stations = (data['stations'] as List<dynamic>? ?? [])
             .map((e) => MarketingStation.fromJson(e))
             .toList();
@@ -77,7 +77,7 @@ class MarketingStationProvider with ChangeNotifier {
           ..clear()
           ..addAll(stations);
       } else {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         throw Exception(data['error'] ?? 'فشل تحميل المحطات');
       }
     } catch (e) {
@@ -97,13 +97,13 @@ class MarketingStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final station = MarketingStation.fromJson(data['station']);
         _selectedStation = station;
         _updateLocalStation(station);
         return station;
       } else {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         throw Exception(data['error'] ?? 'فشل تحميل المحطة');
       }
     } catch (e) {
@@ -125,12 +125,12 @@ class MarketingStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final created = MarketingStation.fromJson(data['station']);
         _stations.insert(0, created);
         return created;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل إنشاء المحطة');
     } catch (e) {
       _setError(e.toString());
@@ -151,13 +151,13 @@ class MarketingStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updated = MarketingStation.fromJson(data['station']);
         _selectedStation = updated;
         _updateLocalStation(updated);
         return updated;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل تحديث المحطة');
     } catch (e) {
       _setError(e.toString());
@@ -181,7 +181,7 @@ class MarketingStationProvider with ChangeNotifier {
         if (_selectedStation?.id == id) _selectedStation = null;
         return true;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل حذف المحطة');
     } catch (e) {
       _setError(e.toString());
@@ -205,13 +205,13 @@ class MarketingStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updated = MarketingStation.fromJson(data['station']);
         _selectedStation = updated;
         _updateLocalStation(updated);
         return updated;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل تحديث الحالة');
     } catch (e) {
       _setError(e.toString());
@@ -232,13 +232,13 @@ class MarketingStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updated = MarketingStation.fromJson(data['station']);
         _selectedStation = updated;
         _updateLocalStation(updated);
         return updated;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل حفظ عقد التأجير');
     } catch (e) {
       _setError(e.toString());
@@ -258,13 +258,13 @@ class MarketingStationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updated = MarketingStation.fromJson(data['station']);
         _selectedStation = updated;
         _updateLocalStation(updated);
         return updated;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل فسخ العقد');
     } catch (e) {
       _setError(e.toString());
@@ -288,7 +288,7 @@ class MarketingStationProvider with ChangeNotifier {
         final station = await fetchStationById(id);
         return station;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل إضافة المضخة');
     } catch (e) {
       _setError(e.toString());
@@ -312,7 +312,7 @@ class MarketingStationProvider with ChangeNotifier {
         final station = await fetchStationById(id);
         return station;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل تحديث المضخة');
     } catch (e) {
       _setError(e.toString());
@@ -344,7 +344,7 @@ class MarketingStationProvider with ChangeNotifier {
         final station = await fetchStationById(stationId);
         return station;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل تسجيل قراءة الإقفال');
     } catch (e) {
       _setError(e.toString());
@@ -400,7 +400,7 @@ class MarketingStationProvider with ChangeNotifier {
         final station = await fetchStationById(stationId);
         return station;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل إضافة المرفقات');
     } catch (e) {
       _setError(e.toString());
@@ -427,7 +427,7 @@ class MarketingStationProvider with ChangeNotifier {
         final station = await fetchStationById(stationId);
         return station;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل إضافة المصروف');
     } catch (e) {
       _setError(e.toString());
@@ -454,7 +454,7 @@ class MarketingStationProvider with ChangeNotifier {
         final station = await fetchStationById(stationId);
         return station;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       throw Exception(data['error'] ?? 'فشل إضافة سند القبض');
     } catch (e) {
       _setError(e.toString());
