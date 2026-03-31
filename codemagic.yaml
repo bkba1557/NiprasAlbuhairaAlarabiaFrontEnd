@@ -61,17 +61,16 @@ workflows:
 
       - name: Build signed IPA
         script: |
-          set -e
+          set -euo pipefail
 
-          PUBSPEC_BUILD_NUMBER=$(grep '^version:' pubspec.yaml | sed -E 's/.*\+([0-9]+)$/\1/')
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || true)
+          # App Store Connect requires each uploaded CFBundleVersion to be
+          # strictly higher than any previously uploaded build. Use a UTC
+          # timestamp so the value is always monotonic, even if the CLI lookup
+          # is unavailable or returns stale data.
+          PUBSPEC_BUILD_NUMBER="$(grep '^version:' pubspec.yaml | sed -nE 's/.*\+([0-9]+)$/\1/p')"
+          NEXT_BUILD_NUMBER="$(date -u +%Y%m%d%H%M%S)"
 
-          if [ -n "$LATEST_BUILD_NUMBER" ]; then
-            NEXT_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
-          else
-            NEXT_BUILD_NUMBER="${PUBSPEC_BUILD_NUMBER:-1}"
-          fi
-
+          echo "Pubspec build number: ${PUBSPEC_BUILD_NUMBER:-unset}"
           echo "Using iOS build number: $NEXT_BUILD_NUMBER"
 
           flutter build ipa --release \
@@ -123,7 +122,12 @@ workflows:
               exit 0
             fi
 
-            if grep -Eqi 'HTTP status code: 429|Upload still in progress|Failed to upload part number|CONTENT_NOT_UPLOADED|STATE_ERROR.CONTENT_NOT_UPLOADED|"code"[[:space:]]*:[[:space:]]*429|"code"[[:space:]]*:[[:space:]]*409' asc_publish.log; then
+            if grep -Eqi 'The bundle version must be higher than the previously uploaded version|ENTITY_ERROR\.ATTRIBUTE\.INVALID\.DUPLICATE|previousBundleVersion' asc_publish.log; then
+              echo "Duplicate CFBundleVersion detected. A higher iOS build number is required." >&2
+              exit 1
+            fi
+
+            if grep -Eqi 'HTTP status code: 429|Upload still in progress|Failed to upload part number|CONTENT_NOT_UPLOADED|STATE_ERROR.CONTENT_NOT_UPLOADED|"code"[[:space:]]*:[[:space:]]*429' asc_publish.log; then
               sleep_seconds=$((BASE_SLEEP * (2 ** (attempt - 1))))
               if [ "$sleep_seconds" -gt "$MAX_SLEEP" ]; then
                 sleep_seconds="$MAX_SLEEP"

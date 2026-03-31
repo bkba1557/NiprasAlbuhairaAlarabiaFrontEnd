@@ -214,7 +214,7 @@ class StationProvider with ChangeNotifier {
         return true;
       }
 
-      final errorData = json.decode(response.body);
+      final errorData = ApiService.decodeJson(response);
       _error = errorData['error'] ?? 'فشل تحويل المخزون';
       _isLoading = false;
       notifyListeners();
@@ -241,7 +241,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedSession = PumpSession.fromJson(data['session']);
 
         // تحديث الجلسة في الليست
@@ -254,7 +254,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل اعتماد الجلسة';
         _isLoading = false;
         notifyListeners();
@@ -287,7 +287,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل اعتماد قراءة الفتح';
         _isLoading = false;
         notifyListeners();
@@ -321,7 +321,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل حذف الجلسة';
         _isLoading = false;
         notifyListeners();
@@ -361,7 +361,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
 
         final allStations = (data['stations'] as List)
             .map((e) => Station.fromJson(e))
@@ -534,7 +534,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
+        final decoded = ApiService.decodeJson(response);
         if (decoded is List) {
           _fuelBalanceReport = decoded
               .whereType<Map>()
@@ -571,7 +571,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newStation = Station.fromJson(data['station']);
         _stations.insert(0, newStation);
 
@@ -579,7 +579,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل إنشاء المحطة';
         _isLoading = false;
         notifyListeners();
@@ -613,7 +613,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? '??? ??? ??????';
         _isLoading = false;
         notifyListeners();
@@ -665,7 +665,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedStation = Station.fromJson(data['station']);
 
         final index = _stations.indexWhere((s) => s.id == stationId);
@@ -681,7 +681,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error =
             errorData['error'] ?? errorData['message'] ?? 'فشل إضافة الطلمبة';
         _isLoading = false;
@@ -713,7 +713,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedStation = Station.fromJson(data['station']);
 
         // تحديث القائمة
@@ -731,7 +731,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل تحديث الطلمبة';
         _isLoading = false;
         notifyListeners();
@@ -764,7 +764,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedStation = Station.fromJson(data['station']);
 
         // تحديث القائمة
@@ -782,7 +782,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل تغيير حالة الطلمبة';
         _isLoading = false;
         notifyListeners();
@@ -810,7 +810,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200 || response.statusCode == 204) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedStation = Station.fromJson(data['station']);
 
         // تحديث القائمة
@@ -828,7 +828,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل حذف الطلمبة';
         _isLoading = false;
         notifyListeners();
@@ -861,7 +861,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _stationStats = StationStats.fromJson(data);
         _isLoading = false;
         notifyListeners();
@@ -916,7 +916,7 @@ class StationProvider with ChangeNotifier {
       final response = await http.get(uri, headers: ApiService.headers);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _sessions = (data['sessions'] as List)
             .map((e) => PumpSession.fromJson(e))
             .toList();
@@ -949,7 +949,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newSession = PumpSession.fromJson(data['session']);
         _sessions.insert(0, newSession);
 
@@ -957,7 +957,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل فتح الجلسة';
         _isLoading = false;
         notifyListeners();
@@ -988,7 +988,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedSession = PumpSession.fromJson(data['session']);
 
         // Update in list
@@ -1016,7 +1016,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل إغلاق الجلسة';
         _isLoading = false;
         notifyListeners();
@@ -1056,10 +1056,10 @@ class StationProvider with ChangeNotifier {
       }
 
       try {
-        final decoded = json.decode(response.body);
+        final decoded = ApiService.decodeJson(response);
         _error = decoded is Map ? decoded['error']?.toString() : null;
       } catch (_) {
-        _error = response.body;
+        _error = utf8.decode(response.bodyBytes);
       }
 
       _error = _error ?? 'فشل إرسال تقرير PDF';
@@ -1088,7 +1088,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedSession = PumpSession.fromJson(data['session']);
 
         final index = _sessions.indexWhere((s) => s.id == sessionId);
@@ -1104,7 +1104,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل تحديث الجلسة';
         _isLoading = false;
         notifyListeners();
@@ -1130,7 +1130,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _selectedSession = PumpSession.fromJson(data['session']);
         _isLoading = false;
         notifyListeners();
@@ -1170,7 +1170,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _inventories = (data['inventories'] as List)
             .map((e) => DailyInventory.fromJson(e))
             .toList();
@@ -1203,7 +1203,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newInventory = DailyInventory.fromJson(data['inventory']);
         _inventories.insert(0, newInventory);
 
@@ -1243,7 +1243,7 @@ class StationProvider with ChangeNotifier {
             );
 
             if (patchResponse.statusCode == 200) {
-              final patchedData = json.decode(patchResponse.body);
+              final patchedData = ApiService.decodeJson(patchResponse);
               final updatedInventory = DailyInventory.fromJson(
                 patchedData['inventory'],
               );
@@ -1265,7 +1265,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error =
             errorData['error'] ?? errorData['message'] ?? 'فشل إنشاء الجرد';
         _isLoading = false;
@@ -1294,7 +1294,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedInventory = DailyInventory.fromJson(data['inventory']);
         final index = _inventories.indexWhere(
           (inventory) => inventory.id == inventoryId,
@@ -1309,7 +1309,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error =
             errorData['error'] ?? errorData['message'] ?? 'فشل اعتماد الجرد';
         _isLoading = false;
@@ -1340,7 +1340,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedInventory = DailyInventory.fromJson(data['inventory']);
 
         final index = _inventories.indexWhere(
@@ -1357,7 +1357,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل تحديث الجرد';
         _isLoading = false;
         notifyListeners();
@@ -1392,7 +1392,7 @@ class StationProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل حذف الجرد';
         _isLoading = false;
         notifyListeners();
@@ -1418,7 +1418,7 @@ class StationProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _selectedInventory = DailyInventory.fromJson(data['inventory']);
         _inventorySessions =
             (data['sessions'] as List<dynamic>?)
