@@ -62,6 +62,10 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   DateTime _vehicleInsuranceExpiryDate = DateTime.now().add(
     const Duration(days: 365),
   );
+  DateTime _vehiclePeriodicInspectionIssueDate = DateTime.now();
+  DateTime _vehiclePeriodicInspectionExpiryDate = DateTime.now().add(
+    const Duration(days: 365),
+  );
   String _vehicleType = 'صهريج وقود';
   String _fuelType = 'ديزل';
   String? _inspectionMonth;
@@ -194,6 +198,20 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       _vehicleInsuranceExpiryDate = vehicleInsuranceExpiry;
     }
 
+    final periodicInspectionIssue = parseDate(
+      record['vehiclePeriodicInspectionIssueDate'],
+    );
+    if (periodicInspectionIssue != null) {
+      _vehiclePeriodicInspectionIssueDate = periodicInspectionIssue;
+    }
+
+    final periodicInspectionExpiry = parseDate(
+      record['vehiclePeriodicInspectionExpiryDate'],
+    );
+    if (periodicInspectionExpiry != null) {
+      _vehiclePeriodicInspectionExpiryDate = periodicInspectionExpiry;
+    }
+
     _vehicleType = record['vehicleType']?.toString() ?? 'صهريج وقود';
     _fuelType = record['fuelType']?.toString() ?? 'ديزل';
     _inspectionMonth =
@@ -303,6 +321,10 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       'vehicleInsuranceIssueDate': _vehicleInsuranceIssueDate.toIso8601String(),
       'vehicleInsuranceExpiryDate': _vehicleInsuranceExpiryDate
           .toIso8601String(),
+      'vehiclePeriodicInspectionIssueDate':
+          _vehiclePeriodicInspectionIssueDate.toIso8601String(),
+      'vehiclePeriodicInspectionExpiryDate':
+          _vehiclePeriodicInspectionExpiryDate.toIso8601String(),
       'insuranceNumber': _vehicleInsurancePolicyNumberController.text.trim(),
       'insuranceExpiry': _vehicleInsuranceExpiryDate.toIso8601String(),
     };
@@ -1774,6 +1796,162 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
                             isLargeScreen: isLargeScreen,
                             isMediumScreen: isMediumScreen,
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(
+                    height: isLargeScreen
+                        ? 32
+                        : isMediumScreen
+                        ? 24
+                        : 16,
+                  ),
+
+                  // =========================
+                  // Periodic Vehicle Inspection (Vehicle Safety Center)
+                  // =========================
+                  Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(
+                        isLargeScreen
+                            ? 32
+                            : isMediumScreen
+                            ? 24
+                            : 16,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.fact_check_outlined,
+                                color: Colors.deepOrange,
+                                size: isLargeScreen
+                                    ? 28
+                                    : isMediumScreen
+                                    ? 24
+                                    : 20,
+                              ),
+                              SizedBox(
+                                width: isLargeScreen
+                                    ? 16
+                                    : isMediumScreen
+                                    ? 12
+                                    : 8,
+                              ),
+                              Expanded(
+                                child: Text(
+                                  '\u0627\u0644\u0641\u062d\u0635 \u0627\u0644\u062f\u0648\u0631\u064a (\u0645\u0631\u0643\u0632 \u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0645\u0631\u0643\u0628\u0627\u062a)',
+                                  style: TextStyle(
+                                    fontSize: isLargeScreen
+                                        ? 22
+                                        : isMediumScreen
+                                        ? 18
+                                        : 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.deepOrange.shade800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(
+                            height: isLargeScreen
+                                ? 24
+                                : isMediumScreen
+                                ? 20
+                                : 16,
+                          ),
+                          if (isLargeScreen || isMediumScreen)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: _buildDateField(
+                                    context: context,
+                                    label: '\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u0635\u062f\u0627\u0631',
+                                    date: _vehiclePeriodicInspectionIssueDate,
+                                    onTap: () => _pickDate(
+                                      context: context,
+                                      initialDate:
+                                          _vehiclePeriodicInspectionIssueDate,
+                                      onPicked: (value) {
+                                        _vehiclePeriodicInspectionIssueDate =
+                                            value;
+                                      },
+                                    ),
+                                    isLargeScreen: isLargeScreen,
+                                    isMediumScreen: isMediumScreen,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: isLargeScreen
+                                      ? 24
+                                      : isMediumScreen
+                                      ? 16
+                                      : 12,
+                                ),
+                                Expanded(
+                                  child: _buildDateField(
+                                    context: context,
+                                    label: '\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0627\u0646\u062a\u0647\u0627\u0621',
+                                    date: _vehiclePeriodicInspectionExpiryDate,
+                                    onTap: () => _pickDate(
+                                      context: context,
+                                      initialDate:
+                                          _vehiclePeriodicInspectionExpiryDate,
+                                      onPicked: (value) {
+                                        _vehiclePeriodicInspectionExpiryDate =
+                                            value;
+                                      },
+                                    ),
+                                    isLargeScreen: isLargeScreen,
+                                    isMediumScreen: isMediumScreen,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else ...[
+                            _buildDateField(
+                              context: context,
+                              label:
+                                  '\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u0635\u062f\u0627\u0631',
+                              date: _vehiclePeriodicInspectionIssueDate,
+                              onTap: () => _pickDate(
+                                context: context,
+                                initialDate: _vehiclePeriodicInspectionIssueDate,
+                                onPicked: (value) {
+                                  _vehiclePeriodicInspectionIssueDate = value;
+                                },
+                              ),
+                              isLargeScreen: isLargeScreen,
+                              isMediumScreen: isMediumScreen,
+                            ),
+                            SizedBox(height: 12),
+                            _buildDateField(
+                              context: context,
+                              label:
+                                  '\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0627\u0646\u062a\u0647\u0627\u0621',
+                              date: _vehiclePeriodicInspectionExpiryDate,
+                              onTap: () => _pickDate(
+                                context: context,
+                                initialDate:
+                                    _vehiclePeriodicInspectionExpiryDate,
+                                onPicked: (value) {
+                                  _vehiclePeriodicInspectionExpiryDate = value;
+                                },
+                              ),
+                              isLargeScreen: isLargeScreen,
+                              isMediumScreen: isMediumScreen,
+                            ),
+                          ],
                         ],
                       ),
                     ),

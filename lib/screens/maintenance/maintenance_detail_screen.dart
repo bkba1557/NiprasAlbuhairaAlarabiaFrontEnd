@@ -596,6 +596,12 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     final vehicleRegistrationExpiryDate = DateTime.tryParse(
       record['vehicleRegistrationExpiryDate']?.toString() ?? '',
     );
+    final vehiclePeriodicInspectionIssueDate = DateTime.tryParse(
+      record['vehiclePeriodicInspectionIssueDate']?.toString() ?? '',
+    );
+    final vehiclePeriodicInspectionExpiryDate = DateTime.tryParse(
+      record['vehiclePeriodicInspectionExpiryDate']?.toString() ?? '',
+    );
     final driverInsuranceIssueDate = DateTime.tryParse(
       record['driverInsuranceIssueDate']?.toString() ?? '',
     );
@@ -1122,6 +1128,69 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                         expiryDate: vehicleRegistrationExpiryDate,
                         isLargeScreen: isLargeScreen,
                         isMediumScreen: isMediumScreen,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // =========================
+            // Periodic Vehicle Inspection (Vehicle Safety Center)
+            // =========================
+            Center(
+              child: Text(
+                'الفحص الدوري (مركز سلامة المركبات)',
+                style: TextStyle(
+                  fontSize: isLargeScreen
+                      ? 24
+                      : isMediumScreen
+                      ? 20
+                      : 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            wrapSectionCard(
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(
+                    isLargeScreen
+                        ? 24
+                        : isMediumScreen
+                        ? 20
+                        : 16,
+                  ),
+                  child: GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: isLargeScreen ? 2 : 1,
+                    childAspectRatio: infoGridAspectRatio,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 12,
+                    children: [
+                      _buildInfoCard(
+                        'تاريخ الإصدار',
+                        vehiclePeriodicInspectionIssueDate != null
+                            ? DateFormat('yyyy-MM-dd')
+                                .format(vehiclePeriodicInspectionIssueDate)
+                            : '-',
+                        Icons.event_available,
+                        Colors.green,
+                      ),
+                      _buildInfoCard(
+                        'تاريخ الانتهاء',
+                        vehiclePeriodicInspectionExpiryDate != null
+                            ? DateFormat('yyyy-MM-dd')
+                                .format(vehiclePeriodicInspectionExpiryDate)
+                            : '-',
+                        Icons.event_busy,
+                        Colors.red,
                       ),
                     ],
                   ),
