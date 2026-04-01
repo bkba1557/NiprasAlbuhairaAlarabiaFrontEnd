@@ -1,114 +1,6 @@
-# workflows:
-#   ios-app-store-release:
-#     name: iOS App Store Release
-#     max_build_duration: 120
-#     instance_type: mac_mini_m2
-
-#     integrations:
-#       app_store_connect: albuhairaalarabianipras
-
-#     environment:
-#       flutter: 3.38.3
-#       xcode: latest
-#       cocoapods: default
-
-#       ios_signing:
-#         distribution_type: app_store
-#         bundle_identifier: com.albuhaira.nipras
-
-#       vars:
-#         XCODE_WORKSPACE: Runner.xcworkspace
-#         XCODE_SCHEME: Runner
-#         APP_STORE_APPLE_ID: "6759683802"
-
-#     cache:
-#       cache_paths:
-#         - $FLUTTER_ROOT/.pub-cache
-#         - ~/.pub-cache
-#         - ~/Library/Caches/CocoaPods
-
-#     scripts:
-#       - name: Get Flutter packages
-#         script: |
-#           flutter clean
-#           flutter pub get
-
-#       - name: Generate iOS app icons
-#         script: |
-#           chmod +x scripts/generate_ios_app_icons.sh
-#           ./scripts/generate_ios_app_icons.sh
-
-#       - name: Install CocoaPods dependencies
-#         script: |
-#           cd ios
-#           pod install
-#           cd ..
-
-#       - name: Set up code signing
-#         script: |
-#           xcode-project use-profiles
-
-#       - name: Build signed IPA
-#         script: |
-#           set -e
-
-#           PUBSPEC_BUILD_NUMBER=$(grep '^version:' pubspec.yaml | sed -E 's/.*\+([0-9]+)$/\1/')
-#           # IMPORTANT:
-#           # - App Store "live" build numbers can lag behind TestFlight uploads.
-#           # - Using the App Store build number can cause duplicate CFBundleVersion uploads.
-#           # Prefer TestFlight build numbers when available.
-#           LATEST_TESTFLIGHT_BUILD_NUMBER="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || true)"
-#           LATEST_APP_STORE_BUILD_NUMBER="$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || true)"
-
-#           LATEST_BUILD_NUMBER=""
-#           if [ -n "$LATEST_TESTFLIGHT_BUILD_NUMBER" ]; then
-#             LATEST_BUILD_NUMBER="$LATEST_TESTFLIGHT_BUILD_NUMBER"
-#           elif [ -n "$LATEST_APP_STORE_BUILD_NUMBER" ]; then
-#             LATEST_BUILD_NUMBER="$LATEST_APP_STORE_BUILD_NUMBER"
-#           fi
-
-#           LATEST_CANDIDATE=0
-#           PUBSPEC_CANDIDATE=0
-
-#           if echo "$LATEST_BUILD_NUMBER" | grep -Eq '^[0-9]+$'; then
-#             LATEST_CANDIDATE=$((LATEST_BUILD_NUMBER + 1))
-#           fi
-#           if echo "$PUBSPEC_BUILD_NUMBER" | grep -Eq '^[0-9]+$'; then
-#             PUBSPEC_CANDIDATE="$PUBSPEC_BUILD_NUMBER"
-#           fi
-
-#           NEXT_BUILD_NUMBER="$LATEST_CANDIDATE"
-#           if [ "$PUBSPEC_CANDIDATE" -gt "$NEXT_BUILD_NUMBER" ]; then
-#             NEXT_BUILD_NUMBER="$PUBSPEC_CANDIDATE"
-#           fi
-
-#           if [ "$NEXT_BUILD_NUMBER" -le 0 ]; then
-#             NEXT_BUILD_NUMBER="$(date +%s)"
-#           fi
-
-#           echo "Using iOS build number: $NEXT_BUILD_NUMBER"
-
-#           flutter build ipa --release \
-#             --build-number="$NEXT_BUILD_NUMBER" \
-#             --export-options-plist=/Users/builder/export_options.plist
-
-#     artifacts:
-#       - build/ios/ipa/*.ipa
-#       - build/ios/archive/*.xcarchive
-#       - /tmp/xcodebuild_logs/*.log
-#       - flutter_drive.log
-
-#     publishing:
-#       app_store_connect:
-#         auth: integration
-
-
-
 workflows:
-  # NOTE: App Store-signed IPAs can't be installed directly on devices.
-  # For direct iPhone installs, use the `ios-ad-hoc-ipa` workflow.
   ios-app-store-release:
-    name: iOS App Store Release (TestFlight + IPA)
+    name: iOS App Store Release
     max_build_duration: 120
     instance_type: mac_mini_m2
 
@@ -128,15 +20,6 @@ workflows:
         XCODE_WORKSPACE: Runner.xcworkspace
         XCODE_SCHEME: Runner
         APP_STORE_APPLE_ID: "6759683802"
-        # Apple upload can sometimes be rate-limited (HTTP 429) or flaky.
-        # These env vars configure Codemagic CLI Tools `app-store-connect publish`
-        # retry behaviour for `xcrun altool --upload-app`.
-        APP_STORE_CONNECT_ALTOOL_RETRIES: "30"
-        APP_STORE_CONNECT_ALTOOL_RETRY_WAIT: "30"
-        # Extra wrapper retry (handles 429/409 from Apple's ContentDelivery).
-        ASC_PUBLISH_MAX_ATTEMPTS: "8"
-        ASC_PUBLISH_RETRY_SLEEP_BASE_SECONDS: "60"
-        ASC_PUBLISH_RETRY_SLEEP_MAX_SECONDS: "900"
 
     cache:
       cache_paths:
@@ -170,145 +53,38 @@ workflows:
           set -e
 
           PUBSPEC_BUILD_NUMBER=$(grep '^version:' pubspec.yaml | sed -E 's/.*\+([0-9]+)$/\1/')
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || true)
+          # IMPORTANT:
+          # - App Store "live" build numbers can lag behind TestFlight uploads.
+          # - Using the App Store build number can cause duplicate CFBundleVersion uploads.
+          # Prefer TestFlight build numbers when available.
+          LATEST_TESTFLIGHT_BUILD_NUMBER="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || true)"
+          LATEST_APP_STORE_BUILD_NUMBER="$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || true)"
 
-          if [ -n "$LATEST_BUILD_NUMBER" ]; then
-            NEXT_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
-          else
-            NEXT_BUILD_NUMBER="${PUBSPEC_BUILD_NUMBER:-1}"
+          LATEST_BUILD_NUMBER=""
+          if [ -n "$LATEST_TESTFLIGHT_BUILD_NUMBER" ]; then
+            LATEST_BUILD_NUMBER="$LATEST_TESTFLIGHT_BUILD_NUMBER"
+          elif [ -n "$LATEST_APP_STORE_BUILD_NUMBER" ]; then
+            LATEST_BUILD_NUMBER="$LATEST_APP_STORE_BUILD_NUMBER"
           fi
 
-          echo "Using iOS build number: $NEXT_BUILD_NUMBER"
+          LATEST_CANDIDATE=0
+          PUBSPEC_CANDIDATE=0
 
-          flutter build ipa --release \
-            --build-number="$NEXT_BUILD_NUMBER" \
-            --export-options-plist=/Users/builder/export_options.plist
-
-      - name: Normalize IPA filename (ASCII)
-        script: |
-          set -e
-
-          IPA_DIR="build/ios/ipa"
-          IPA_SRC="$(ls -1 "$IPA_DIR"/*.ipa | head -n 1)"
-          IPA_DST="$IPA_DIR/order_tracker.ipa"
-
-          if [ "$IPA_SRC" != "$IPA_DST" ]; then
-            mv "$IPA_SRC" "$IPA_DST"
-            echo "Renamed IPA to: $IPA_DST"
+          if echo "$LATEST_BUILD_NUMBER" | grep -Eq '^[0-9]+$'; then
+            LATEST_CANDIDATE=$((LATEST_BUILD_NUMBER + 1))
+          fi
+          if echo "$PUBSPEC_BUILD_NUMBER" | grep -Eq '^[0-9]+$'; then
+            PUBSPEC_CANDIDATE="$PUBSPEC_BUILD_NUMBER"
           fi
 
-      - name: Publish to App Store Connect (retry on 429/409)
-        script: |
-          set -euo pipefail
-
-          if ! command -v app-store-connect >/dev/null 2>&1; then
-            echo "Missing Codemagic CLI tool: app-store-connect" >&2
-            exit 1
+          NEXT_BUILD_NUMBER="$LATEST_CANDIDATE"
+          if [ "$PUBSPEC_CANDIDATE" -gt "$NEXT_BUILD_NUMBER" ]; then
+            NEXT_BUILD_NUMBER="$PUBSPEC_CANDIDATE"
           fi
 
-          IPA_PATH="build/ios/ipa/order_tracker.ipa"
-          if [ ! -f "$IPA_PATH" ]; then
-            echo "IPA not found at: $IPA_PATH" >&2
-            ls -la build/ios/ipa || true
-            exit 1
+          if [ "$NEXT_BUILD_NUMBER" -le 0 ]; then
+            NEXT_BUILD_NUMBER="$(date +%s)"
           fi
-
-          MAX_ATTEMPTS="${ASC_PUBLISH_MAX_ATTEMPTS:-8}"
-          BASE_SLEEP="${ASC_PUBLISH_RETRY_SLEEP_BASE_SECONDS:-60}"
-          MAX_SLEEP="${ASC_PUBLISH_RETRY_SLEEP_MAX_SECONDS:-900}"
-
-          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-            echo "App Store Connect publish attempt $attempt/$MAX_ATTEMPTS..."
-
-            if app-store-connect publish \
-              --path "$IPA_PATH" \
-              --altool-retries "${APP_STORE_CONNECT_ALTOOL_RETRIES:-10}" \
-              --altool-retry-wait "${APP_STORE_CONNECT_ALTOOL_RETRY_WAIT:-0.5}" \
-              2>&1 | tee asc_publish.log; then
-              echo "Publish succeeded."
-              exit 0
-            fi
-
-            if grep -Eqi 'HTTP status code: 429|Upload still in progress|Failed to upload part number|CONTENT_NOT_UPLOADED|STATE_ERROR.CONTENT_NOT_UPLOADED|"code"[[:space:]]*:[[:space:]]*429|"code"[[:space:]]*:[[:space:]]*409' asc_publish.log; then
-              sleep_seconds=$((BASE_SLEEP * (2 ** (attempt - 1))))
-              if [ "$sleep_seconds" -gt "$MAX_SLEEP" ]; then
-                sleep_seconds="$MAX_SLEEP"
-              fi
-              echo "Transient Apple upload issue detected. Waiting ${sleep_seconds}s then retry..."
-              sleep "$sleep_seconds"
-              continue
-            fi
-
-            echo "Non-retryable publish failure. See asc_publish.log" >&2
-            exit 1
-          done
-
-          echo "Publish failed after $MAX_ATTEMPTS attempts." >&2
-          exit 1
-
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - build/ios/archive/*.xcarchive
-      - /tmp/xcodebuild_logs/*.log
-      - asc_publish.log
-      - flutter_drive.log
-
-  ios-ad-hoc-ipa:
-    name: iOS Ad Hoc IPA (Direct Install)
-    max_build_duration: 120
-    instance_type: mac_mini_m2
-
-    # No App Store Connect upload is needed for Ad Hoc builds.
-    # Uncomment if you want to use App Store Connect tools in scripts.
-    # integrations:
-    #   app_store_connect: albuhairaalarabianipras
-
-    environment:
-      flutter: 3.38.3
-      xcode: latest
-      cocoapods: default
-
-      ios_signing:
-        distribution_type: ad_hoc
-        bundle_identifier: com.albuhaira.nipras
-
-      vars:
-        XCODE_WORKSPACE: Runner.xcworkspace
-        XCODE_SCHEME: Runner
-
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - ~/.pub-cache
-        - ~/Library/Caches/CocoaPods
-
-    scripts:
-      - name: Get Flutter packages
-        script: |
-          flutter clean
-          flutter pub get
-
-      - name: Generate iOS app icons
-        script: |
-          chmod +x scripts/generate_ios_app_icons.sh
-          ./scripts/generate_ios_app_icons.sh
-
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios
-          pod install
-          cd ..
-
-      - name: Set up code signing
-        script: |
-          xcode-project use-profiles
-
-      - name: Build signed IPA (ad-hoc)
-        script: |
-          set -e
-
-          # Use a monotonic build number for device installs (no App Store Connect needed).
-          NEXT_BUILD_NUMBER="$(date +%s)"
 
           echo "Using iOS build number: $NEXT_BUILD_NUMBER"
 
@@ -321,3 +97,8 @@ workflows:
       - build/ios/archive/*.xcarchive
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+
