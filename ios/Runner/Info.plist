@@ -60,11 +60,17 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
-	<!-- Location (While In Use Only) -->
+	<!-- 🔥 Location (REQUIRED FIX) -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>
-	نحتاج إلى موقعك لعرض مسار الشاحنة وتتبع الطلب بشكل مباشر أثناء استخدام التطبيق فقط.
-	We use your location to display the truck route and track orders in real time while using the app only.
+	نحتاج إلى موقعك لعرض موقعك الحالي وتتبع الشاحنات والطلبات داخل التطبيق أثناء الاستخدام فقط.
+	We use your location to display your current position and track trucks and orders while using the app.
+	</string>
+
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>
+	يتم استخدام الموقع لتحسين دقة التتبع وتقديم تجربة أفضل داخل التطبيق.
+	Location is used to improve tracking accuracy and provide a better user experience.
 	</string>
 
 	<!-- Microphone -->
@@ -102,7 +108,7 @@
 	We need permission to save photos and videos when sharing media.
 	</string>
 
-	<!-- Background Modes (Safe & Allowed) -->
+	<!-- Background Modes (Safe) -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
