@@ -54,7 +54,7 @@ class SupplierProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _suppliers = (data['suppliers'] as List)
             .map((e) => Supplier.fromJson(e))
             .toList();
@@ -120,7 +120,7 @@ class SupplierProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         _selectedSupplier = Supplier.fromJson(data['supplier']);
         _isLoading = false;
         notifyListeners();
@@ -218,14 +218,14 @@ class SupplierProvider with ChangeNotifier {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final newSupplier = Supplier.fromJson(data['supplier']);
         _suppliers.insert(0, newSupplier);
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل إنشاء المورد';
         _isLoading = false;
         notifyListeners();
@@ -324,7 +324,7 @@ class SupplierProvider with ChangeNotifier {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         final updatedSupplier = Supplier.fromJson(data['supplier']);
 
         // Update in list
@@ -342,7 +342,7 @@ class SupplierProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل تحديث بيانات المورد';
         _isLoading = false;
         notifyListeners();
@@ -380,7 +380,7 @@ class SupplierProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final errorData = json.decode(response.body);
+        final errorData = ApiService.decodeJson(response);
         _error = errorData['error'] ?? 'فشل حذف المورد';
         _isLoading = false;
         notifyListeners();
@@ -429,7 +429,7 @@ class SupplierProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = ApiService.decodeJson(response);
         return (data['suppliers'] as List)
             .map((e) => Supplier.fromJson(e))
             .toList();
@@ -448,7 +448,7 @@ class SupplierProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return ApiService.decodeJson(response);
       }
       return {};
     } catch (e) {

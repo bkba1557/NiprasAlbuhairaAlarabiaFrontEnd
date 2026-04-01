@@ -23,8 +23,9 @@ class ApiConfig {
   }
 
   static String _defaultDevBaseUrl() {
-    // if (kIsWeb) return productionBaseUrl;
-    if (kIsWeb) return devLanBaseUrl;
+    // Web testing is usually done against the HTTPS server (to avoid mixed
+    // content / network policy issues when the API isn't on the same LAN).
+    if (kIsWeb) return productionBaseUrl;
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:

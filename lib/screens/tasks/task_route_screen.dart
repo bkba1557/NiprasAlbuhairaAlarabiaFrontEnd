@@ -265,7 +265,7 @@ class _TaskRouteScreenState extends State<TaskRouteScreen> {
       if (response.statusCode != 200) {
         throw Exception('Failed to load directions');
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       final routes = data['routes'];
       if (routes is! List || routes.isEmpty) {
         throw Exception('No routes found');

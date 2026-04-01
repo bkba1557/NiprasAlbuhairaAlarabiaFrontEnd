@@ -37,35 +37,35 @@ Future<Uint8List> buildInspectionPdf(StationInspection inspection) async {
         pw.SizedBox(height: 6),
         pw.Center(
           child: pw.Text(
-            '????? ?????? ????',
+            'تقرير تفتيش محطة',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
         ),
         pw.SizedBox(height: 12),
-        _buildInfoSection('?????? ??????', [
-          _infoRow('??? ??????', inspection.name),
-          _infoRow('???????', inspection.city),
-          _infoRow('???????', inspection.region),
-          _infoRow('???????', inspection.address),
-          _infoRow('??????', _statusLabel(inspection.status)),
+        _buildInfoSection('بيانات المحطة', [
+          _infoRow('اسم المحطة', inspection.name),
+          _infoRow('المدينة', inspection.city),
+          _infoRow('المنطقة', inspection.region),
+          _infoRow('العنوان', inspection.address),
+          _infoRow('الحالة', _statusLabel(inspection.status)),
           if (inspection.location != null)
             _infoRow(
-              '??????????',
+              'الإحداثيات',
               '${inspection.location!.lat.toStringAsFixed(6)}, ${inspection.location!.lng.toStringAsFixed(6)}',
             ),
         ]),
         pw.SizedBox(height: 10),
-        _buildInfoSection('?????? ??????', [
-          _infoRow('??? ??????', inspection.owner?.name ?? '-'),
-          _infoRow('??? ??????', inspection.owner?.phone ?? '-'),
-          _infoRow('????? ??????', inspection.owner?.address ?? '-'),
+        _buildInfoSection('بيانات المالك', [
+          _infoRow('اسم المالك', inspection.owner?.name ?? '-'),
+          _infoRow('رقم الجوال', inspection.owner?.phone ?? '-'),
+          _infoRow('عنوان المالك', inspection.owner?.address ?? '-'),
         ]),
         pw.SizedBox(height: 10),
         _buildPumpsSection(inspection),
         pw.SizedBox(height: 10),
         _buildFuelSummarySection(inspection),
         pw.SizedBox(height: 10),
-        _buildInfoSection('?????????', [
+        _buildInfoSection('ملاحظات', [
           pw.Text(
             inspection.notes?.isNotEmpty == true ? inspection.notes! : '-',
             style: const pw.TextStyle(fontSize: 10),
@@ -93,7 +93,7 @@ pw.Widget _buildPdfHeader(pw.MemoryImage logoImage) {
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
               pw.Text(
-                '???? ??????? ??????? ????????',
+                'نظام نبراس لإدارة وتتبع الطلبات',
                 textAlign: pw.TextAlign.right,
                 style: pw.TextStyle(
                   fontSize: 13,
@@ -102,7 +102,7 @@ pw.Widget _buildPdfHeader(pw.MemoryImage logoImage) {
               ),
               pw.SizedBox(height: 4),
               pw.Text(
-                '????? ?????? ???? ??????',
+                'تقرير تفتيش محطة الوقود',
                 textAlign: pw.TextAlign.right,
                 style: const pw.TextStyle(fontSize: 9),
               ),
@@ -126,7 +126,7 @@ pw.Widget _buildPdfFooter() {
       pw.Divider(color: PdfColors.grey400),
       pw.SizedBox(height: 4),
       pw.Text(
-        '???? ????? | ???? ??????? ???????',
+        'شركة البحيرة العربية | نظام نبراس',
         style: const pw.TextStyle(fontSize: 8),
         textAlign: pw.TextAlign.center,
       ),
@@ -216,18 +216,18 @@ pw.Widget _buildPumpsSection(StationInspection inspection) {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text(
-          '?????? ??????? ????????',
+          'تفاصيل المضخات والليات',
           style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 6),
         _buildTable(
           headers: const [
-            '??????',
-            '????',
-            '??? ??????',
-            '????? ?????',
-            '????? ???????',
-            '??????? ???????',
+            'المضخة',
+            'اللية',
+            'نوع الوقود',
+            'قراءة الفتح',
+            'قراءة الإغلاق',
+            'اللترات المباعة',
           ],
           rows: rows,
         ),
@@ -263,12 +263,12 @@ pw.Widget _buildFuelSummarySection(StationInspection inspection) {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text(
-          '???? ??????? ??????? ??? ??? ??????',
+          'إجمالي المبيعات حسب نوع الوقود',
           style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 6),
         _buildTable(
-          headers: const ['??? ??????', '?????? ???????'],
+          headers: const ['نوع الوقود', 'إجمالي اللترات'],
           rows: rows,
         ),
       ],
@@ -325,24 +325,24 @@ pw.Widget _buildTable({
 String _fuelLabel(FuelType type) {
   switch (type) {
     case FuelType.gas91:
-      return '????? 91';
+      return 'بنزين 91';
     case FuelType.gas95:
-      return '????? 95';
+      return 'بنزين 95';
     case FuelType.diesel:
-      return '????';
+      return 'ديزل';
     case FuelType.kerosene:
-      return '???????';
+      return 'كيروسين';
   }
 }
 
 String _statusLabel(InspectionStatus status) {
   switch (status) {
     case InspectionStatus.accepted:
-      return '??????';
+      return 'مقبول';
     case InspectionStatus.rejected:
-      return '??????';
+      return 'مرفوض';
     case InspectionStatus.pending:
     default:
-      return '??? ????????';
+      return 'تحت المراجعة';
   }
 }

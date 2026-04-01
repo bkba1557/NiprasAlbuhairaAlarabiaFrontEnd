@@ -1,5 +1,6 @@
 // ignore_for_file: unused_local_variable, dead_code
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:order_tracker/models/driver_model.dart';
@@ -8,6 +9,7 @@ import 'package:order_tracker/models/order_model.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/notification_provider.dart';
 import 'package:order_tracker/providers/order_provider.dart';
+import 'package:order_tracker/services/backup_service.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/widgets/recent_orders_widget.dart';
@@ -18,6 +20,7 @@ import 'package:order_tracker/utils/file_saver.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:pdf/pdf.dart';
@@ -59,6 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _exportEstimatedSeconds = 6;
   String _exportPdfScope = 'completed';
   String _exportExcelScope = 'completed';
+  bool _backupBusy = false;
   final ScrollController _ordersHorizontalController = ScrollController();
 
   final ScrollController _ordersVerticalController = ScrollController();
@@ -977,6 +981,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
+              actions: [
+                if (authProvider.isAdminLike)
+                  IconButton(
+                    onPressed:
+                        _backupBusy ? null : () => _showBackupDialog(context),
+                    tooltip: 'النسخ الاحتياطي',
+                    icon: const Icon(Icons.backup_outlined),
+                  ),
+              ],
             ),
       body: isDesktop
           ? _buildDesktopLayout(
@@ -1964,11 +1977,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       Row(
                         children: [
-                          IconButton(
-                            onPressed: () {
-                              Navigator.pushNamed(
-                                context,
-                                AppRoutes.notifications,
+	                          IconButton(
+	                            onPressed: () {
+	                              Navigator.pushNamed(
+	                                context,
+	                                AppRoutes.notifications,
                               );
                             },
                             icon: Badge(
@@ -1979,13 +1992,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                               backgroundColor: AppColors.errorRed,
                               textColor: Colors.white,
-                              child: const Icon(Icons.notifications_outlined),
+	                              child: const Icon(Icons.notifications_outlined),
+	                            ),
+	                          ),
+                          if (authProvider.isAdminLike)
+                            IconButton(
+                              onPressed: _backupBusy
+                                  ? null
+                                  : () => _showBackupDialog(context),
+                              tooltip: 'النسخ الاحتياطي',
+                              icon: const Icon(Icons.backup_outlined),
                             ),
-                          ),
-                          IconButton(
-                            onPressed: () =>
-                                _confirmLogout(context, authProvider),
-                            icon: const Icon(Icons.logout),
+	                          IconButton(
+	                            onPressed: () =>
+	                                _confirmLogout(context, authProvider),
+	                            icon: const Icon(Icons.logout),
                             tooltip: 'تسجيل الخروج',
                             color: AppColors.errorRed,
                           ),
@@ -8675,6 +8696,200 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ],
     );
+  }
+
+  Future<T?> _runBackupOperation<T>(
+    BuildContext context, {
+    required String message,
+    required Future<T> Function() action,
+  }) async {
+    if (_backupBusy) return null;
+
+    setState(() {
+      _backupBusy = true;
+    });
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.6),
+            ),
+            const SizedBox(width: 14),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final result = await action();
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      return result;
+    } catch (_) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      rethrow;
+	    } finally {
+	      if (mounted) {
+	        setState(() {
+	          _backupBusy = false;
+	        });
+	      }
+	    }
+	  }
+
+  String _friendlyError(Object error) {
+    final text = error.toString().trim();
+    if (text.startsWith('Exception:')) {
+      return text.replaceFirst('Exception:', '').trim();
+    }
+    return text;
+  }
+
+  Future<void> _showBackupDialog(BuildContext context) async {
+    if (_backupBusy) return;
+
+    final role = Provider.of<AuthProvider>(context, listen: false).role;
+    final canImport = role == 'owner' || role == 'admin';
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('النسخ الاحتياطي'),
+        content: const Text(
+          'يتم إنشاء نسخة احتياطية تلقائياً كل 12 ساعة (حسب إعدادات الخادم)، ويتم إرسالها لبريد المالك. '
+          'يمكنك تحميل نسخة الآن أو استيراد نسخة لاسترجاع البيانات.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إغلاق'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              unawaited(_downloadBackupNow(context));
+            },
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('تحميل'),
+          ),
+          if (canImport)
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                unawaited(_importBackupNow(context));
+              },
+              icon: const Icon(Icons.upload_file_outlined),
+              label: const Text('استيراد'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _downloadBackupNow(BuildContext context) async {
+    try {
+      final savedPath = await _runBackupOperation<String?>(
+        context,
+        message: 'جاري إنشاء/تحميل النسخة الاحتياطية...',
+        action: () => BackupService.downloadLatestBackup(fresh: true),
+      );
+
+      if (!mounted || savedPath == null) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            kIsWeb ? 'تم تحميل النسخة الاحتياطية.' : 'تم حفظ النسخة: $savedPath',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final hint = kIsWeb && error.toString().contains('Failed to fetch')
+          ? ' (على الويب: تأكد أن رابط الـ API صحيح ومتاح: لو السيرفر https استخدم https، ولو صفحة https ما ينفع API http)'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فشل النسخ الاحتياطي: ${_friendlyError(error)}$hint'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _importBackupNow(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('استيراد نسخة احتياطية'),
+        content: const Text(
+          'الاستيراد سيستبدل البيانات الحالية على قاعدة البيانات (حذف ثم استيراد). هل تريد المتابعة؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.errorRed),
+            child: const Text('متابعة'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final pickerResult = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['gz', 'ndjson', 'json'],
+      withData: kIsWeb,
+    );
+
+    if (pickerResult == null || pickerResult.files.isEmpty) return;
+
+    final file = pickerResult.files.first;
+
+    try {
+      final response = await _runBackupOperation<Map<String, dynamic>>(
+        context,
+        message: 'جاري استيراد النسخة الاحتياطية...',
+        action: () => BackupService.restoreFromBackup(
+          file: file,
+          dropExisting: true,
+        ),
+      );
+
+      if (!mounted || response == null) return;
+
+      final data = response['data'] is Map<String, dynamic>
+          ? response['data'] as Map<String, dynamic>
+          : <String, dynamic>{};
+      final totalInserted = data['totalInserted'];
+      final insertedText =
+          totalInserted == null ? '' : ' (تم إدخال $totalInserted سجل)';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم الاستيراد بنجاح$insertedText. يفضل إعادة تشغيل التطبيق.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('فشل الاستيراد: ${_friendlyError(error)}')),
+      );
+    }
   }
 
   Future<void> _confirmLogout(

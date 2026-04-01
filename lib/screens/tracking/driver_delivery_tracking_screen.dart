@@ -784,8 +784,6 @@ class _DriverDeliveryTrackingScreenState
           accuracy: LocationAccuracy.bestForNavigation,
           distanceFilter: 10,
           pauseLocationUpdatesAutomatically: false,
-          allowBackgroundLocationUpdates: true,
-          showBackgroundLocationIndicator: true,
         );
       default:
         return const LocationSettings(

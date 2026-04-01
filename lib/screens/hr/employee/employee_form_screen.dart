@@ -743,7 +743,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         _city.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('???? ??? ???? ?????? ????????'),
+          content: Text('يرجى تعبئة جميع الحقول المطلوبة'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -754,7 +754,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     if (_dateOfBirth == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('????? ??????? ?????'),
+          content: Text('يرجى اختيار التاريخ'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -765,7 +765,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     if (_nationalId.length != 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('??? ?????? ??? ?? ???? 10 ?????'),
+          content: Text('رقم الهوية يجب أن يكون 10 أرقام'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -776,7 +776,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     if (_department.isEmpty || _position.isEmpty || _employmentType.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('???? ??? ???? ?????? ????????'),
+          content: Text('يرجى تعبئة جميع الحقول المطلوبة'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -787,7 +787,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     if (_hireDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('????? ??????? ?????'),
+          content: Text('يرجى اختيار التاريخ'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -798,7 +798,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     if (_contractStartDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('????? ????? ??????'),
+          content: Text('يرجى اختيار تاريخ بداية العقد'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -809,7 +809,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     if (_basicSalary <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('?????? ??????? ??? ?? ???? ???? ?? ???'),
+          content: Text('الراتب الأساسي يجب أن يكون أكبر من صفر'),
           backgroundColor: AppColors.errorRed,
         ),
       );

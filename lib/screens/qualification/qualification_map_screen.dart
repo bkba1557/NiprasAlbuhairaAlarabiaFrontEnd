@@ -353,7 +353,7 @@ class _QualificationStationsMapScreenState
         _routeCache[station.id] = fallbackInfo;
         return fallbackInfo;
       }
-      final data = json.decode(response.body);
+      final data = ApiService.decodeJson(response);
       final routes = data['routes'];
       if (routes is! List || routes.isEmpty) {
         final fallbackInfo = _RouteInfo(

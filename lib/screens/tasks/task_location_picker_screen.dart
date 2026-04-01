@@ -144,7 +144,7 @@ class _TaskLocationPickerScreenState extends State<TaskLocationPickerScreen> {
         headers: {'User-Agent': 'order-tracker-app'},
       );
       if (response.statusCode != 200) return;
-      final data = json.decode(response.body);
+      final data = json.decode(utf8.decode(response.bodyBytes));
       if (data is! Map) return;
       final address = data['address'];
       if (address is! Map) return;
@@ -203,7 +203,7 @@ class _TaskLocationPickerScreenState extends State<TaskLocationPickerScreen> {
         headers: {'User-Agent': 'order-tracker-app'},
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         if (data is List && data.isNotEmpty) {
           final results = <_SearchResult>[];
           for (final item in data) {

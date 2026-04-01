@@ -8,9 +8,7 @@ class DriverBackgroundLocationPermission {
       'driver_background_location_prompted_v1_';
 
   static bool get _supportsBackgroundLocation =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   static Future<void> maybePromptOnFirstLaunch(
     BuildContext context, {
@@ -81,7 +79,8 @@ class DriverBackgroundLocationPermission {
       permission = await Geolocator.requestPermission();
     }
 
-    if (permission == LocationPermission.whileInUse && _supportsBackgroundLocation) {
+    if (permission == LocationPermission.whileInUse &&
+        _supportsBackgroundLocation) {
       permission = await Geolocator.requestPermission();
     }
 
@@ -94,10 +93,17 @@ class DriverBackgroundLocationPermission {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
+        final isAndroidBackgroundFlow = _supportsBackgroundLocation;
         return AlertDialog(
-          title: const Text('فعّل إذن الموقع من الإعدادات'),
-          content: const Text(
-            'تم رفض إذن الموقع في الخلفية بشكل دائم. فعّل "السماح طوال الوقت" حتى يستمر تتبع الطلب مباشر أثناء وجود التطبيق في الخلفية.',
+          title: Text(
+            isAndroidBackgroundFlow
+                ? 'فعّل إذن الموقع في الخلفية من الإعدادات'
+                : 'فعّل إذن الموقع من الإعدادات',
+          ),
+          content: Text(
+            isAndroidBackgroundFlow
+                ? 'تم رفض إذن الموقع في الخلفية بشكل دائم. فعّل "السماح طوال الوقت" حتى يستمر تتبع الطلب مباشر أثناء وجود التطبيق في الخلفية.'
+                : 'تم رفض إذن الموقع بشكل دائم. فعّل إذن الموقع أثناء استخدام التطبيق من إعدادات الجهاز.',
           ),
           actions: [
             TextButton(
