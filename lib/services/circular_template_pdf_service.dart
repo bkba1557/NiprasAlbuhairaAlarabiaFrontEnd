@@ -32,7 +32,9 @@ class CircularTemplatePdfService {
   static Future<pw.Font> _loadCairoRegular() async {
     final cached = _cachedCairoRegular;
     if (cached != null) return cached;
-    final font = pw.Font.ttf(await rootBundle.load('assets/fonts/Cairo-Regular.ttf'));
+    final font = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Cairo-Regular.ttf'),
+    );
     _cachedCairoRegular = font;
     return font;
   }
@@ -40,7 +42,9 @@ class CircularTemplatePdfService {
   static Future<pw.Font> _loadCairoBold() async {
     final cached = _cachedCairoBold;
     if (cached != null) return cached;
-    final font = pw.Font.ttf(await rootBundle.load('assets/fonts/Cairo-Bold.ttf'));
+    final font = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Cairo-Bold.ttf'),
+    );
     _cachedCairoBold = font;
     return font;
   }
@@ -69,10 +73,14 @@ class CircularTemplatePdfService {
 
     final safeSubject = (subject ?? '').trim();
     final safeBody = (body ?? '').trim();
-    final subjectTextAlign =
-        _parseTextAlign(subjectAlign, fallback: pw.TextAlign.center);
-    final bodyTextAlign =
-        _parseTextAlign(bodyAlign, fallback: pw.TextAlign.right);
+    final subjectTextAlign = _parseTextAlign(
+      subjectAlign,
+      fallback: pw.TextAlign.center,
+    );
+    final bodyTextAlign = _parseTextAlign(
+      bodyAlign,
+      fallback: pw.TextAlign.right,
+    );
     final resolvedIssuedAt = issuedAt ?? DateTime.now();
     final issuedAtStr = DateFormat('yyyy/MM/dd').format(resolvedIssuedAt);
 
@@ -108,7 +116,10 @@ class CircularTemplatePdfService {
         build: (_) => [
           pw.SizedBox(height: 14),
           if (includeMetaRow)
-            _buildMetaRow(circularNumber: circularNumber, issuedAt: issuedAtStr),
+            _buildMetaRow(
+              circularNumber: circularNumber,
+              issuedAt: issuedAtStr,
+            ),
           if (safeSubject.isNotEmpty) ...[
             pw.SizedBox(height: 20),
             pw.Text(
@@ -116,8 +127,9 @@ class CircularTemplatePdfService {
               textAlign: subjectTextAlign,
               style: pw.TextStyle(
                 fontSize: subjectFontSize,
-                fontWeight:
-                    subjectBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+                fontWeight: subjectBold
+                    ? pw.FontWeight.bold
+                    : pw.FontWeight.normal,
                 decoration: subjectUnderline
                     ? pw.TextDecoration.underline
                     : pw.TextDecoration.none,
@@ -132,8 +144,9 @@ class CircularTemplatePdfService {
               style: pw.TextStyle(
                 fontSize: bodyFontSize,
                 height: 1.6,
-                fontWeight:
-                    bodyBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+                fontWeight: bodyBold
+                    ? pw.FontWeight.bold
+                    : pw.FontWeight.normal,
                 decoration: bodyUnderline
                     ? pw.TextDecoration.underline
                     : pw.TextDecoration.none,

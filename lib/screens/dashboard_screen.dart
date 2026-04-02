@@ -1185,6 +1185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ].contains(user?.role);
 
     final canViewCirculars = user?.role == 'owner' || user?.role == 'manager';
+    final canSendDailyReport = user != null;
 
     final orderItems = <_DashboardDrawerItemData>[
       if (canViewOrders)
@@ -1267,6 +1268,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: AppColors.primaryBlue,
           onTap: () =>
               _navigateFromMobileDrawer(context, AppRoutes.circulars),
+        ),
+      if (canSendDailyReport)
+        _DashboardDrawerItemData(
+          icon: Icons.description_outlined,
+          title: 'تقرير يومي',
+          color: AppColors.primaryDarkBlue,
+          onTap: () =>
+              _navigateFromMobileDrawer(context, AppRoutes.dailyReports),
         ),
       if (canViewTasks)
         _DashboardDrawerItemData(
@@ -5953,6 +5962,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final canViewCirculars =
         authProvider.user?.role == 'owner' || authProvider.user?.role == 'manager';
+    final canSendDailyReport = authProvider.user != null;
 
     final ordersChildren = <Widget>[
       if (canViewOrders)
@@ -6125,6 +6135,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.announcement_outlined,
           title: 'التعاميم',
           onTap: () => Navigator.pushNamed(context, AppRoutes.circulars),
+        ),
+      if (canSendDailyReport)
+        _buildDesktopFolderItem(
+          icon: Icons.description_outlined,
+          title: 'تقرير يومي',
+          onTap: () => Navigator.pushNamed(context, AppRoutes.dailyReports),
         ),
     ];
 

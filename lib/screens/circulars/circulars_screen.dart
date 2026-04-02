@@ -46,12 +46,13 @@ class _CircularsScreenState extends State<CircularsScreen> {
   bool _loadingNumber = true;
   bool _publishing = false;
   bool _autoPreview = false;
-  bool _useServerPdf = true;
   bool _shouldRepaintPreview = false;
   DateTime? _lastPreviewRefreshedAt;
   Timer? _previewDebounce;
   String? _lastCopiedNumber;
   late final LayoutCallback _previewBuildCallback = _buildPreviewPdfBytes;
+  Uint8List? _previewCacheBytes;
+  String? _previewCacheKey;
 
   TextAlign _subjectAlign = TextAlign.center;
   TextAlign _bodyAlign = TextAlign.right;
@@ -148,9 +149,7 @@ class _CircularsScreenState extends State<CircularsScreen> {
       constraints: const BoxConstraints(minHeight: 36, minWidth: 40),
       isSelected: options.map((o) => o == value).toList(growable: false),
       onPressed: (index) => onChanged(options[index]),
-      children: [
-        for (final icon in icons) Icon(icon, size: 18),
-      ],
+      children: [for (final icon in icons) Icon(icon, size: 18)],
     );
   }
 
@@ -193,7 +192,10 @@ class _CircularsScreenState extends State<CircularsScreen> {
           labelText: labelText,
           border: const OutlineInputBorder(),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
         ),
         items: options
             .map(
@@ -217,8 +219,9 @@ class _CircularsScreenState extends State<CircularsScreen> {
     try {
       final response = await ApiService.get('/circulars/next-number');
       final decoded = ApiService.decodeJson(response);
-      final serverNumber =
-          decoded is Map ? decoded['number']?.toString() : null;
+      final serverNumber = decoded is Map
+          ? decoded['number']?.toString()
+          : null;
       if (serverNumber == null || serverNumber.trim().isEmpty) {
         throw Exception('Invalid circular number from server');
       }
@@ -295,44 +298,56 @@ class _CircularsScreenState extends State<CircularsScreen> {
         ? 'BHR00001'
         : _numberController.text.trim();
 
-    final payload = <String, dynamic>{
-      'number': circularNumber,
-      'subject': _subjectController.text,
-      'body': _bodyController.text,
-      'includeMetaRow': _includeMetaRow,
-      'subjectAlign': _alignToApiValue(_subjectAlign),
-      'bodyAlign': _alignToApiValue(_bodyAlign),
-      'subjectFontSize': _subjectFontSize,
-      'bodyFontSize': _bodyFontSize,
-      'subjectBold': _subjectBold,
-      'subjectUnderline': _subjectUnderline,
-      'bodyBold': _bodyBold,
-      'bodyUnderline': _bodyUnderline,
-    };
+    final subject = _subjectController.text;
+    final body = _bodyController.text;
+    final includeMetaRow = _includeMetaRow;
+    final subjectAlign = _alignToApiValue(_subjectAlign);
+    final bodyAlign = _alignToApiValue(_bodyAlign);
+    final subjectFontSize = _subjectFontSize;
+    final bodyFontSize = _bodyFontSize;
+    final subjectBold = _subjectBold;
+    final subjectUnderline = _subjectUnderline;
+    final bodyBold = _bodyBold;
+    final bodyUnderline = _bodyUnderline;
 
-    if (_useServerPdf) {
-      try {
-        final response = await ApiService.post('/circulars/render-pdf', payload);
-        return response.bodyBytes;
-      } catch (_) {
-        // Fall back to local PDF generation when the server is unreachable.
-      }
+    final cacheKey = <Object?>[
+      circularNumber,
+      subject,
+      body,
+      includeMetaRow,
+      subjectAlign,
+      bodyAlign,
+      subjectFontSize,
+      bodyFontSize,
+      subjectBold,
+      subjectUnderline,
+      bodyBold,
+      bodyUnderline,
+    ].join('|');
+
+    final cachedBytes = _previewCacheBytes;
+    if (_previewCacheKey == cacheKey && cachedBytes != null) {
+      return cachedBytes;
     }
 
-    return CircularTemplatePdfService.buildCircularPdfBytes(
+    final bytes = await CircularTemplatePdfService.buildCircularPdfBytes(
       circularNumber: circularNumber,
-      subject: payload['subject']?.toString(),
-      body: payload['body']?.toString(),
-      includeMetaRow: payload['includeMetaRow'] == true,
-      subjectAlign: payload['subjectAlign']?.toString() ?? 'center',
-      bodyAlign: payload['bodyAlign']?.toString() ?? 'right',
-      subjectFontSize: (payload['subjectFontSize'] as num?)?.toDouble() ?? 18,
-      bodyFontSize: (payload['bodyFontSize'] as num?)?.toDouble() ?? 12,
-      subjectBold: payload['subjectBold'] == true,
-      subjectUnderline: payload['subjectUnderline'] == true,
-      bodyBold: payload['bodyBold'] == true,
-      bodyUnderline: payload['bodyUnderline'] == true,
+      subject: subject,
+      body: body,
+      includeMetaRow: includeMetaRow,
+      subjectAlign: subjectAlign,
+      bodyAlign: bodyAlign,
+      subjectFontSize: subjectFontSize,
+      bodyFontSize: bodyFontSize,
+      subjectBold: subjectBold,
+      subjectUnderline: subjectUnderline,
+      bodyBold: bodyBold,
+      bodyUnderline: bodyUnderline,
     );
+
+    _previewCacheKey = cacheKey;
+    _previewCacheBytes = bytes;
+    return bytes;
   }
 
   Future<void> _copyNumber() async {
@@ -341,9 +356,9 @@ class _CircularsScreenState extends State<CircularsScreen> {
     await Clipboard.setData(ClipboardData(text: number));
     if (!mounted) return;
     setState(() => _lastCopiedNumber = number);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('تم نسخ رقم التعميم: $number')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('تم نسخ رقم التعميم: $number')));
   }
 
   @override
@@ -375,12 +390,27 @@ class _CircularsScreenState extends State<CircularsScreen> {
                   Expanded(child: _buildPreview(context)),
                 ],
               )
-            : Column(
-                children: [
-                  _buildForm(context),
-                  const SizedBox(height: 16),
-                  Expanded(child: _buildPreview(context)),
-                ],
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  var previewHeight = constraints.maxHeight * 0.62;
+                  if (previewHeight < 320) previewHeight = 320;
+                  if (previewHeight > 720) previewHeight = 720;
+                  final bottomSpace = MediaQuery.of(context).padding.bottom + 24;
+
+                  return ListView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    children: [
+                      _buildForm(context),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        height: previewHeight,
+                        child: _buildPreview(context),
+                      ),
+                      SizedBox(height: bottomSpace),
+                    ],
+                  );
+                },
               ),
       ),
     );
@@ -449,9 +479,9 @@ class _CircularsScreenState extends State<CircularsScreen> {
             Text(
               'تنسيق العنوان',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade700,
-                  ),
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade700,
+              ),
             ),
             const SizedBox(height: 6),
             Wrap(
@@ -502,9 +532,9 @@ class _CircularsScreenState extends State<CircularsScreen> {
             Text(
               'تنسيق النص',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade700,
-                  ),
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade700,
+              ),
             ),
             const SizedBox(height: 6),
             Wrap(
@@ -582,23 +612,13 @@ class _CircularsScreenState extends State<CircularsScreen> {
               contentPadding: EdgeInsets.zero,
               title: const Text('تحديث تلقائي (قد يكون أبطأ)'),
             ),
-            SwitchListTile.adaptive(
-              value: _useServerPdf,
-              onChanged: (v) {
-                setState(() => _useServerPdf = v);
-                _refreshPreview();
-              },
-              contentPadding: EdgeInsets.zero,
-              title: const Text('توليد PDF من السيرفر (أخف وأسرع)'),
-            ),
             if (_lastPreviewRefreshedAt != null) ...[
               const SizedBox(height: 4),
               Text(
                 'آخر تحديث: ${_lastPreviewRefreshedAt!.toLocal().toString().split('.').first}',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Colors.grey.shade600),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
               ),
             ],
             const SizedBox(height: 6),
