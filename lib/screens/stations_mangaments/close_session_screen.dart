@@ -2066,6 +2066,12 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncStationFuelPricesFromProviderCache();
+  }
+
+  @override
   void initState() {
     super.initState();
 
@@ -2135,6 +2141,27 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     });
   }
 
+  void _syncStationFuelPricesFromProviderCache() {
+    if (!mounted || _session == null) return;
+
+    final provider = context.read<StationProvider>();
+    final cachedStation = provider.getCachedStation(_session!.stationId);
+    if (cachedStation == null) return;
+
+    final next = <String, double>{
+      for (final price in cachedStation.fuelPrices) price.fuelType: price.price,
+    };
+    if (mapEquals(_stationFuelPrices, next)) return;
+
+    setState(() {
+      _stationFuelPrices
+        ..clear()
+        ..addAll(next);
+    });
+
+    _recalculateTotals();
+  }
+
   void _recalculateTotals() {
     if (_session == null) return;
 
@@ -2170,10 +2197,10 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
       nozzle.totalAmount = amount;
     }
 
-    final double cash = double.tryParse(_cashController.text) ?? 0;
-    final double card = double.tryParse(_cardController.text) ?? 0;
-    final double mada = double.tryParse(_madaController.text) ?? 0;
-    final double other = double.tryParse(_otherController.text) ?? 0;
+    final double cash = _tryParseLocalizedDouble(_cashController.text) ?? 0;
+    final double card = _tryParseLocalizedDouble(_cardController.text) ?? 0;
+    final double mada = _tryParseLocalizedDouble(_madaController.text) ?? 0;
+    final double other = _tryParseLocalizedDouble(_otherController.text) ?? 0;
 
     final double actualSales = cash + card + mada + other;
 
@@ -2235,13 +2262,11 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   double _resolveNozzleUnitPrice(NozzleReading nozzle) {
+    final stationPrice = _resolveFuelUnitPrice(nozzle.fuelType);
+    if (stationPrice > 0) return stationPrice;
+
     if (nozzle.unitPrice != null && nozzle.unitPrice! > 0) {
       return nozzle.unitPrice!;
-    }
-
-    final lookup = _stationFuelPrices[nozzle.fuelType];
-    if (lookup != null && lookup > 0) {
-      return lookup;
     }
 
     if (_session?.unitPrice != null && _session!.unitPrice! > 0) {
@@ -2384,10 +2409,96 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     return buffer.toString();
   }
 
+  double? _tryParseLocalizedDouble(String? input) {
+    final raw = input?.trim();
+    if (raw == null || raw.isEmpty) return null;
+
+    var normalized = raw;
+    normalized = normalized.replaceAll(RegExp(r'[\u200E\u200F]'), '');
+    normalized = _arabicDigitsToWestern(normalized);
+    normalized = normalized.replaceAll(RegExp(r'\s+'), '');
+    normalized = normalized.replaceAll('٫', '.');
+    normalized = normalized.replaceAll('،', ',');
+    normalized = normalized.replaceAll(RegExp(r'[^0-9\\.,\\-]'), '');
+
+    if (normalized.isEmpty) return null;
+
+    final isNegative = normalized.startsWith('-');
+    final unsigned = isNegative ? normalized.substring(1) : normalized;
+    if (unsigned.isEmpty) return null;
+
+    final dotCount = '.'.allMatches(unsigned).length;
+    final commaCount = ','.allMatches(unsigned).length;
+    final totalSeparators = dotCount + commaCount;
+
+    final lastDot = unsigned.lastIndexOf('.');
+    final lastComma = unsigned.lastIndexOf(',');
+    final decimalIndex = lastDot > lastComma ? lastDot : lastComma;
+
+    int fractionalDigits = 0;
+    int digitsBefore = 0;
+    if (decimalIndex != -1) {
+      final fractionalRaw = unsigned.substring(decimalIndex + 1);
+      fractionalDigits =
+          fractionalRaw.replaceAll(RegExp(r'[^0-9]'), '').length;
+
+      final beforeRaw = unsigned.substring(0, decimalIndex);
+      digitsBefore = beforeRaw.replaceAll(RegExp(r'[^0-9]'), '').length;
+    }
+
+    final digitsOnly = unsigned.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isEmpty) return null;
+
+    bool treatAsDecimal = false;
+    if (decimalIndex != -1) {
+      if (totalSeparators == 1) {
+        if (fractionalDigits == 0) {
+          treatAsDecimal = false;
+        } else if (fractionalDigits == 3 && digitsBefore <= 3) {
+          treatAsDecimal = false;
+        } else {
+          treatAsDecimal = true;
+        }
+      } else {
+        final hasMixedSeparators = dotCount > 0 && commaCount > 0;
+        if (hasMixedSeparators) {
+          treatAsDecimal = fractionalDigits > 0;
+        } else {
+          if (fractionalDigits == 0) {
+            treatAsDecimal = false;
+          } else if (fractionalDigits == 3) {
+            treatAsDecimal = false;
+          } else {
+            treatAsDecimal = true;
+          }
+        }
+      }
+    }
+
+    String finalNumber;
+    if (treatAsDecimal && fractionalDigits > 0) {
+      final integerDigitsCount = digitsOnly.length - fractionalDigits;
+      final integerPart = integerDigitsCount > 0
+          ? digitsOnly.substring(0, integerDigitsCount)
+          : '0';
+      final fractionalPart =
+          digitsOnly.substring(digitsOnly.length - fractionalDigits);
+      finalNumber = '$integerPart.$fractionalPart';
+    } else {
+      finalNumber = digitsOnly;
+    }
+
+    if (isNegative) {
+      finalNumber = '-$finalNumber';
+    }
+
+    return double.tryParse(finalNumber);
+  }
+
   double _toDouble(dynamic value) {
     if (value == null) return 0;
     if (value is num) return value.toDouble();
-    return double.tryParse(value.toString()) ?? 0;
+    return _tryParseLocalizedDouble(value.toString()) ?? 0;
   }
 
   Map<String, double> _normalizeFuelMap(Map<String, double> input) {
@@ -2556,7 +2667,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     final fuelType = _selectedFuelType == null
         ? ''
         : _normalizeFuelType(_selectedFuelType!);
-    final quantity = double.tryParse(_fuelQuantityController.text) ?? 0;
+    final quantity = _tryParseLocalizedDouble(_fuelQuantityController.text) ?? 0;
 
     if (fuelType.isEmpty || quantity <= 0) {
       return result;
@@ -3070,6 +3181,16 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
 
     setState(() => _showValidationErrors = true);
 
+    for (final nozzle in session.nozzleReadings ?? []) {
+      final key = _nozzleKey(nozzle);
+      final controller = _closingControllers[key];
+      if (controller != null) {
+        nozzle.closingReading = _tryParseLocalizedDouble(controller.text);
+      }
+    }
+
+    _recalculateTotals();
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -3090,8 +3211,11 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'يرجى إدخال قراءة الغلق لخرطوم '
-              '${nozzle.nozzleNumber} (${nozzle.fuelType})',
+              ((_closingControllers[key]?.text ?? '').trim().isEmpty)
+                  ? 'يرجى إدخال قراءة الغلق لخرطوم '
+                      '${nozzle.nozzleNumber} (${nozzle.fuelType})'
+                  : 'قراءة الغلق غير صحيحة لخرطوم '
+                      '${nozzle.nozzleNumber} (${nozzle.fuelType})',
             ),
             backgroundColor: AppColors.errorRed,
           ),
@@ -3200,7 +3324,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
       final normalizedSold = _normalizeFuelMap(_soldLitersByFuel);
       final normalizedAfter = _normalizeFuelMap(_stockAfterSalesByFuel);
       final normalizedReturns = _normalizeFuelMap(_returnsByFuel());
-      final suppliedQuantity = double.tryParse(_fuelQuantityController.text) ?? 0;
+      final suppliedQuantity =
+          _tryParseLocalizedDouble(_fuelQuantityController.text) ?? 0;
       final suppliedFuelType = _selectedFuelType == null
           ? ''
           : _normalizeFuelType(_selectedFuelType!);
@@ -3218,18 +3343,16 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         'nozzleReadings': closingNozzles,
 
         'paymentTypes': {
-          'cash': double.tryParse(_cashController.text) ?? 0,
-          'card': double.tryParse(_cardController.text) ?? 0,
-          'mada': double.tryParse(_madaController.text) ?? 0,
-          'other': double.tryParse(_otherController.text) ?? 0,
+          'cash': _tryParseLocalizedDouble(_cashController.text) ?? 0,
+          'card': _tryParseLocalizedDouble(_cardController.text) ?? 0,
+          'mada': _tryParseLocalizedDouble(_madaController.text) ?? 0,
+          'other': _tryParseLocalizedDouble(_otherController.text) ?? 0,
         },
 
-        'fuelSupply':
-            _fuelQuantityController.text.isNotEmpty &&
-                _fuelQuantityController.text != '0'
+        'fuelSupply': suppliedQuantity > 0
             ? {
                 'fuelType': _selectedFuelType,
-                'quantity': double.tryParse(_fuelQuantityController.text) ?? 0,
+                'quantity': suppliedQuantity,
                 'tankerNumber': _tankerNumberController.text,
                 'supplierName': _supplierNameController.text,
               }
@@ -3254,7 +3377,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
             : null,
 
         'carriedForwardBalance':
-            double.tryParse(_carriedForwardController.text) ?? 0,
+            _tryParseLocalizedDouble(_carriedForwardController.text) ?? 0,
 
         'expenses': _expenses.map((e) => e.toJson()).toList(),
         'expensesTotal': expensesTotal,
@@ -3692,17 +3815,17 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                   decimal: true,
                 ),
                 validator: (v) {
-                  final value = double.tryParse(v ?? '');
+                  final value = _tryParseLocalizedDouble(v);
                   if (value == null) {
                     return 'أدخل رقم صالح';
                   }
-                  if (value <= nozzle.openingReading) {
-                    return 'يجب أن تكون أكبر من قراءة الفتح';
+                  if (value < nozzle.openingReading) {
+                    return 'لا يمكن أن تكون أقل من قراءة الفتح';
                   }
                   return null;
                 },
                 onChanged: (v) {
-                  nozzle.closingReading = double.tryParse(v);
+                  nozzle.closingReading = _tryParseLocalizedDouble(v);
                   _recalculateTotals();
                 },
               ),
@@ -3797,7 +3920,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         const SizedBox(height: 12),
         ElevatedButton.icon(
           onPressed: () {
-            final amount = double.tryParse(_expenseAmountController.text);
+            final amount = _tryParseLocalizedDouble(_expenseAmountController.text);
             if (_expenseTypeController.text.isEmpty || amount == null) return;
 
             setState(() {
@@ -3923,7 +4046,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         ElevatedButton.icon(
           onPressed: () {
             final qty =
-                double.tryParse(_returnFuelQuantityController.text) ?? 0;
+                _tryParseLocalizedDouble(_returnFuelQuantityController.text) ??
+                0;
             final fuelType = _selectedReturnFuelType;
             if (fuelType == null || fuelType.isEmpty || qty <= 0) return;
 
@@ -4047,7 +4171,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
           controller: _shortageAmountController,
           labelText: 'مبلغ العجز',
           keyboardType: TextInputType.number,
-          onChanged: (v) => _shortageAmount = double.tryParse(v) ?? 0,
+          onChanged: (v) => _shortageAmount = _tryParseLocalizedDouble(v) ?? 0,
         ),
         const SizedBox(height: 12),
         CustomTextField(
@@ -4058,7 +4182,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         const SizedBox(height: 16),
         ElevatedButton.icon(
           onPressed: () {
-            final amount = double.tryParse(_shortageAmountController.text) ?? 0;
+            final amount =
+                _tryParseLocalizedDouble(_shortageAmountController.text) ?? 0;
             if (amount <= 0 || _shortageReasonController.text.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -4502,7 +4627,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                     decimal: true,
                                   ),
                               onChanged: (v) {
-                                nozzle.closingReading = double.tryParse(v);
+                                nozzle.closingReading = _tryParseLocalizedDouble(v);
                                 _recalculateTotals();
                               },
                             ),
@@ -4848,7 +4973,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                         child: Center(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              final amount = double.tryParse(
+                              final amount = _tryParseLocalizedDouble(
                                 _expenseAmountController.text,
                               );
                               if (_expenseTypeController.text.isEmpty ||
@@ -5171,7 +5296,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                         child: Center(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              final qty = double.tryParse(
+                              final qty = _tryParseLocalizedDouble(
                                 _returnFuelQuantityController.text,
                               );
                               final fuelType = _selectedReturnFuelType;
@@ -5362,7 +5487,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                               keyboardType: TextInputType.number,
                               style: TextStyle(fontSize: dataFont),
                               onChanged: (v) =>
-                                  _shortageAmount = double.tryParse(v) ?? 0,
+                                  _shortageAmount =
+                                      _tryParseLocalizedDouble(v) ?? 0,
                             ),
                           ),
                         ),
@@ -5404,7 +5530,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                             child: ElevatedButton.icon(
                               onPressed: () {
                                 final amount =
-                                    double.tryParse(
+                                    _tryParseLocalizedDouble(
                                       _shortageAmountController.text,
                                     ) ??
                                     0;

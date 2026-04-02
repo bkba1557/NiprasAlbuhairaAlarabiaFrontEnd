@@ -22,6 +22,7 @@ import 'package:order_tracker/providers/tanker_provider.dart';
 import 'package:order_tracker/providers/marketing_station_provider.dart';
 import 'package:order_tracker/providers/station_inspection_provider.dart';
 import 'package:order_tracker/providers/chat_provider.dart';
+import 'package:order_tracker/providers/circular_provider.dart';
 import 'package:order_tracker/providers/notification_provider.dart';
 import 'package:order_tracker/providers/order_provider.dart';
 import 'package:order_tracker/providers/qualification_provider.dart';
@@ -86,6 +87,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => CustomerProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => CircularProvider()),
         ChangeNotifierProvider(create: (_) => DriverProvider()),
         ChangeNotifierProvider(create: (_) => DriverTrackingProvider()),
         ChangeNotifierProvider(create: (_) => TankerProvider()),

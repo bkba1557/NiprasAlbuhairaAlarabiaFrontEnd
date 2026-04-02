@@ -39,6 +39,7 @@ import 'package:order_tracker/screens/archive/archive_document_details_screen.da
 import 'package:order_tracker/screens/order/costomer_order/customer_form_screen.dart';
 import 'package:order_tracker/screens/order/costomer_order/customer_order_form.dart';
 import 'package:order_tracker/screens/order/costomer_order/customers_screen.dart';
+import 'package:order_tracker/screens/circulars/circulars_screen.dart';
 import 'package:order_tracker/screens/dashboard_screen.dart';
 import 'package:order_tracker/screens/auth_devices_screen.dart';
 import 'package:order_tracker/screens/blocked_devices_screen.dart';
@@ -140,6 +141,7 @@ class AppRoutes {
   // Main
   static const dashboard = '/dashboard';
   static const tracking = '/tracking';
+  static const circulars = '/circulars';
 
   // Orders
   static const driverHome = '/driver/home';
@@ -295,6 +297,7 @@ class AppRoutes {
     chat: (_) => const ChatListScreen(),
 
     dashboard: (_) => const DashboardScreen(),
+    circulars: (_) => const CircularsScreen(),
     driverHome: (_) => const DriverHomeScreen(),
     tracking: (_) => const TrackingScreen(),
     trading: (_) => const TraderScreen(),

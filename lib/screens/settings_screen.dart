@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:order_tracker/screens/settings/export_templates_screen.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
@@ -25,6 +26,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context);
+    final role = authProvider.user?.role;
+    final canEditTemplates = role == 'owner' || role == 'manager';
 
     return Scaffold(
       appBar: AppBar(title: const Text('الإعدادات')),
@@ -119,6 +122,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            if (canEditTemplates) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'قوالب التصدير',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 20),
+                      ListTile(
+                        leading: const Icon(Icons.picture_as_pdf_outlined),
+                        title: const Text('تعديل قوالب PDF'),
+                        subtitle: const Text(
+                          'تخصيص شكل ملفات التصدير مثل التعاميم والتقارير',
+                        ),
+                        trailing: const Icon(Icons.chevron_left),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ExportTemplatesScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             // Data & Sync Settings
             Card(
               child: Padding(

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:order_tracker/localization/app_localizations.dart' as loc;
 import 'package:order_tracker/models/models.dart';
@@ -142,6 +143,7 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
   bool _initializedForStationScope = false;
   bool _showFilters = false;
   final Map<String, Map<String, double>> _stationPriceCache = {};
+  StationProvider? _stationProvider;
 
   bool get _isOwnerStation => context.read<AuthProvider>().isOwnerStation;
 
@@ -152,6 +154,56 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initByRole();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final provider = context.read<StationProvider>();
+    if (_stationProvider != provider) {
+      _stationProvider?.removeListener(_onStationProviderChanged);
+      _stationProvider = provider;
+      _stationProvider?.addListener(_onStationProviderChanged);
+    }
+
+    _syncStationPriceCacheFromProvider();
+  }
+
+  @override
+  void dispose() {
+    _stationProvider?.removeListener(_onStationProviderChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onStationProviderChanged() {
+    if (!mounted) return;
+    _syncStationPriceCacheFromProvider();
+  }
+
+  void _syncStationPriceCacheFromProvider() {
+    final provider = _stationProvider;
+    if (provider == null || _stationPriceCache.isEmpty) return;
+
+    var changed = false;
+    for (final stationId in _stationPriceCache.keys.toList()) {
+      final cachedStation = provider.getCachedStation(stationId);
+      if (cachedStation == null) continue;
+
+      final next = <String, double>{
+        for (final price in cachedStation.fuelPrices)
+          price.fuelType: price.price,
+      };
+
+      if (mapEquals(_stationPriceCache[stationId], next)) continue;
+      _stationPriceCache[stationId] = next;
+      changed = true;
+    }
+
+    if (changed) {
+      setState(() {});
+    }
   }
 
   Future<void> _initByRole() async {
@@ -557,22 +609,53 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
     return diff > 0 ? diff : 0;
   }
 
-  double _sessionUnitPrice(PumpSession session) {
-    if (session.unitPrice != null && session.unitPrice! > 0) {
-      return session.unitPrice!;
+  Map<String, double>? _stationPricesFor(String stationId) {
+    final cached = _stationPriceCache[stationId];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final provider = _stationProvider;
+    final station = provider?.getCachedStation(stationId);
+    if (station == null) return cached;
+
+    return <String, double>{
+      for (final price in station.fuelPrices) price.fuelType: price.price,
+    };
+  }
+
+  double? _lookupStationFuelPrice(
+    Map<String, double>? stationPrices,
+    String fuelType,
+  ) {
+    if (stationPrices == null || stationPrices.isEmpty) return null;
+
+    final direct = stationPrices[fuelType];
+    if (direct != null && direct > 0) return direct;
+
+    final normalized = fuelType.trim();
+    for (final entry in stationPrices.entries) {
+      if (entry.key.trim() == normalized && entry.value > 0) {
+        return entry.value;
+      }
     }
 
-    final stationPrices = _stationPriceCache[session.stationId];
+    return null;
+  }
+
+  double _sessionUnitPrice(PumpSession session) {
+    final stationPrices = _stationPricesFor(session.stationId);
     final readings = session.nozzleReadings ?? [];
-    final usedFuelTypes = readings
+    final usedFuelTypes = <String>{
+      ...readings
         .map((reading) => reading.fuelType)
         .where((type) => type.isNotEmpty)
-        .toSet();
+        .toSet(),
+      if (session.fuelType.isNotEmpty) session.fuelType,
+    };
 
     final availablePrices = <double>[];
     if (stationPrices != null) {
       for (final fuelType in usedFuelTypes) {
-        final price = stationPrices[fuelType];
+        final price = _lookupStationFuelPrice(stationPrices, fuelType);
         if (price != null && price > 0) {
           availablePrices.add(price);
         }
@@ -582,6 +665,10 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
     if (availablePrices.isNotEmpty) {
       final total = availablePrices.reduce((value, element) => value + element);
       return total / availablePrices.length;
+    }
+
+    if (session.unitPrice != null && session.unitPrice! > 0) {
+      return session.unitPrice!;
     }
 
     final fallbackPrices = (session.nozzleReadings ?? [])
@@ -597,8 +684,9 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
   }
 
   double _sessionExpectedAmount(PumpSession session) {
-    final stationPrices = _stationPriceCache[session.stationId];
+    final stationPrices = _stationPricesFor(session.stationId);
     final readings = session.nozzleReadings ?? [];
+    final fallbackUnitPrice = _sessionUnitPrice(session);
     double total = 0;
 
     for (final reading in readings) {
@@ -606,9 +694,9 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
       if (liters == 0) continue;
 
       final price =
+          _lookupStationFuelPrice(stationPrices, reading.fuelType) ??
           reading.unitPrice ??
-          stationPrices?[reading.fuelType] ??
-          _sessionUnitPrice(session);
+          fallbackUnitPrice;
       if (price <= 0) continue;
 
       total += liters * price;
@@ -658,7 +746,7 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
   }
 
   Map<String, double> _sessionFuelTypePrices(PumpSession session) {
-    final stationPrices = _stationPriceCache[session.stationId] ?? {};
+    final stationPrices = _stationPricesFor(session.stationId) ?? {};
     final readings = session.nozzleReadings ?? [];
 
     final prices = <String, double>{};
@@ -667,8 +755,8 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
       if (fuelType.isEmpty) continue;
 
       final price =
+          _lookupStationFuelPrice(stationPrices, fuelType) ??
           reading.unitPrice ??
-          stationPrices[fuelType] ??
           session.unitPrice ??
           0;
       if (price <= 0) continue;
@@ -678,7 +766,9 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
 
     if (prices.isEmpty && session.fuelType.isNotEmpty) {
       final fallbackPrice =
-          session.unitPrice ?? stationPrices[session.fuelType] ?? 0;
+          _lookupStationFuelPrice(stationPrices, session.fuelType) ??
+          session.unitPrice ??
+          0;
       if (fallbackPrice > 0) {
         prices[session.fuelType] = fallbackPrice;
       }
@@ -786,6 +876,9 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
       return const Text('—', style: TextStyle(color: Colors.grey));
     }
 
+    final stationPrices = _stationPricesFor(session.stationId);
+    final fallbackUnitPrice = _sessionUnitPrice(session);
+
     return SizedBox(
       width: 260,
       height: 90,
@@ -797,7 +890,10 @@ class _SessionsListScreenState extends State<SessionsListScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: readings.map((r) {
               final liters = r.totalLiters ?? 0;
-              final price = r.unitPrice ?? 0;
+              final price =
+                  _lookupStationFuelPrice(stationPrices, r.fuelType) ??
+                  r.unitPrice ??
+                  fallbackUnitPrice;
               final expectedAmount = liters * price;
               final actualAmount = r.totalAmount ?? expectedAmount;
               final diff = actualAmount - expectedAmount;

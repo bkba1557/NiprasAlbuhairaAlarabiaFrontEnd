@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:order_tracker/models/circular_model.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/chat_provider.dart';
+import 'package:order_tracker/providers/circular_provider.dart';
 import 'package:order_tracker/services/whatsapp_service.dart';
 import 'package:order_tracker/utils/app_navigation.dart';
 import 'package:order_tracker/utils/app_routes.dart';
@@ -75,6 +77,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  String? _lastCircularCheckUserId;
 
   @override
   void initState() {
@@ -105,6 +108,9 @@ class _AppShellState extends State<AppShell>
         context.read<ChatProvider>().clearState();
       });
     }
+
+    final circularProvider = context.watch<CircularProvider>();
+    _syncPendingCircularGate(auth, circularProvider);
 
     return Stack(
       children: [
@@ -286,6 +292,147 @@ class _AppShellState extends State<AppShell>
               ],
             );
           },
+        ),
+        if (auth.isAuthenticated && circularProvider.pendingCircular != null)
+          _PendingCircularOverlay(
+            circular: circularProvider.pendingCircular!,
+            isAccepting: circularProvider.isAccepting,
+            onAccept: () async {
+              try {
+                await context.read<CircularProvider>().acceptPendingCircular();
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('فشل قبول التعميم: $e')),
+                );
+              }
+            },
+          ),
+      ],
+    );
+  }
+
+  void _syncPendingCircularGate(AuthProvider auth, CircularProvider circulars) {
+    final userId = auth.user?.id;
+
+    if (!auth.isAuthenticated || userId == null || userId.trim().isEmpty) {
+      if (_lastCircularCheckUserId != null) {
+        _lastCircularCheckUserId = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) => circulars.reset());
+      }
+      return;
+    }
+
+    if (_lastCircularCheckUserId == userId) return;
+    _lastCircularCheckUserId = userId;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      circulars.checkPendingCircular();
+    });
+  }
+}
+
+class _PendingCircularOverlay extends StatelessWidget {
+  final CircularModel circular;
+  final bool isAccepting;
+  final Future<void> Function() onAccept;
+
+  const _PendingCircularOverlay({
+    required this.circular,
+    required this.isAccepting,
+    required this.onAccept,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final maxHeight = size.height * 0.86;
+    final subject = circular.subject.trim();
+    final body = circular.body.trim().isEmpty ? circular.bodyHtml.trim() : circular.body.trim();
+
+    return Stack(
+      children: [
+        const ModalBarrier(dismissible: false, color: Colors.black54),
+        SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 760,
+                maxHeight: maxHeight,
+              ),
+              child: Material(
+                color: Colors.white,
+                elevation: 8,
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'تعميم جديد',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        circular.number,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (subject.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          subject,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      const Divider(height: 1),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: SingleChildScrollView(
+                            child: SelectableText(
+                              body.isEmpty ? '-' : body,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(height: 1.7, fontSize: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: isAccepting ? null : onAccept,
+                        icon: isAccepting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.check_circle_outline),
+                        label: const Text('أوافق وأفتح التطبيق'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ],
     );

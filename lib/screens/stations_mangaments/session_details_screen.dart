@@ -48,12 +48,47 @@ class SessionDetailsScreen extends StatefulWidget {
 class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
   final Map<String, double> _fuelPriceLookup = {};
   bool _isFuelPriceLoading = false;
+  StationProvider? _stationProvider;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSessionDetails();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final provider = context.read<StationProvider>();
+    if (_stationProvider != provider) {
+      _stationProvider = provider;
+    }
+
+    _syncFuelPricesFromProviderCache();
+  }
+
+  void _syncFuelPricesFromProviderCache() {
+    if (!mounted) return;
+    final provider = _stationProvider ?? context.read<StationProvider>();
+    final session = provider.selectedSession;
+    if (session == null || session.stationId.isEmpty) return;
+
+    final cachedStation = provider.getCachedStation(session.stationId);
+    if (cachedStation == null) return;
+
+    final next = <String, double>{
+      for (final price in cachedStation.fuelPrices) price.fuelType: price.price,
+    };
+    if (mapEquals(_fuelPriceLookup, next)) return;
+
+    setState(() {
+      _fuelPriceLookup
+        ..clear()
+        ..addAll(next);
+      _isFuelPriceLoading = false;
     });
   }
 
@@ -258,12 +293,22 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
   }
 
   double _resolveReadingUnitPrice(NozzleReading reading, PumpSession session) {
-    if (reading.unitPrice != null && reading.unitPrice! > 0)
+    final direct = _fuelPriceLookup[reading.fuelType];
+    if (direct != null && direct > 0) return direct;
+
+    final normalized = _normalizeFuelType(reading.fuelType);
+    for (final entry in _fuelPriceLookup.entries) {
+      if (_normalizeFuelType(entry.key) == normalized && entry.value > 0) {
+        return entry.value;
+      }
+    }
+
+    if (reading.unitPrice != null && reading.unitPrice! > 0) {
       return reading.unitPrice!;
-    if (session.unitPrice != null && session.unitPrice! > 0)
+    }
+    if (session.unitPrice != null && session.unitPrice! > 0) {
       return session.unitPrice!;
-    final lookup = _fuelPriceLookup[reading.fuelType];
-    if (lookup != null && lookup > 0) return lookup;
+    }
     return 0;
   }
 

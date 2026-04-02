@@ -54,6 +54,15 @@ class StationProvider with ChangeNotifier {
   bool _isStationsLoading = false;
   bool get isStationsLoading => _isStationsLoading;
 
+  void _upsertStationInLists(Station station) {
+    final existingIndex = _stations.indexWhere((s) => s.id == station.id);
+    if (existingIndex != -1) {
+      _stations[existingIndex] = station;
+    } else {
+      _stations.add(station);
+    }
+  }
+
   PumpSession? getPreviousSession(PumpSession currentSession) {
     if (_sessions.isEmpty) return null;
 
@@ -454,6 +463,7 @@ class StationProvider with ChangeNotifier {
       final data = await _fetchStationPayload(stationId);
       final station = Station.fromJson(data['station']);
       _stationCache[stationId] = station;
+      _upsertStationInLists(station);
       return station;
     } catch (_) {
       return null;
@@ -473,6 +483,7 @@ class StationProvider with ChangeNotifier {
       final data = await _fetchStationPayload(id, query: query);
       final station = Station.fromJson(data['station']);
       _stationCache[id] = station;
+      _upsertStationInLists(station);
       _selectedStation = station;
       _sessions = (data['todaysSessions'] as List)
           .map((e) => PumpSession.fromJson(e))

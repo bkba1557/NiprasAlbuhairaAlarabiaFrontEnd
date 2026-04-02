@@ -79,6 +79,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ];
   final Map<String, bool> _desktopFolderExpanded = {
     'inventory': false,
+    'circulars': false,
     'orders': true,
     'archive': false,
     'qualification': false,
@@ -1183,6 +1184,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'Maintenance_Technician',
     ].contains(user?.role);
 
+    final canViewCirculars = user?.role == 'owner' || user?.role == 'manager';
+
     final orderItems = <_DashboardDrawerItemData>[
       if (canViewOrders)
         _DashboardDrawerItemData(
@@ -1256,6 +1259,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: AppColors.primaryDarkBlue,
           onTap: () =>
               _navigateFromMobileDrawer(context, AppRoutes.inventoryDashboard),
+        ),
+      if (canViewCirculars)
+        _DashboardDrawerItemData(
+          icon: Icons.announcement_outlined,
+          title: 'تعميم',
+          color: AppColors.primaryBlue,
+          onTap: () =>
+              _navigateFromMobileDrawer(context, AppRoutes.circulars),
         ),
       if (canViewTasks)
         _DashboardDrawerItemData(
@@ -5940,6 +5951,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'Maintenance_Technician',
     ].contains(authProvider.user?.role);
 
+    final canViewCirculars =
+        authProvider.user?.role == 'owner' || authProvider.user?.role == 'manager';
+
     final ordersChildren = <Widget>[
       if (canViewOrders)
         _buildDesktopFolderItem(
@@ -6105,6 +6119,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
     ];
 
+    final circularsChildren = <Widget>[
+      if (canViewCirculars)
+        _buildDesktopFolderItem(
+          icon: Icons.announcement_outlined,
+          title: 'التعاميم',
+          onTap: () => Navigator.pushNamed(context, AppRoutes.circulars),
+        ),
+    ];
+
     final contractsChildren = <Widget>[
       if (canViewContracts)
         _buildDesktopFolderItem(
@@ -6235,6 +6258,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: 'المخزون',
           icon: Icons.folder,
           children: inventoryChildren,
+        ),
+      if (circularsChildren.isNotEmpty)
+        _buildDesktopFolderSection(
+          folderKey: 'circulars',
+          title: 'التعاميم',
+          icon: Icons.folder,
+          children: circularsChildren,
         ),
       if (tasksChildren.isNotEmpty)
         _buildDesktopFolderSection(

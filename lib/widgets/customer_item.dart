@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/customer_model.dart';
 
@@ -107,6 +109,69 @@ class CustomerItem extends StatelessWidget {
         : customer.googleMapsQueryUrl;
     if (url == null || url.trim().isEmpty) return;
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  String? _customerLocationUrl(Customer customer) {
+    final url = customer.googleMapsQueryUrl ?? customer.googleMapsDirectionsUrl;
+    if (url == null || url.trim().isEmpty) return null;
+    return url.trim();
+  }
+
+  Future<void> _showLocationShareSheet(
+    BuildContext context,
+    Customer customer,
+  ) async {
+    final url = _customerLocationUrl(customer);
+    if (url == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا يوجد موقع مسجل لهذا العميل'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final String shareText = customer.name.trim().isNotEmpty
+        ? 'موقع ${customer.name}: $url'
+        : url;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: const Text('مشاركة'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await Share.share(shareText, subject: 'مشاركة الموقع');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_outlined),
+                title: const Text('نسخ الرابط'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await Clipboard.setData(ClipboardData(text: url));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تم نسخ رابط الموقع'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -230,6 +295,14 @@ class CustomerItem extends StatelessWidget {
                                         ),
                                         icon: const Icon(Icons.directions, size: 18),
                                         label: const Text('اتجاهات'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed: () => _showLocationShareSheet(
+                                          context,
+                                          customer,
+                                        ),
+                                        icon: const Icon(Icons.share_outlined, size: 18),
+                                        label: const Text('مشاركة للموقع'),
                                       ),
                                     ],
                                   ),

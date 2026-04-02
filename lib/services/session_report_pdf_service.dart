@@ -439,14 +439,22 @@ double _resolveReadingUnitPrice(
   PumpSession session, {
   required Map<String, double> fuelPriceLookup,
 }) {
+  final direct = fuelPriceLookup[reading.fuelType];
+  if (direct != null && direct > 0) return direct;
+
+  final normalized = _normalizeFuelType(reading.fuelType);
+  for (final entry in fuelPriceLookup.entries) {
+    if (_normalizeFuelType(entry.key) == normalized && entry.value > 0) {
+      return entry.value;
+    }
+  }
+
   if (reading.unitPrice != null && reading.unitPrice! > 0) {
     return reading.unitPrice!;
   }
   if (session.unitPrice != null && session.unitPrice! > 0) {
     return session.unitPrice!;
   }
-  final lookup = fuelPriceLookup[reading.fuelType];
-  if (lookup != null && lookup > 0) return lookup;
   return 0;
 }
 
