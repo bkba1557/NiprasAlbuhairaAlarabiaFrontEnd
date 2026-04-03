@@ -650,6 +650,12 @@ class ApiEndpoints {
   static const String authDevices = '/auth/devices';
   static const String logoutAllAuthDevices = '/auth/devices/logout-all';
   static const String blockedDevices = '/auth/blocked-devices';
+
+  // System pause / maintenance notice (Owner only for activate/deactivate)
+  static const String systemPauseStatus = '/system-pause';
+  static const String systemPauseActivate = '/system-pause/activate';
+  static const String systemPauseDeactivate = '/system-pause/deactivate';
+
   static const String orders = '/orders';
   static const String orderAutofillDocument = '/orders/autofill/document';
   static const String orderImportDocuments = '/orders/import/documents';

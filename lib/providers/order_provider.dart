@@ -48,6 +48,54 @@ class OrderProvider with ChangeNotifier {
     return null;
   }
 
+  String? _serializeFilterValue(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    if (value is DateTime) {
+      return value.toIso8601String();
+    }
+    return value.toString();
+  }
+
+  Map<String, String> _normalizeQueryFilters(Map<String, dynamic>? filters) {
+    if (filters == null || filters.isEmpty) return const {};
+
+    final normalized = <String, String>{};
+    filters.forEach((key, value) {
+      final serialized = _serializeFilterValue(value);
+      if (serialized != null) {
+        normalized[key] = serialized;
+      }
+    });
+    return normalized;
+  }
+
+  Uri _ordersUri({int page = 1, Map<String, dynamic>? filters}) {
+    final queryParameters = <String, String>{
+      'page': page.toString(),
+      ..._normalizeQueryFilters(filters),
+    };
+
+    return Uri.parse(
+      '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}',
+    ).replace(queryParameters: queryParameters);
+  }
+
+  DateTime? _coerceDate(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value.trim());
+    }
+    return null;
+  }
+
+  DateTime _normalizeDateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
   Map<String, String> _multipartHeaders() {
     final headers = Map<String, String>.from(ApiService.headers);
     headers.remove('Content-Type');
@@ -174,8 +222,7 @@ class OrderProvider with ChangeNotifier {
     return orders;
   }
 
-  List<Order> get orders =>
-      _filteredOrders.isNotEmpty ? _filteredOrders : _orders;
+  List<Order> get orders => _filters.isNotEmpty ? _filteredOrders : _orders;
   Order? get selectedOrder => _selectedOrder;
   List<Activity> get activities => _activities;
   bool get isLoading => _isLoading;
@@ -278,15 +325,12 @@ class OrderProvider with ChangeNotifier {
     }
 
     try {
-      String url = '${ApiEndpoints.baseUrl}${ApiEndpoints.orders}?page=$page';
+      _filters = filters == null ? {} : {...filters};
+      final requestFilters = <String, dynamic>{..._filters};
+      String url = _ordersUri(page: page, filters: requestFilters).toString();
 
-      if (filters != null) {
-        _filters = {...filters};
-        filters.forEach((key, value) {
-          if (value != null && value.toString().isNotEmpty) {
-            url += '&$key=$value';
-          }
-        });
+      if (requestFilters['forMerge'] == true) {
+        requestFilters['mergeStatus'] = 'منفصل';
       }
 
       // 🔥 إضافة تصفية خاصة للدمج
@@ -294,13 +338,14 @@ class OrderProvider with ChangeNotifier {
         url += '&mergeStatus=منفصل';
       }
 
+      url = _ordersUri(page: page, filters: requestFilters).toString();
       final response = await http.get(
         Uri.parse(url),
         headers: ApiService.headers,
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
+        final data = ApiService.decodeJson(response);
 
         _orders = _parseOrdersFromPayload(data);
 
@@ -341,6 +386,9 @@ class OrderProvider with ChangeNotifier {
 
     _filteredOrders = _orders.where((order) {
       bool matches = true;
+      final orderDate = _normalizeDateOnly(order.orderDate);
+      final startDate = _coerceDate(_filters['startDate']);
+      final endDate = _coerceDate(_filters['endDate']);
 
       if (_filters['status'] != null && _filters['status'].isNotEmpty) {
         matches = matches && order.status == _filters['status'];
@@ -349,8 +397,7 @@ class OrderProvider with ChangeNotifier {
       if (_filters['supplierName'] != null &&
           _filters['supplierName'].isNotEmpty) {
         matches =
-            matches &&
-            (order.supplierName?.contains(_filters['supplierName']) ?? false);
+            matches && order.supplierName.contains(_filters['supplierName']);
       }
 
       if (_filters['orderNumber'] != null &&
@@ -369,20 +416,21 @@ class OrderProvider with ChangeNotifier {
           _filters['customerName'].isNotEmpty) {
         matches =
             matches &&
-            (order.customer?.name?.contains(_filters['customerName']) ?? false);
+            (order.customer?.name.contains(_filters['customerName']) ?? false);
       }
 
-      if (_filters['startDate'] != null) {
-        matches = matches && order.orderDate.isAfter(_filters['startDate']);
+      if (startDate != null) {
+        matches = matches && !orderDate.isBefore(_normalizeDateOnly(startDate));
       }
 
-      if (_filters['endDate'] != null) {
-        matches = matches && order.orderDate.isBefore(_filters['endDate']);
+      if (endDate != null) {
+        matches = matches && !orderDate.isAfter(_normalizeDateOnly(endDate));
       }
 
       if (_filters['requestType'] != null &&
           _filters['requestType'].isNotEmpty) {
-        matches = matches && order.requestType == _filters['requestType'];
+        matches =
+            matches && order.effectiveRequestType == _filters['requestType'];
       }
 
       // 🔥 فلترة خاصة للدمج
@@ -400,6 +448,31 @@ class OrderProvider with ChangeNotifier {
 
       return matches;
     }).toList();
+  }
+
+  Future<int> fetchOrdersCount({Map<String, dynamic>? filters}) async {
+    try {
+      final requestFilters = <String, dynamic>{...?filters, 'limit': 1};
+      final response = await http.get(
+        _ordersUri(page: 1, filters: requestFilters),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode != 200) {
+        return 0;
+      }
+
+      final data = ApiService.decodeJson(response);
+      final pagination = _extractPagination(data);
+
+      if (pagination != null) {
+        return _intOrFallback(pagination['total'], 0);
+      }
+
+      return _parseOrdersFromPayload(data).length;
+    } catch (_) {
+      return 0;
+    }
   }
 
   // ============================================
@@ -567,6 +640,48 @@ class OrderProvider with ChangeNotifier {
         request.fields['unit'] = order.unit!;
       }
 
+      if (order.unitPrice != null) {
+        request.fields['unitPrice'] = order.unitPrice!.toString();
+      }
+
+      if (order.totalPrice != null) {
+        request.fields['totalPrice'] = order.totalPrice!.toString();
+      }
+
+      if (order.vatRate != null) {
+        request.fields['vatRate'] = order.vatRate!.toString();
+      }
+
+      if (order.vatAmount != null) {
+        request.fields['vatAmount'] = order.vatAmount!.toString();
+      }
+
+      if (order.totalPriceWithVat != null) {
+        request.fields['totalPriceWithVat'] = order.totalPriceWithVat!
+            .toString();
+      }
+
+      if (order.transportSourceCity?.trim().isNotEmpty == true) {
+        request.fields['transportSourceCity'] = order.transportSourceCity!
+            .trim();
+      }
+
+      if (order.transportCapacityLiters != null) {
+        request.fields['transportCapacityLiters'] = order
+            .transportCapacityLiters!
+            .toString();
+      }
+
+      if (order.pricingSnapshot != null) {
+        request.fields['pricingSnapshot'] = json.encode(order.pricingSnapshot);
+      }
+
+      if (order.transportPricingOverride != null) {
+        request.fields['transportPricingOverride'] = json.encode(
+          order.transportPricingOverride,
+        );
+      }
+
       // =========================
       // 📝 ملاحظات
       // =========================
@@ -699,6 +814,9 @@ class OrderProvider with ChangeNotifier {
         'productType',
         'unitPrice',
         'totalPrice',
+        'vatRate',
+        'vatAmount',
+        'totalPriceWithVat',
         'orderDate',
         'paymentMethod',
         'paymentStatus',
@@ -715,6 +833,10 @@ class OrderProvider with ChangeNotifier {
         'driverEarnings',
         'distance',
         'deliveryDuration',
+        'transportSourceCity',
+        'transportCapacityLiters',
+        'pricingSnapshot',
+        'transportPricingOverride',
       ];
 
       final filteredUpdates = <String, dynamic>{};
@@ -742,7 +864,11 @@ class OrderProvider with ChangeNotifier {
         request.headers.addAll(_multipartHeaders());
 
         filteredUpdates.forEach((key, value) {
-          request.fields[key] = value.toString();
+          if (value is Map || value is List) {
+            request.fields[key] = json.encode(value);
+          } else {
+            request.fields[key] = value.toString();
+          }
         });
 
         if (firebaseAttachments.isNotEmpty) {

@@ -27,9 +27,14 @@ class ApiConfig {
   }
 
   static String _defaultDevBaseUrl() {
-    // Web testing is usually done against the HTTPS server (to avoid mixed
-    // content / network policy issues when the API isn't on the same LAN).
-    if (kIsWeb) return productionBaseUrl;
+    // Web:
+    // - In debug/profile, it's usually safe to use the LAN backend (served over
+    //   HTTP) because Flutter's dev server is also HTTP.
+    // - In release, keep using the production HTTPS backend to avoid mixed
+    //   content / network policy issues.
+    if (kIsWeb) {
+      return kReleaseMode ? productionBaseUrl : devLanBaseUrl;
+    }
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:

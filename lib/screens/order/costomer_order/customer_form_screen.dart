@@ -46,6 +46,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   final _contactPersonController = TextEditingController();
   final _contactPersonPhoneController = TextEditingController();
   final _notesController = TextEditingController();
+  late final Map<String, TextEditingController> _fuelPricingControllers;
 
   bool _showDocumentSection = false;
   double? _selectedLatitude;
@@ -60,6 +61,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   @override
   void initState() {
     super.initState();
+    _fuelPricingControllers = {
+      for (final fuelType in kSupportedFuelTypes)
+        fuelType: TextEditingController(),
+    };
     if (widget.customerToEdit != null) {
       _initializeFormWithCustomer();
     }
@@ -79,6 +84,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _contactPersonController.dispose();
     _contactPersonPhoneController.dispose();
     _notesController.dispose();
+    for (final controller in _fuelPricingControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -96,6 +104,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _contactPersonController.text = customer.contactPerson ?? '';
     _contactPersonPhoneController.text = customer.contactPersonPhone ?? '';
     _notesController.text = customer.notes ?? '';
+    for (final fuelType in kSupportedFuelTypes) {
+      _fuelPricingControllers[fuelType]!.text =
+          customer.fuelPriceFor(fuelType)?.toStringAsFixed(3) ?? '';
+    }
     _selectedLatitude = customer.latitude;
     _selectedLongitude = customer.longitude;
     _showDocumentSection = customer.documents.isNotEmpty;
@@ -942,6 +954,25 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     );
   }
 
+  double? _parseDoubleOrNull(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    return double.tryParse(trimmed.replaceAll(',', '.'));
+  }
+
+  List<Map<String, dynamic>> _buildFuelPricingPayload() {
+    final result = <Map<String, dynamic>>[];
+    for (final fuelType in kSupportedFuelTypes) {
+      final price = _parseDoubleOrNull(_fuelPricingControllers[fuelType]!.text);
+      if (price == null) continue;
+      result.add({
+        'fuelType': fuelType,
+        'pricePerLiter': price,
+      });
+    }
+    return result;
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -981,6 +1012,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       'notes': _notesController.text.trim().isNotEmpty
           ? _notesController.text.trim()
           : null,
+      'fuelPricing': _buildFuelPricingPayload(),
     };
 
     if (widget.customerToEdit != null) {
@@ -1137,6 +1169,125 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       keyboardType: TextInputType.emailAddress,
                                     ),
                                   ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'تسعيرة العميل',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'حدد سعر كل نوع وقود لهذا العميل. تسعيرة النقل أصبحت من شاشة تسعيرة النقل المنفصلة.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: AppColors.mediumGray),
+                                ),
+                                const SizedBox(height: 20),
+                                GridView.count(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  crossAxisCount: gridCols,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 16,
+                                  childAspectRatio: 3.5,
+                                  children: [
+                                    for (final fuelType in kSupportedFuelTypes)
+                                      CustomTextField(
+                                        controller:
+                                            _fuelPricingControllers[fuelType],
+                                        labelText: fuelType,
+                                        prefixIcon:
+                                            Icons.local_gas_station_outlined,
+                                        keyboardType:
+                                            const TextInputType
+                                                .numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                        suffixText: 'ر.س/لتر',
+                                        onChanged: (_) => setState(() {}),
+                                        validator: (value) {
+                                          final parsed =
+                                              _parseDoubleOrNull(value ?? '');
+                                          if ((value ?? '').trim().isEmpty) {
+                                            return null;
+                                          }
+                                          if (parsed == null) {
+                                            return 'أدخل رقم صحيح';
+                                          }
+                                          if (parsed < 0) {
+                                            return 'القيمة يجب أن تكون >= 0';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Builder(
+                                  builder: (context) {
+                                    final configuredCount = kSupportedFuelTypes
+                                        .where(
+                                          (fuelType) =>
+                                              _parseDoubleOrNull(
+                                                _fuelPricingControllers[fuelType]!
+                                                    .text,
+                                              ) !=
+                                              null,
+                                        )
+                                        .length;
+
+                                    return Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryBlue.withValues(
+                                          alpha: 0.06,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: AppColors.primaryBlue
+                                              .withValues(alpha: 0.14),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.price_check_outlined,
+                                            color: AppColors.primaryBlue,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          const Expanded(
+                                            child: Text(
+                                              'أنواع الوقود المسعّرة',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w900,
+                                                color: AppColors.primaryBlue,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            '$configuredCount / ${kSupportedFuelTypes.length}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              color: AppColors.primaryBlue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),

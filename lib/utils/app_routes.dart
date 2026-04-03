@@ -51,11 +51,19 @@ import 'package:order_tracker/screens/login_screen.dart';
 import 'package:order_tracker/screens/notifications_screen.dart';
 import 'package:order_tracker/screens/order/merge/merge_orders_screen.dart';
 import 'package:order_tracker/screens/order/supplier_order/supplier_order_form_screen.dart';
+import 'package:order_tracker/screens/order_management/customer_liters_report_screen.dart';
+import 'package:order_tracker/screens/order_management/customer_pricing_screen.dart';
+import 'package:order_tracker/screens/order_management/order_management_dashboard_screen.dart';
+import 'package:order_tracker/screens/order_management/tax_settings_screen.dart';
+import 'package:order_tracker/screens/order_management/transport_orders_screen.dart';
+import 'package:order_tracker/screens/order_management/treasury/customer_accounts_screen.dart';
+import 'package:order_tracker/screens/order_management/treasury/customer_treasury_screen.dart';
 import 'package:order_tracker/screens/order_details_screen.dart';
 import 'package:order_tracker/screens/orders_screen.dart';
 import 'package:order_tracker/screens/profile_screen.dart';
 import 'package:order_tracker/screens/support_screen.dart';
 import 'package:order_tracker/screens/register_screen.dart';
+import 'package:order_tracker/screens/account/system_pause_screen.dart';
 import 'package:order_tracker/screens/reports/customer_report_screen.dart';
 import 'package:order_tracker/screens/reports/driver_report_screen.dart';
 import 'package:order_tracker/screens/reports/invoice_report_screen.dart';
@@ -176,12 +184,29 @@ class AppRoutes {
   static const settings = '/settings';
   static const support = '/support';
   static const notifications = '/notifications';
+  static const systemPause = '/system-pause';
   static const String suppliers = '/suppliers';
   static const String supplierForm = '/supplier/form';
   static const String supplierOrderForm = '/supplier/order/form';
   static const String customerOrderForm = '/customer/order/form';
   static const String supplierDetails = '/supplier/details';
   static const String mergeOrders = '/merge-orders';
+
+  // Order Management
+  static const String orderManagementDashboard = '/orders/management';
+  static const String orderManagementCustomerAccounts =
+      '/orders/management/customers/accounts';
+  static const String orderManagementFuelPricing =
+      '/orders/management/customers/fuel-pricing';
+  static const String orderManagementTransportPricing =
+      '/orders/management/customers/transport-pricing';
+  static const String orderManagementTransportOrders =
+      '/orders/management/transport/orders';
+  static const String orderManagementCustomerLitersReport =
+      '/orders/management/reports/customer-liters';
+  static const String orderManagementTaxSettings = '/orders/management/tax';
+  static const String orderManagementTreasury = '/orders/management/treasury';
+
   static const String tasks = '/tasks';
   static const String contractsManagement = '/contracts';
   static const String chat = '/chat';
@@ -308,6 +333,17 @@ class AppRoutes {
 
     orders: (_) => const OrdersScreen(),
     customers: (_) => const CustomersScreen(),
+    orderManagementDashboard: (_) => const OrderManagementDashboardScreen(),
+    orderManagementCustomerAccounts: (_) => const CustomerAccountsScreen(),
+    orderManagementFuelPricing: (_) =>
+        const CustomerPricingScreen(mode: CustomerPricingMode.fuel),
+    orderManagementTransportPricing: (_) =>
+        const CustomerPricingScreen(mode: CustomerPricingMode.transport),
+    orderManagementTransportOrders: (_) => const TransportOrdersScreen(),
+    orderManagementCustomerLitersReport: (_) =>
+        const CustomerLitersReportScreen(),
+    orderManagementTaxSettings: (_) => const TaxSettingsScreen(),
+    orderManagementTreasury: (_) => const CustomerTreasuryScreen(),
 
     maintenanceDashboard: (context) => const MaintenanceDashboardScreen(),
     workshopFuelDashboard: (context) => const WorkshopFuelDashboardScreen(),
@@ -362,6 +398,7 @@ class AppRoutes {
     settings: (_) => const SettingsScreen(),
     support: (_) => const SupportScreen(),
     notifications: (_) => const NotificationsScreen(),
+    systemPause: (_) => const SystemPauseScreen(),
     fuelStations: (context) => const FuelStationsScreen(),
     fuelStationForm: (context) => const FuelStationFormScreen(),
 

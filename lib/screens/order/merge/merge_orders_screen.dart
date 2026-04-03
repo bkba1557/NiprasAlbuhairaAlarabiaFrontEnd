@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:order_tracker/models/models.dart';
 import 'package:order_tracker/models/order_model.dart';
 import 'package:order_tracker/providers/order_provider.dart';
+import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/gradient_button.dart';
@@ -444,7 +445,7 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
       return false;
     }
 
-    if (customer.quantity != supplier.quantity) {
+    if (customer.quantity! > supplier.quantity!) {
       return false;
     }
 
@@ -1316,17 +1317,263 @@ class _MergeOrdersScreenState extends State<MergeOrdersScreen> {
               isCompatible: true,
             ),
 
+            const SizedBox(height: 14),
+            _buildPricingPreview(),
+
             if (!isCompatible)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  'ملاحظة: يجب أن تكون الكمية المتوفرة لدى المورد تساوي كمية طلب العميل، وأن يكون وقت التحميل بعد وقت الوصول',
+                  'ملاحظة: يجب أن تكون كمية المورد كافية لتغطية طلب العميل مع تطابق نوع الوقود.',
                   style: TextStyle(color: AppColors.errorRed, fontSize: 12),
                 ),
               ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPricingPreview() {
+    final order = _selectedCustomerOrder;
+    if (order == null) return const SizedBox.shrink();
+
+    final isTransport = order.effectiveRequestType == 'نقل';
+    final fuel = order.effectiveFuelPricePerLiter;
+    final transportMode = order.effectiveTransportMode;
+    final transportValue = order.effectiveTransportValue;
+    final returnMode = order.effectiveReturnMode;
+    final returnValue = order.effectiveReturnValue;
+    final hasFuelPricing =
+        order.hasPricingSnapshot ||
+        order.customer?.fuelPriceFor(order.fuelType) != null;
+
+    if (!hasFuelPricing) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.warningOrange.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.warningOrange.withValues(alpha: 0.18),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, color: AppColors.warningOrange),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'لم يتم ضبط سعر الوقود لهذا العميل بعد.',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pushNamed(
+                context,
+                AppRoutes.orderManagementFuelPricing,
+              ),
+              child: const Text('فتح التسعيرة'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final vatRate = order.effectiveVatRate;
+    final qty = order.quantity ?? 0;
+    final unitPrice = order.effectiveUnitPricePerLiter;
+    final subtotal = order.effectiveSubtotal;
+    final vat = order.effectiveVatAmount;
+    final total = order.effectiveTotalWithVat;
+
+    final money = NumberFormat.currency(
+      locale: 'ar',
+      symbol: 'ر.س',
+      decimalDigits: 2,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.14),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.calculate_outlined, color: AppColors.primaryBlue),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'التسعيرة (حسب اللترات)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+              ),
+              Text(
+                'VAT ${(vatRate * 100).toStringAsFixed(0)}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primaryBlue.withValues(alpha: 0.78),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _pricingChip(
+                label: 'الوقود/لتر',
+                value: money.format(fuel),
+                icon: Icons.local_gas_station_outlined,
+              ),
+              if (isTransport)
+                _pricingChip(
+                  label: transportMode == 'per_liter' ? 'النقل/لتر' : 'النقل',
+                  value: transportValue == null
+                      ? 'غير محدد'
+                      : transportMode == 'per_liter'
+                          ? '${money.format(transportValue)} / لتر'
+                          : money.format(transportValue),
+                  icon: Icons.local_shipping_outlined,
+                ),
+              if (isTransport)
+                _pricingChip(
+                  label: returnMode == 'per_liter' ? 'الرد/لتر' : 'الرد',
+                  value: returnValue == null
+                      ? 'غير محدد'
+                      : returnMode == 'per_liter'
+                          ? '${money.format(returnValue)} / لتر'
+                          : money.format(returnValue),
+                  icon: Icons.keyboard_return_outlined,
+                ),
+              _pricingChip(
+                label: 'الإجمالي/لتر',
+                value: money.format(unitPrice),
+                icon: Icons.price_check_outlined,
+                emphasize: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _pricingRow(label: 'الكمية', value: '${qty.toStringAsFixed(0)} لتر'),
+          if (isTransport && (order.effectiveTransportSourceCity?.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 6),
+            _pricingRow(
+              label: 'مدينة المصدر',
+              value: order.effectiveTransportSourceCity!,
+            ),
+          ],
+          if (isTransport && order.effectiveTransportCapacityLiters != null) ...[
+            const SizedBox(height: 6),
+            _pricingRow(
+              label: 'السعة',
+              value: '${order.effectiveTransportCapacityLiters} لتر',
+            ),
+          ],
+          const SizedBox(height: 6),
+          _pricingRow(
+            label: 'الإجمالي قبل الضريبة',
+            value: money.format(subtotal),
+          ),
+          const SizedBox(height: 6),
+          _pricingRow(label: 'الضريبة', value: money.format(vat)),
+          const Divider(height: 18),
+          _pricingRow(
+            label: 'الإجمالي شامل الضريبة',
+            value: money.format(total),
+            emphasize: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pricingChip({
+    required String label,
+    required String value,
+    required IconData icon,
+    bool emphasize = false,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: emphasize
+            ? AppColors.primaryBlue.withValues(alpha: 0.10)
+            : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: emphasize
+              ? AppColors.primaryBlue.withValues(alpha: 0.20)
+              : Colors.transparent,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: emphasize ? AppColors.primaryBlue : Colors.grey.shade700,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$label: ',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: emphasize ? AppColors.primaryBlue : Colors.black87,
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: emphasize ? FontWeight.w900 : FontWeight.w700,
+                color: emphasize ? AppColors.primaryBlue : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pricingRow({
+    required String label,
+    required String value,
+    bool emphasize = false,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: emphasize ? FontWeight.w900 : FontWeight.w700,
+              color: emphasize ? AppColors.primaryBlue : Colors.black87,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: emphasize ? FontWeight.w900 : FontWeight.w800,
+            color: emphasize ? AppColors.primaryBlue : Colors.black87,
+          ),
+        ),
+      ],
     );
   }
 

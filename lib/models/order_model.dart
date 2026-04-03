@@ -7,6 +7,16 @@ import 'customer_model.dart';
 import 'driver_model.dart';
 import 'supplier_model.dart';
 
+Map<String, dynamic>? _asOrderMap(dynamic value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) {
+    return value.map(
+      (key, dynamicValue) => MapEntry(key.toString(), dynamicValue),
+    );
+  }
+  return null;
+}
+
 class Order {
   final String id;
   final DateTime orderDate;
@@ -85,12 +95,19 @@ class Order {
   // ⭐ معلومات إضافية
   final double? unitPrice;
   final double? totalPrice;
+  final double? vatRate;
+  final double? vatAmount;
+  final double? totalPriceWithVat;
   final String? paymentMethod;
   final String? paymentStatus;
   final String? productType;
   final double? driverEarnings;
   final double? distance;
   final int? deliveryDuration;
+  final String? transportSourceCity;
+  final int? transportCapacityLiters;
+  final Map<String, dynamic>? pricingSnapshot;
+  final Map<String, dynamic>? transportPricingOverride;
 
   final DateTime? mergedAt;
   final DateTime? completedAt;
@@ -170,12 +187,19 @@ class Order {
     // معلومات إضافية
     this.unitPrice,
     this.totalPrice,
+    this.vatRate,
+    this.vatAmount,
+    this.totalPriceWithVat,
     this.paymentMethod,
     this.paymentStatus,
     this.productType,
     this.driverEarnings,
     this.distance,
     this.deliveryDuration,
+    this.transportSourceCity,
+    this.transportCapacityLiters,
+    this.pricingSnapshot,
+    this.transportPricingOverride,
 
     this.mergedAt,
     this.completedAt,
@@ -491,6 +515,15 @@ class Order {
       totalPrice: json['totalPrice'] != null
           ? double.tryParse(json['totalPrice'].toString())
           : null,
+      vatRate: json['vatRate'] != null
+          ? double.tryParse(json['vatRate'].toString())
+          : null,
+      vatAmount: json['vatAmount'] != null
+          ? double.tryParse(json['vatAmount'].toString())
+          : null,
+      totalPriceWithVat: json['totalPriceWithVat'] != null
+          ? double.tryParse(json['totalPriceWithVat'].toString())
+          : null,
       paymentMethod: json['paymentMethod']?.toString(),
       paymentStatus: json['paymentStatus']?.toString(),
       productType: json['productType']?.toString(),
@@ -503,6 +536,12 @@ class Order {
       deliveryDuration: json['deliveryDuration'] is int
           ? json['deliveryDuration']
           : int.tryParse(json['deliveryDuration']?.toString() ?? ''),
+      transportSourceCity: json['transportSourceCity']?.toString(),
+      transportCapacityLiters: json['transportCapacityLiters'] is int
+          ? json['transportCapacityLiters']
+          : int.tryParse(json['transportCapacityLiters']?.toString() ?? ''),
+      pricingSnapshot: _asOrderMap(json['pricingSnapshot']),
+      transportPricingOverride: _asOrderMap(json['transportPricingOverride']),
 
       mergedAt: DateTime.tryParse(json['mergedAt']?.toString() ?? ''),
       completedAt: DateTime.tryParse(json['completedAt']?.toString() ?? ''),
@@ -595,12 +634,19 @@ class Order {
       // معلومات إضافية
       'unitPrice': unitPrice,
       'totalPrice': totalPrice,
+      'vatRate': vatRate,
+      'vatAmount': vatAmount,
+      'totalPriceWithVat': totalPriceWithVat,
       'paymentMethod': paymentMethod,
       'paymentStatus': paymentStatus,
       'productType': productType,
       'driverEarnings': driverEarnings,
       'distance': distance,
       'deliveryDuration': deliveryDuration,
+      'transportSourceCity': transportSourceCity,
+      'transportCapacityLiters': transportCapacityLiters,
+      'pricingSnapshot': pricingSnapshot,
+      'transportPricingOverride': transportPricingOverride,
 
       'mergedAt': mergedAt?.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
@@ -627,6 +673,66 @@ class Order {
 
   /// تحقق إذا كان الطلب مدمجاً
   bool get isMerged => mergeStatus == 'مدمج' || mergeStatus == 'مكتمل';
+
+  double? pricingNumber(String key) {
+    final value = pricingSnapshot?[key];
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  String? pricingText(String key) => pricingSnapshot?[key]?.toString();
+
+  double get effectiveVatRate => pricingNumber('vatRate') ?? vatRate ?? 0.15;
+
+  double get effectiveVatAmount =>
+      pricingNumber('vatAmount') ??
+      vatAmount ??
+      ((totalPrice ?? 0) * effectiveVatRate);
+
+  double get effectiveTotalWithVat =>
+      pricingNumber('totalWithVat') ??
+      pricingNumber('totalPriceWithVat') ??
+      totalPriceWithVat ??
+      ((totalPrice ?? 0) + effectiveVatAmount);
+
+  double get effectiveFuelPricePerLiter =>
+      pricingNumber('fuelPricePerLiter') ??
+      customer?.fuelPriceFor(fuelType) ??
+      0;
+
+  double get effectiveFuelSubtotal =>
+      pricingNumber('fuelSubtotal') ??
+      ((quantity ?? 0) * effectiveFuelPricePerLiter);
+
+  double get effectiveTransportCharge => pricingNumber('transportCharge') ?? 0;
+
+  double get effectiveReturnCharge => pricingNumber('returnCharge') ?? 0;
+
+  double get effectiveSubtotal =>
+      pricingNumber('subtotal') ??
+      totalPrice ??
+      (effectiveFuelSubtotal + effectiveTransportCharge + effectiveReturnCharge);
+
+  double get effectiveUnitPricePerLiter =>
+      pricingNumber('unitPricePerLiter') ??
+      unitPrice ??
+      ((quantity ?? 0) > 0 ? effectiveSubtotal / (quantity ?? 1) : 0);
+
+  String? get effectiveTransportMode => pricingText('transportMode');
+
+  double? get effectiveTransportValue => pricingNumber('transportValue');
+
+  String? get effectiveReturnMode => pricingText('returnMode');
+
+  double? get effectiveReturnValue => pricingNumber('returnValue');
+
+  String? get effectiveTransportSourceCity =>
+      pricingText('sourceCity') ?? transportSourceCity;
+
+  int? get effectiveTransportCapacityLiters =>
+      pricingNumber('capacityLiters')?.round() ?? transportCapacityLiters;
+
+  bool get hasPricingSnapshot => pricingSnapshot?.isNotEmpty == true;
 
   /// تحقق إذا كان الطلب قابلاً للدمج
   bool get canMerge =>
@@ -965,12 +1071,19 @@ class Order {
     String? delayReason,
     double? unitPrice,
     double? totalPrice,
+    double? vatRate,
+    double? vatAmount,
+    double? totalPriceWithVat,
     String? paymentMethod,
     String? paymentStatus,
     String? productType,
     double? driverEarnings,
     double? distance,
     int? deliveryDuration,
+    String? transportSourceCity,
+    int? transportCapacityLiters,
+    Map<String, dynamic>? pricingSnapshot,
+    Map<String, dynamic>? transportPricingOverride,
     DateTime? mergedAt,
     DateTime? completedAt,
     DateTime? cancelledAt,
@@ -1034,12 +1147,21 @@ class Order {
       delayReason: delayReason ?? this.delayReason,
       unitPrice: unitPrice ?? this.unitPrice,
       totalPrice: totalPrice ?? this.totalPrice,
+      vatRate: vatRate ?? this.vatRate,
+      vatAmount: vatAmount ?? this.vatAmount,
+      totalPriceWithVat: totalPriceWithVat ?? this.totalPriceWithVat,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       productType: productType ?? this.productType,
       driverEarnings: driverEarnings ?? this.driverEarnings,
       distance: distance ?? this.distance,
       deliveryDuration: deliveryDuration ?? this.deliveryDuration,
+      transportSourceCity: transportSourceCity ?? this.transportSourceCity,
+      transportCapacityLiters:
+          transportCapacityLiters ?? this.transportCapacityLiters,
+      pricingSnapshot: pricingSnapshot ?? this.pricingSnapshot,
+      transportPricingOverride:
+          transportPricingOverride ?? this.transportPricingOverride,
       mergedAt: mergedAt ?? this.mergedAt,
       completedAt: completedAt ?? this.completedAt,
       cancelledAt: cancelledAt ?? this.cancelledAt,

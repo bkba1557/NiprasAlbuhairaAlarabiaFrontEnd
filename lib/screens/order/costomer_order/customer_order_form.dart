@@ -12,12 +12,16 @@ import 'package:intl/intl.dart';
 import 'package:order_tracker/models/customer_model.dart';
 import 'package:order_tracker/models/models.dart';
 import 'package:order_tracker/models/order_model.dart';
+import 'package:order_tracker/models/transport_pricing_rule_model.dart';
 import 'package:order_tracker/models/driver_model.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/order_provider.dart';
 import 'package:order_tracker/providers/customer_provider.dart';
 import 'package:order_tracker/providers/driver_provider.dart';
+import 'package:order_tracker/providers/tax_provider.dart';
+import 'package:order_tracker/services/order_management_pricing_service.dart';
 import 'package:order_tracker/utils/api_service.dart';
+import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/saudi_cities.dart';
 import 'package:order_tracker/widgets/app_soft_background.dart';
@@ -49,6 +53,17 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
       TextEditingController();
   final TextEditingController _customerFilterController =
       TextEditingController();
+  final TextEditingController _transportSourceCityController =
+      TextEditingController();
+  final TextEditingController _overrideTransportValueController =
+      TextEditingController();
+  final TextEditingController _overrideReturnValueController =
+      TextEditingController();
+  final NumberFormat _moneyFormat = NumberFormat.currency(
+    locale: 'ar',
+    symbol: 'ر.س',
+    decimalDigits: 2,
+  );
 
   DateTime _orderDate = DateTime.now();
   DateTime _arrivalDate = DateTime.now().add(const Duration(days: 1));
@@ -74,6 +89,12 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   Driver? _selectedDriver;
   String? _selectedDriverId;
   List<Driver> _drivers = [];
+  List<TransportPricingRule> _transportPricingRules = [];
+  bool _loadingTransportPricingRules = false;
+  bool _useTransportPricingOverride = false;
+  int? _transportCapacityLiters = 32000;
+  String _overrideTransportMode = 'fixed';
+  String _overrideReturnMode = 'fixed';
   bool get _isEditMode => widget.orderToEdit != null;
   bool _hasCreatedOrders = false;
 
@@ -126,6 +147,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     super.initState();
     _customersFuture = _loadCustomers();
     _driversFuture = _loadDrivers();
+    unawaited(_loadTransportPricingRules());
     _initFuture = _initEditMode();
   }
 
@@ -136,6 +158,428 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     if (widget.orderToEdit != null) {
       _initializeFormWithOrder();
     }
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _notesController.dispose();
+    _customerSearchController.dispose();
+    _customerFilterController.dispose();
+    _transportSourceCityController.dispose();
+    _overrideTransportValueController.dispose();
+    _overrideReturnValueController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTransportPricingRules() async {
+    if (_loadingTransportPricingRules) return;
+    setState(() => _loadingTransportPricingRules = true);
+
+    try {
+      final rules =
+          await OrderManagementPricingService.fetchTransportPricingRules();
+      if (!mounted) return;
+      setState(() => _transportPricingRules = rules);
+    } catch (e) {
+      debugPrint('Error loading transport pricing rules: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingTransportPricingRules = false);
+      }
+    }
+  }
+
+  String? get _transportSourceCity {
+    final value = _transportSourceCityController.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  double? _parseControllerDouble(TextEditingController controller) {
+    final value = controller.text.trim();
+    if (value.isEmpty) return null;
+    return double.tryParse(value.replaceAll(',', '.'));
+  }
+
+  Map<String, dynamic>? _buildTransportOverridePayload() {
+    if (!_useTransportPricingOverride || _purchaseType != 'نقل') return null;
+
+    final transportValue = _parseControllerDouble(_overrideTransportValueController);
+    final returnValue = _parseControllerDouble(_overrideReturnValueController);
+
+    if (transportValue == null) return null;
+
+    return {
+      'sourceCity': _transportSourceCity,
+      'capacityLiters': _transportCapacityLiters,
+      'fuelType': _fuelType,
+      'transportMode': _overrideTransportMode,
+      'transportValue': transportValue,
+      'returnMode': _overrideReturnMode,
+      'returnValue': returnValue ?? 0,
+    };
+  }
+
+  TransportPricingRule? get _matchedTransportPricingRule =>
+      OrderManagementPricingService.matchRule(
+        rules: _transportPricingRules,
+        fuelType: _fuelType,
+        sourceCity: _transportSourceCity,
+        capacityLiters: _transportCapacityLiters,
+      );
+
+  OrderPricingPreview get _pricingPreview =>
+      OrderManagementPricingService.buildPreview(
+        isTransport: _purchaseType == 'نقل',
+        quantity: _quantityValue,
+        vatRate: _vatRate,
+        fuelPricePerLiter: _selectedCustomer?.fuelPriceFor(_fuelType),
+        sourceCity: _transportSourceCity,
+        capacityLiters: _transportCapacityLiters,
+        matchedRule: _matchedTransportPricingRule,
+        transportOverride: _buildTransportOverridePayload(),
+      );
+
+  List<String> get _transportSourceCitySuggestions {
+    final suggestions = <String>{
+      ...saudiCities.keys,
+      ..._transportPricingRules
+          .map((rule) => rule.sourceCity.trim())
+          .where((city) => city.isNotEmpty),
+    };
+    final current = _transportSourceCity;
+    if (current != null && current.isNotEmpty) {
+      suggestions.add(current);
+    }
+    final list = suggestions.toList()..sort();
+    return list;
+  }
+
+  void _handlePurchaseTypeChanged(String value) {
+    setState(() {
+      _purchaseType = value;
+
+      if (_purchaseType == 'شراء') {
+        _selectedDriverId = null;
+        _selectedDriver = null;
+        return;
+      }
+
+      if (_transportCapacityLiters == null) {
+        final suggestedCapacity = _quantityValue.round();
+        _transportCapacityLiters =
+            OrderManagementPricingService.supportedCapacities.contains(
+                  suggestedCapacity,
+                )
+                ? suggestedCapacity
+                : OrderManagementPricingService.supportedCapacities.last;
+      }
+    });
+  }
+
+  void _syncCapacityWithQuantity(String value) {
+    final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
+    if (parsed == null) return;
+
+    final rounded = parsed.round();
+    if (!OrderManagementPricingService.supportedCapacities.contains(rounded)) {
+      return;
+    }
+
+    _transportCapacityLiters = rounded;
+  }
+
+  String _pricingModeLabel(String mode) {
+    return mode == 'per_liter' ? 'باللتر' : 'سعر ثابت';
+  }
+
+  Widget _buildPricingModeDropdown({
+    required String value,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: DropdownButton<String>(
+        value: value,
+        isExpanded: true,
+        underline: const SizedBox(),
+        items: const [
+          DropdownMenuItem(value: 'fixed', child: Text('سعر ثابت')),
+          DropdownMenuItem(value: 'per_liter', child: Text('باللتر')),
+        ],
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildTransportOverrideRow({
+    required bool isDesktop,
+    required String title,
+    required String mode,
+    required ValueChanged<String?> onModeChanged,
+    required TextEditingController controller,
+  }) {
+    final modeField = _buildFieldWithIcon(
+      label: '$title - نوع التسعير',
+      icon: Icons.tune_outlined,
+      color: AppColors.infoBlue,
+      child: _buildPricingModeDropdown(
+        value: mode,
+        onChanged: onModeChanged,
+      ),
+      );
+
+    final valueField = _buildFieldWithIcon(
+      label: '$title - القيمة',
+      icon: Icons.payments_outlined,
+      color: AppColors.infoBlue,
+      child: CustomTextField(
+        controller: controller,
+        labelText: mode == 'per_liter' ? 'القيمة لكل لتر' : 'القيمة الإجمالية',
+        prefixIcon: Icons.numbers_outlined,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        suffixText: mode == 'per_liter' ? 'ر.س/لتر' : 'ر.س',
+        fieldColor: Colors.white,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+
+    return isDesktop
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: modeField),
+              const SizedBox(width: 12),
+              Expanded(child: valueField),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              modeField,
+              const SizedBox(height: 12),
+              valueField,
+            ],
+          );
+  }
+
+  Widget _buildTransportPricingSection({required bool isDesktop}) {
+    if (_purchaseType != 'نقل') return const SizedBox.shrink();
+
+    final matchedRule = _matchedTransportPricingRule;
+    final sourceCities = _transportSourceCitySuggestions;
+    final highlightColor = AppColors.infoBlue;
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(top: isDesktop ? 20 : 16),
+      padding: EdgeInsets.all(isDesktop ? 18 : 14),
+      decoration: BoxDecoration(
+        color: highlightColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: highlightColor.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.local_shipping_outlined,
+                color: AppColors.infoBlue,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'تسعيرة النقل والرد',
+                  style: TextStyle(
+                    fontSize: isDesktop ? 16 : 15,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.infoBlue,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.orderManagementTransportPricing,
+                ),
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: const Text('إدارة التسعير'),
+              ),
+            ],
+          ),
+          if (_loadingTransportPricingRules) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(minHeight: 3),
+          ],
+          const SizedBox(height: 14),
+          _buildFieldWithIcon(
+            label: 'مدينة مصدر الوقود',
+            icon: Icons.location_city_outlined,
+            color: AppColors.infoBlue,
+            child: Column(
+              children: [
+                CustomTextField(
+                  controller: _transportSourceCityController,
+                  labelText: 'مثال: الرياض أو جدة',
+                  prefixIcon: Icons.location_on_outlined,
+                  fieldColor: Colors.white,
+                  onChanged: (_) => setState(() {}),
+                ),
+                if (sourceCities.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: sourceCities.map((city) {
+                        final selected = _transportSourceCity == city;
+                        return ChoiceChip(
+                          label: Text(city),
+                          selected: selected,
+                          onSelected: (_) {
+                            setState(() {
+                              _transportSourceCityController.text = city;
+                            });
+                          },
+                          selectedColor: AppColors.infoBlue,
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(
+                            color: selected ? Colors.white : Colors.black87,
+                            fontWeight:
+                                selected ? FontWeight.w800 : FontWeight.w600,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _buildFieldWithIcon(
+            label: 'سعة الشاحنة',
+            icon: Icons.local_shipping_outlined,
+            color: AppColors.infoBlue,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: OrderManagementPricingService.supportedCapacities.map((
+                capacity,
+              ) {
+                final selected = _transportCapacityLiters == capacity;
+                return ChoiceChip(
+                  label: Text('$capacity لتر'),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() => _transportCapacityLiters = capacity);
+                  },
+                  selectedColor: AppColors.infoBlue,
+                  backgroundColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: selected ? Colors.white : Colors.black87,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _useTransportPricingOverride,
+            title: const Text(
+              'تعديل تسعيرة هذا الطلب يدوياً',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(
+              _useTransportPricingOverride
+                  ? 'سيتم حفظ التسعيرة لهذا الطلب فقط ويمكن تعديلها لاحقاً.'
+                  : 'سيتم تطبيق جدول التسعير حسب المدينة والسعة ونوع الوقود.',
+            ),
+            onChanged: (value) {
+              setState(() => _useTransportPricingOverride = value);
+            },
+          ),
+          if (_useTransportPricingOverride) ...[
+            const SizedBox(height: 12),
+            _buildTransportOverrideRow(
+              isDesktop: isDesktop,
+              title: 'النقل',
+              mode: _overrideTransportMode,
+              onModeChanged: (value) {
+                if (value == null) return;
+                setState(() => _overrideTransportMode = value);
+              },
+              controller: _overrideTransportValueController,
+            ),
+            const SizedBox(height: 12),
+            _buildTransportOverrideRow(
+              isDesktop: isDesktop,
+              title: 'الرد',
+              mode: _overrideReturnMode,
+              onModeChanged: (value) {
+                if (value == null) return;
+                setState(() => _overrideReturnMode = value);
+              },
+              controller: _overrideReturnValueController,
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: matchedRule == null
+                    ? AppColors.warningOrange.withValues(alpha: 0.08)
+                    : AppColors.successGreen.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: matchedRule == null
+                      ? AppColors.warningOrange.withValues(alpha: 0.18)
+                      : AppColors.successGreen.withValues(alpha: 0.18),
+                ),
+              ),
+              child: matchedRule == null
+                  ? const Text(
+                      'لا توجد قاعدة تسعير مطابقة حالياً. اختر مدينة المصدر والسعة أو فعّل التسعيرة اليدوية.',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'تم العثور على قاعدة تسعير مطابقة.',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.successGreen,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'النقل: ${_pricingModeLabel(matchedRule.transportMode)}'
+                          ' • ${matchedRule.transportMode == 'per_liter' ? '${_moneyFormat.format(matchedRule.transportValue)} / لتر' : _moneyFormat.format(matchedRule.transportValue)}',
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'الرد: ${_pricingModeLabel(matchedRule.returnMode)}'
+                          ' • ${matchedRule.returnMode == 'per_liter' ? '${_moneyFormat.format(matchedRule.returnValue)} / لتر' : _moneyFormat.format(matchedRule.returnValue)}',
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   PreferredSizeWidget _buildDesktopAppBar() {
@@ -399,6 +843,17 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
     _selectedCustomer = order.customer;
     _selectedCustomerId = order.customer?.id;
+    _transportSourceCityController.text = order.transportSourceCity ?? '';
+    _transportCapacityLiters = order.transportCapacityLiters;
+    _useTransportPricingOverride = order.transportPricingOverride != null;
+    _overrideTransportMode =
+        order.transportPricingOverride?['transportMode']?.toString() ?? 'fixed';
+    _overrideReturnMode =
+        order.transportPricingOverride?['returnMode']?.toString() ?? 'fixed';
+    _overrideTransportValueController.text =
+        order.transportPricingOverride?['transportValue']?.toString() ?? '';
+    _overrideReturnValueController.text =
+        order.transportPricingOverride?['returnValue']?.toString() ?? '';
 
     // ✅ حماية نوع العملية
     _purchaseType = _purchaseTypes.contains(order.requestType)
@@ -424,6 +879,14 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
     if (_selectedCustomer != null) {
       _customerSearchController.text = _selectedCustomer!.name;
+    }
+
+    if (_transportCapacityLiters == null &&
+        order.quantity != null &&
+        OrderManagementPricingService.supportedCapacities.contains(
+          order.quantity!.round(),
+        )) {
+      _transportCapacityLiters = order.quantity!.round();
     }
 
     setState(() {});
@@ -798,6 +1261,31 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
+    final pricingPreview = _pricingPreview;
+    final qty = _quantityValue;
+
+    if (!pricingPreview.hasFuelPricing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى ضبط سعر الوقود لهذا العميل أولاً'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
+    if (_purchaseType == 'نقل' && !pricingPreview.hasTransportPricing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'حدد مدينة المصدر والسعة أو فعّل التسعيرة اليدوية لهذا الطلب',
+          ),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
     // ===============================
     // ✅ إنشاء الطلب (الموقع اختياري)
     // ===============================
@@ -832,15 +1320,27 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
       // ⛽ الوقود
       fuelType: _fuelType,
-      quantity: _quantityController.text.trim().isNotEmpty
-          ? double.tryParse(_quantityController.text.trim())
-          : null,
+      quantity: qty,
       unit: _unit,
 
       // 📝 ملاحظات
       notes: _notesController.text.trim().isNotEmpty
           ? _notesController.text.trim()
           : null,
+
+      unitPrice: pricingPreview.unitPricePerLiter,
+      totalPrice: pricingPreview.subtotal,
+      vatRate: pricingPreview.vatRate,
+      vatAmount: pricingPreview.vatAmount,
+      totalPriceWithVat: pricingPreview.totalWithVat,
+      transportSourceCity: _purchaseType == 'نقل' ? _transportSourceCity : null,
+      transportCapacityLiters:
+          _purchaseType == 'نقل' ? _transportCapacityLiters : null,
+      pricingSnapshot: pricingPreview.toPricingSnapshot(
+        requestType: _purchaseType,
+        fuelType: _fuelType,
+      ),
+      transportPricingOverride: _buildTransportOverridePayload(),
 
       companyLogo: _companyLogoPath,
       attachments: [],
@@ -1346,6 +1846,17 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
   // تحديد إذا كان في وضع الويب/كمبيوتر
   bool get _isDesktop => MediaQuery.of(context).size.width > 800;
 
+  double get _vatRate => context.watch<TaxProvider>().vatRate;
+
+  double? _parseDoubleOrNull(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    return double.tryParse(trimmed.replaceAll(',', '.'));
+  }
+
+  double get _quantityValue =>
+      _parseDoubleOrNull(_quantityController.text) ?? 0.0;
+
   @override
   Widget build(BuildContext context) {
     final orderProvider = Provider.of<OrderProvider>(context);
@@ -1385,43 +1896,46 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // 1️⃣ اختيار العميل
+              // 1ï¸⃣ اختيار العميل
               _buildCustomerCardMobile(context),
               const SizedBox(height: 16),
 
-              // 2️⃣ نوع عملية العميل (شراء / نقل)
+              // 2ï¸⃣ نوع عملية العميل (شراء / نقل)
               if (_selectedCustomer != null) ...[
                 _buildPurchaseTypeCardMobile(context),
                 const SizedBox(height: 16),
               ],
 
-              // 3️⃣ اختيار السائق (يظهر فقط إذا كان النوع "نقل")
+              // 3ï¸⃣ اختيار السائق (يظهر فقط إذا كان النوع "نقل")
               _buildDriverCardMobile(context),
               if (_purchaseType == 'نقل') const SizedBox(height: 16),
 
-              // 4️⃣ موقع العميل
+              // 4ï¸⃣ موقع العميل
               if (_selectedCustomer != null) ...[
                 _buildLocationCardMobile(context),
                 const SizedBox(height: 16),
               ],
 
-              // 5️⃣ معلومات الطلب
+              // 5ï¸⃣ معلومات الطلب
               _buildOrderInfoCardMobile(context),
               const SizedBox(height: 16),
 
-              // 6️⃣ معلومات الوقود
+              // 6ï¸⃣ معلومات الوقود
               _buildFuelInfoCardMobile(context),
               const SizedBox(height: 16),
 
-              // 7️⃣ تاريخ الوصول
+              // 7ï¸⃣ تاريخ الوصول
+              _buildPricingSummaryCard(context),
+              const SizedBox(height: 16),
+
               _buildArrivalDateCardMobile(context),
               const SizedBox(height: 16),
 
-              // 8️⃣ الحالة والملاحظات
+              // 8ï¸⃣ الحالة والملاحظات
               _buildStatusNotesCardMobile(context),
               const SizedBox(height: 16),
 
-              // 9️⃣ المرفقات
+              // 9ï¸⃣ المرفقات
               _buildAttachmentsCardMobile(context),
               const SizedBox(height: 32),
 
@@ -1498,6 +2012,9 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildFuelInfoCardDesktop(context),
+                          const SizedBox(height: 24),
+
+                          _buildPricingSummaryCard(context),
                           const SizedBox(height: 24),
 
                           _buildStatusNotesCardDesktop(context),
@@ -1709,16 +2226,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
                   onChanged: (String? value) {
                     if (value == null) return;
-
-                    setState(() {
-                      _purchaseType = value;
-
-                      // ✅ عند التحويل إلى "شراء" يتم تصفير السائق بالكامل
-                      if (_purchaseType == 'شراء') {
-                        _selectedDriverId = null;
-                        _selectedDriver = null;
-                      }
-                    });
+                    _handlePurchaseTypeChanged(value);
                   },
                 ),
               ),
@@ -1788,16 +2296,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
 
                   onChanged: (String? value) {
                     if (value == null) return;
-
-                    setState(() {
-                      _purchaseType = value;
-
-                      // ✅ عند التحويل إلى "شراء" نحذف السائق نهائيًا
-                      if (_purchaseType == 'شراء') {
-                        _selectedDriverId = null;
-                        _selectedDriver = null;
-                      }
-                    });
+                    _handlePurchaseTypeChanged(value);
                   },
                 ),
               ),
@@ -2034,6 +2533,9 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                     labelText: 'أدخل الكمية باللتر',
                     prefixIcon: Icons.format_list_numbered,
                     keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      setState(() => _syncCapacityWithQuantity(value));
+                    },
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'يرجى إدخال الكمية';
@@ -2063,6 +2565,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                         onSelected: (selected) {
                           setState(() {
                             _quantityController.text = quantity;
+                            _syncCapacityWithQuantity(quantity);
                           });
                         },
                         backgroundColor: Colors.grey[200],
@@ -2078,9 +2581,301 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                 ],
               ),
             ),
+            _buildTransportPricingSection(isDesktop: false),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPricingSummaryCard(BuildContext context) {
+    final customer = _selectedCustomer;
+    if (customer == null) return const SizedBox.shrink();
+
+    final pricing = _pricingPreview;
+    final isTransport = _purchaseType == 'نقل';
+    final hasFuelPricing = pricing.hasFuelPricing;
+
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: AppColors.primaryBlue,
+        );
+
+    return Card(
+      elevation: _isDesktop ? 2 : 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: EdgeInsets.all(_isDesktop ? 24 : 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.calculate_outlined, color: AppColors.primaryBlue),
+                const SizedBox(width: 10),
+                Expanded(child: Text('التسعيرة والضريبة', style: titleStyle)),
+                Text(
+                  'VAT ${(100 * _vatRate).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primaryBlue.withValues(alpha: 0.78),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (!hasFuelPricing) ...[
+              Text(
+                'لم يتم ضبط سعر الوقود لهذا العميل بعد.',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87.withValues(alpha: 0.72),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    AppRoutes.orderManagementFuelPricing,
+                  ),
+                  icon: const Icon(Icons.local_gas_station_outlined),
+                  label: const Text('فتح تسعيرة الوقود للعملاء'),
+                ),
+              ),
+            ],
+            if (hasFuelPricing)
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _moneyChip(
+                    label: 'الوقود/لتر',
+                    value: _moneyFormat.format(pricing.fuelPricePerLiter),
+                    icon: Icons.local_gas_station_outlined,
+                  ),
+                  if (isTransport)
+                    _moneyChip(
+                      label: pricing.transportMode == 'per_liter'
+                          ? 'النقل/لتر'
+                          : 'النقل',
+                      value: pricing.transportValue == null
+                          ? 'غير محدد'
+                          : pricing.transportMode == 'per_liter'
+                              ? '${_moneyFormat.format(pricing.transportValue)} / لتر'
+                              : _moneyFormat.format(pricing.transportValue),
+                      icon: Icons.local_shipping_outlined,
+                    ),
+                  if (isTransport)
+                    _moneyChip(
+                      label: pricing.returnMode == 'per_liter'
+                          ? 'الرد/لتر'
+                          : 'الرد',
+                      value: pricing.returnValue == null
+                          ? 'غير محدد'
+                          : pricing.returnMode == 'per_liter'
+                              ? '${_moneyFormat.format(pricing.returnValue)} / لتر'
+                              : _moneyFormat.format(pricing.returnValue),
+                      icon: Icons.keyboard_return_outlined,
+                    ),
+                  _moneyChip(
+                    label: 'الإجمالي/لتر',
+                    value: pricing.unitPricePerLiter == 0
+                        ? '—'
+                        : _moneyFormat.format(pricing.unitPricePerLiter),
+                    icon: Icons.price_check_outlined,
+                    emphasize: true,
+                  ),
+                ],
+              ),
+            if (hasFuelPricing) const SizedBox(height: 14),
+            if (hasFuelPricing)
+              Column(
+                children: [
+                  if (isTransport && !pricing.hasTransportPricing)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningOrange.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppColors.warningOrange.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'تسعيرة النقل غير مكتملة لهذا الطلب.',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.warningOrange,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _useTransportPricingOverride
+                                ? 'أدخل قيمة النقل اليدوية لهذا الطلب.'
+                                : 'حدد مدينة المصدر والسعة أو افتح شاشة تسعيرة النقل.',
+                            style: TextStyle(
+                              color: Colors.black87.withValues(alpha: 0.72),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.14),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        _summaryRow(
+                          label: 'الكمية',
+                          value:
+                              '${pricing.quantity.toStringAsFixed(0)} ${_unit.isEmpty ? 'لتر' : _unit}',
+                        ),
+                        if (isTransport &&
+                            (pricing.sourceCity?.trim().isNotEmpty ?? false)) ...[
+                          const SizedBox(height: 8),
+                          _summaryRow(
+                            label: 'مدينة المصدر',
+                            value: pricing.sourceCity!,
+                          ),
+                        ],
+                        if (isTransport && pricing.capacityLiters != null) ...[
+                          const SizedBox(height: 8),
+                          _summaryRow(
+                            label: 'السعة',
+                            value: '${pricing.capacityLiters} لتر',
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        _summaryRow(
+                          label: 'إجمالي الوقود',
+                          value: _moneyFormat.format(pricing.fuelSubtotal),
+                        ),
+                        if (isTransport) ...[
+                          const SizedBox(height: 8),
+                          _summaryRow(
+                            label: 'قيمة النقل',
+                            value: _moneyFormat.format(pricing.transportCharge),
+                          ),
+                          const SizedBox(height: 8),
+                          _summaryRow(
+                            label: 'قيمة الرد',
+                            value: _moneyFormat.format(pricing.returnCharge),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        _summaryRow(
+                          label: 'الإجمالي قبل الضريبة',
+                          value: _moneyFormat.format(pricing.subtotal),
+                        ),
+                        const SizedBox(height: 8),
+                        _summaryRow(
+                          label: 'الضريبة',
+                          value: _moneyFormat.format(pricing.vatAmount),
+                        ),
+                        const Divider(height: 18),
+                        _summaryRow(
+                          label: 'الإجمالي شامل الضريبة',
+                          value: _moneyFormat.format(pricing.totalWithVat),
+                          emphasize: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _moneyChip({
+    required String label,
+    required String value,
+    required IconData icon,
+    bool emphasize = false,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: emphasize
+            ? AppColors.primaryBlue.withValues(alpha: 0.10)
+            : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: emphasize
+              ? AppColors.primaryBlue.withValues(alpha: 0.20)
+              : Colors.transparent,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: emphasize ? AppColors.primaryBlue : Colors.grey.shade700,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$label: ',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: emphasize ? AppColors.primaryBlue : Colors.black87,
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: emphasize ? FontWeight.w900 : FontWeight.w700,
+                color: emphasize ? AppColors.primaryBlue : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow({
+    required String label,
+    required String value,
+    bool emphasize = false,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: emphasize ? FontWeight.w900 : FontWeight.w700,
+              color: emphasize ? AppColors.primaryBlue : Colors.black87,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: emphasize ? FontWeight.w900 : FontWeight.w800,
+            color: emphasize ? AppColors.primaryBlue : Colors.black87,
+          ),
+        ),
+      ],
     );
   }
 
@@ -2818,6 +3613,9 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                     labelText: '',
                     prefixIcon: null,
                     keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      setState(() => _syncCapacityWithQuantity(value));
+                    },
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'يرجى إدخال الكمية';
@@ -2846,6 +3644,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                         onSelected: (selected) {
                           setState(() {
                             _quantityController.text = quantity;
+                            _syncCapacityWithQuantity(quantity);
                           });
                         },
                         backgroundColor: Colors.grey[200],
@@ -2861,6 +3660,7 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
                 ],
               ),
             ),
+            _buildTransportPricingSection(isDesktop: true),
           ],
         ),
       ),
@@ -3175,3 +3975,4 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     );
   }
 }
+

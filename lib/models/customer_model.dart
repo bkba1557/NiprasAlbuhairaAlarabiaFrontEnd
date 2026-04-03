@@ -1,8 +1,63 @@
 import 'package:intl/intl.dart';
 
+const List<String> kSupportedFuelTypes = <String>[
+  'بنزين 91',
+  'بنزين 95',
+  'ديزل',
+  'كيروسين',
+];
+
 double? _parseCustomerDouble(dynamic value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '');
+}
+
+List<CustomerFuelPrice> _parseCustomerFuelPricing(dynamic value) {
+  if (value is List) {
+    return value
+        .whereType<Map>()
+        .map((entry) => CustomerFuelPrice.fromJson(Map<String, dynamic>.from(entry)))
+        .where((entry) => entry.fuelType.trim().isNotEmpty)
+        .toList();
+  }
+
+  if (value is Map) {
+    return value.entries.map((entry) {
+      return CustomerFuelPrice(
+        fuelType: entry.key,
+        pricePerLiter: _parseCustomerDouble(entry.value) ?? 0,
+      );
+    }).toList();
+  }
+
+  return const <CustomerFuelPrice>[];
+}
+
+class CustomerFuelPrice {
+  final String fuelType;
+  final double pricePerLiter;
+
+  const CustomerFuelPrice({
+    required this.fuelType,
+    required this.pricePerLiter,
+  });
+
+  factory CustomerFuelPrice.fromJson(Map<String, dynamic> json) {
+    return CustomerFuelPrice(
+      fuelType: json['fuelType']?.toString() ?? '',
+      pricePerLiter: _parseCustomerDouble(
+            json['pricePerLiter'] ?? json['price'] ?? json['value'],
+          ) ??
+          0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'fuelType': fuelType,
+      'pricePerLiter': pricePerLiter,
+    };
+  }
 }
 
 class Customer {
@@ -38,6 +93,12 @@ class Customer {
   final DateTime? lastOrderDate;
   final String? customerType;
 
+  /// ⭐ تسعيرة الوقود للعميل (ريال/لتر)
+  final double? fuelPricePerLiter;
+
+  /// ⭐ تسعير الوقود حسب نوع الوقود
+  final List<CustomerFuelPrice> fuelPricing;
+
   Customer({
     required this.id,
     required this.name,
@@ -67,6 +128,8 @@ class Customer {
     this.totalSpent,
     this.lastOrderDate,
     this.customerType,
+    this.fuelPricePerLiter,
+    this.fuelPricing = const [],
     this.documents = const [],
   });
 
@@ -182,6 +245,10 @@ class Customer {
       totalSpent: totalSpent,
       lastOrderDate: lastOrderDate,
       customerType: json['customerType']?.toString(),
+      fuelPricePerLiter: _parseCustomerDouble(
+        json['fuelPricePerLiter'] ?? json['fuelPrice'],
+      ),
+      fuelPricing: _parseCustomerFuelPricing(json['fuelPricing']),
       documents: documents,
     );
   }
@@ -216,6 +283,8 @@ class Customer {
       'totalSpent': totalSpent,
       'lastOrderDate': lastOrderDate?.toIso8601String(),
       'customerType': customerType,
+      'fuelPricePerLiter': fuelPricePerLiter,
+      'fuelPricing': fuelPricing.map((entry) => entry.toJson()).toList(),
       'documents': documents.map((doc) => doc.toJson()).toList(),
     };
   }
@@ -224,6 +293,20 @@ class Customer {
 
   String get displayName =>
       name.isNotEmpty && code.isNotEmpty ? '$name ($code)' : name;
+
+  double? fuelPriceFor(String? fuelType) {
+    final normalizedFuelType = fuelType?.trim() ?? '';
+    if (normalizedFuelType.isNotEmpty) {
+      for (final entry in fuelPricing) {
+        if (entry.fuelType.trim() == normalizedFuelType) {
+          return entry.pricePerLiter;
+        }
+      }
+    }
+    return fuelPricePerLiter;
+  }
+
+  bool get hasFuelPricing => fuelPricing.isNotEmpty || fuelPricePerLiter != null;
 
   String get fullLocation {
     final parts = <String>[];

@@ -179,6 +179,26 @@ class CustomerItem extends StatelessWidget {
     final statusType = _resolveCustomerStatus(customer);
     final statusColor = _customerStatusColor(statusType);
     final statusLabel = _customerStatusLabel(statusType);
+    final money = NumberFormat.currency(
+      locale: 'ar',
+      symbol: 'ر.س',
+      decimalDigits: 3,
+    );
+
+    final pricedFuelEntries = customer.fuelPricing.isNotEmpty
+        ? customer.fuelPricing
+        : kSupportedFuelTypes
+            .map((fuelType) {
+              final price = customer.fuelPriceFor(fuelType);
+              if (price == null) return null;
+              return CustomerFuelPrice(
+                fuelType: fuelType,
+                pricePerLiter: price,
+              );
+            })
+            .whereType<CustomerFuelPrice>()
+            .toList();
+    final hasPricing = pricedFuelEntries.isNotEmpty;
 
     return Card(
       elevation: 2,
@@ -274,6 +294,22 @@ class CustomerItem extends StatelessWidget {
                                         ),
                                       ),
                                     ],
+                                  ),
+                                ),
+                              if (hasPricing)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: Wrap(
+                                    spacing: 10,
+                                    runSpacing: 10,
+                                    children: pricedFuelEntries.map((entry) {
+                                      return _CustomerPricingChip(
+                                        icon: Icons.local_gas_station_outlined,
+                                        label: entry.fuelType,
+                                        value: money.format(entry.pricePerLiter),
+                                        emphasize: entry.fuelType == 'ديزل',
+                                      );
+                                    }).toList(),
                                   ),
                                 ),
                               if (customer.hasCoordinates)
@@ -499,6 +535,65 @@ class CustomerItem extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomerPricingChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool emphasize;
+
+  const _CustomerPricingChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: emphasize
+            ? AppColors.primaryBlue.withValues(alpha: 0.10)
+            : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: emphasize
+              ? AppColors.primaryBlue.withValues(alpha: 0.20)
+              : Colors.transparent,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: emphasize ? AppColors.primaryBlue : Colors.grey.shade700,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$label: ',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: emphasize ? AppColors.primaryBlue : Colors.black87,
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: emphasize ? FontWeight.w900 : FontWeight.w700,
+                color: emphasize ? AppColors.primaryBlue : Colors.black87,
+              ),
+            ),
+          ],
         ),
       ),
     );

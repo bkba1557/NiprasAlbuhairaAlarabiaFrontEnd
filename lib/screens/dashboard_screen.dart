@@ -81,6 +81,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     'inventory': false,
     'circulars': false,
     'orders': true,
+    'order_management': false,
     'archive': false,
     'qualification': false,
   };
@@ -1185,6 +1186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ].contains(user?.role);
 
     final canViewCirculars = user?.role == 'owner' || user?.role == 'manager';
+    final canManageSystemPause = user?.role == 'owner';
     final canSendDailyReport = user != null;
 
     final orderItems = <_DashboardDrawerItemData>[
@@ -1370,6 +1372,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onTap: () =>
             _navigateFromMobileDrawer(context, AppRoutes.notifications),
       ),
+      if (canManageSystemPause)
+        _DashboardDrawerItemData(
+          icon: Icons.pause_circle_outline_rounded,
+          title: 'إشعار التوقف المؤقت',
+          color: AppColors.warningOrange,
+          onTap: () =>
+              _navigateFromMobileDrawer(context, AppRoutes.systemPause),
+        ),
       _DashboardDrawerItemData(
         icon: Icons.person_outline_rounded,
         title: 'الملف الشخصي',
@@ -5993,6 +6003,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
     ];
 
+    final orderManagementChildren = <Widget>[
+      if (canViewOrders)
+        _buildDesktopFolderItem(
+          icon: Icons.percent_outlined,
+          title: 'إعدادات الضريبة',
+          onTap: () =>
+              Navigator.pushNamed(context, AppRoutes.orderManagementTaxSettings),
+        ),
+      if (canViewOrders)
+        _buildDesktopFolderItem(
+          icon: Icons.folder_special_outlined,
+          title: 'إدارة الطلبات',
+          onTap: () =>
+              Navigator.pushNamed(context, AppRoutes.orderManagementDashboard),
+        ),
+      if (canViewOrders)
+        _buildDesktopFolderItem(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'الخزينة',
+          onTap: () =>
+              Navigator.pushNamed(context, AppRoutes.orderManagementTreasury),
+        ),
+      if (canViewCustomers)
+        _buildDesktopFolderItem(
+          icon: Icons.people_alt_outlined,
+          title: 'حسابات العملاء',
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.orderManagementCustomerAccounts,
+          ),
+        ),
+      if (canViewCustomers)
+        _buildDesktopFolderItem(
+          icon: Icons.local_gas_station_outlined,
+          title: 'تسعيرة الوقود للعملاء',
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.orderManagementFuelPricing,
+          ),
+        ),
+      if (canViewCustomers)
+        _buildDesktopFolderItem(
+          icon: Icons.price_change_outlined,
+          title: 'تسعيرة النقل',
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.orderManagementTransportPricing,
+          ),
+        ),
+      if (canViewOrders)
+        _buildDesktopFolderItem(
+          icon: Icons.local_shipping_outlined,
+          title: 'إدارة طلبات النقل',
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.orderManagementTransportOrders,
+          ),
+        ),
+      if (canViewCustomers)
+        _buildDesktopFolderItem(
+          icon: Icons.bar_chart_outlined,
+          title: 'تقرير اللترات للعملاء',
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.orderManagementCustomerLitersReport,
+          ),
+        ),
+    ];
+
     final partiesChildren = <Widget>[
       if (canViewCustomers)
         _buildDesktopFolderItem(
@@ -6179,6 +6258,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         badge: notificationProvider.unreadCount,
         onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
       ),
+      if (authProvider.user?.role == 'owner')
+        _buildDesktopFolderItem(
+          icon: Icons.pause_circle_outline_rounded,
+          title: 'إشعار التوقف المؤقت',
+          onTap: () => Navigator.pushNamed(context, AppRoutes.systemPause),
+          color: AppColors.warningOrange,
+        ),
       _buildDesktopFolderItem(
         icon: Icons.person,
         title: 'الملف الشخصي',
@@ -6232,6 +6318,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.folder,
           initiallyExpanded: true,
           children: ordersChildren,
+        ),
+      if (orderManagementChildren.isNotEmpty)
+        _buildDesktopFolderSection(
+          folderKey: 'order_management',
+          title: 'إدارة الطلبات',
+          icon: Icons.folder_special_outlined,
+          children: orderManagementChildren,
         ),
       if (partiesChildren.isNotEmpty)
         _buildDesktopFolderSection(

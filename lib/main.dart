@@ -29,11 +29,14 @@ import 'package:order_tracker/providers/qualification_provider.dart';
 import 'package:order_tracker/providers/station_provider.dart';
 import 'package:order_tracker/providers/supplier_provider.dart';
 import 'package:order_tracker/providers/station_maintenance_provider.dart';
+import 'package:order_tracker/providers/system_pause_provider.dart';
+import 'package:order_tracker/providers/tax_provider.dart';
 import 'package:order_tracker/providers/theme_provider.dart';
 import 'package:order_tracker/providers/task_provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:order_tracker/services/local_notification_service.dart';
 import 'package:order_tracker/widgets/app_shell.dart';
+import 'package:order_tracker/widgets/system_pause_gate.dart';
 
 import 'package:order_tracker/localization/app_localizations.dart';
 import 'package:order_tracker/utils/app_navigation.dart';
@@ -85,6 +88,7 @@ Future<void> main() async {
 
         ChangeNotifierProvider(create: (_) => OrderProvider()),
         ChangeNotifierProvider(create: (_) => CustomerProvider()),
+        ChangeNotifierProvider(create: (_) => TaxProvider()..initialize()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(create: (_) => CircularProvider()),
@@ -93,6 +97,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => TankerProvider()),
         ChangeNotifierProvider(create: (_) => SupplierProvider()),
         ChangeNotifierProvider(create: (_) => MaintenanceProvider()),
+        ChangeNotifierProvider(create: (_) => SystemPauseProvider()..initialize()),
         ChangeNotifierProvider(create: (_) => WorkshopFuelProvider()),
         ChangeNotifierProvider(create: (_) => CustodyDocumentProvider()),
         ChangeNotifierProvider(create: (_) => FuelStationProvider()),
@@ -161,9 +166,11 @@ class MyApp extends StatelessWidget {
       builder: (context, child) {
         if (child == null) return const SizedBox.shrink();
         return _SelectionOverlay(
-          child: AppShell(
-            observer: appNavigationObserver,
-            child: _AppWithNotifications(child: child),
+          child: SystemPauseGate(
+            child: AppShell(
+              observer: appNavigationObserver,
+              child: _AppWithNotifications(child: child),
+            ),
           ),
         );
       },

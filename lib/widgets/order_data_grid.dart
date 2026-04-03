@@ -1,127 +1,294 @@
 import 'dart:async';
-import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:order_tracker/models/models.dart';
 import 'package:order_tracker/models/order_model.dart';
 import 'package:order_tracker/utils/constants.dart';
-import 'package:syncfusion_flutter_datagrid/datagrid.dart';
-import 'package:syncfusion_flutter_core/theme.dart';
 
-class OrderDataSource extends DataGridSource {
-  OrderDataSource(List<Order> orders) {
-    _orders = orders;
-    _startTimer();
-    _buildDataGridRows();
-  }
+class OrderDataGrid extends StatefulWidget {
+  const OrderDataGrid({super.key, required this.orders, this.onRowTap});
 
-  List<DataGridRow> dataGridRows = [];
-  List<Order> _orders = [];
-  late Timer _timer;
-  final Map<DataGridRow, Order> _rowToOrder = {};
-  final Map<DataGridRow, int> _rowIndexMap = {};
+  final List<Order> orders;
+  final void Function(Order)? onRowTap;
 
-  void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _buildDataGridRows();
-      notifyListeners();
+  @override
+  State<OrderDataGrid> createState() => _OrderDataGridState();
+}
+
+class _OrderDataGridState extends State<OrderDataGrid> {
+  final ScrollController _horizontalController = ScrollController();
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
     });
   }
 
+  @override
   void dispose() {
-    _timer.cancel();
+    _ticker?.cancel();
+    _horizontalController.dispose();
+    super.dispose();
   }
 
-  void _buildDataGridRows() {
-    _rowToOrder.clear();
-    _rowIndexMap.clear();
-    dataGridRows = _orders.asMap().entries.map<DataGridRow>((entry) {
-      final index = entry.key;
-      final order = entry.value;
-      final row = DataGridRow(
-        cells: [
-          DataGridCell<String>(
-            columnName: 'orderDate',
-            value: _formatDate(order.orderDate),
-          ),
-          DataGridCell<String>(
-            columnName: 'supplierName',
-            value: order.orderSource == 'عميل'
-                ? (order.customer!.name.isNotEmpty == true
-                      ? order.customer!.name
-                      : '—')
-                : (order.supplierName?.isNotEmpty == true
-                      ? order.supplierName!
-                      : '—'),
-          ),
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
 
-          DataGridCell<String>(
-            columnName: 'requestType',
-            value: _displayRequestType(order),
-          ),
-          DataGridCell<String>(
-            columnName: 'fuelQuantity',
-            value: _buildFuelQuantityText(order),
-          ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : screenWidth;
+        final baseColumns = _buildColumns(screenWidth);
+        final baseTableWidth = baseColumns.fold<double>(
+          0,
+          (sum, column) => sum + column.width,
+        );
+        final scale = baseTableWidth < viewportWidth
+            ? viewportWidth / baseTableWidth
+            : 1.0;
+        final columns = baseColumns
+            .map((column) => column.copyWith(width: column.width * scale))
+            .toList();
+        final tableWidth = columns.fold<double>(
+          0,
+          (sum, column) => sum + column.width,
+        );
 
-          DataGridCell<String>(
-            columnName: 'orderNumber',
-            value: order.orderNumber,
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: AppColors.backgroundGray.withValues(alpha: 0.24),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.lightGray.withValues(alpha: 0.22),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(8),
+            child: Scrollbar(
+              controller: _horizontalController,
+              thumbVisibility: true,
+              interactive: true,
+              notificationPredicate: (notification) =>
+                  notification.metrics.axis == Axis.horizontal,
+              child: SingleChildScrollView(
+                controller: _horizontalController,
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: tableWidth,
+                  child: CustomScrollView(
+                    primary: true,
+                    slivers: [
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _OrdersTableHeaderDelegate(columns: columns),
+                      ),
+                      SliverList.builder(
+                        itemCount: widget.orders.length,
+                        itemBuilder: (context, index) {
+                          final order = widget.orders[index];
+                          return _buildRow(order, index, columns);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-          DataGridCell<String>(
-            columnName: 'supplierOrderNumber',
-            value: order.supplierOrderNumber ?? '—',
-          ),
-          DataGridCell<String>(
-            columnName: 'loadingDate',
-            value: _formatDate(order.loadingDate),
-          ),
-          DataGridCell<Widget>(
-            columnName: 'timer',
-            value: _buildTimerCell(order),
-          ),
-          DataGridCell<String>(columnName: 'statusDriver', value: order.status),
-        ],
-      );
-      _rowToOrder[row] = order;
-      _rowIndexMap[row] = index;
-      return row;
-    }).toList();
+        );
+      },
+    );
   }
 
-  Order? orderForRow(DataGridRow row) => _rowToOrder[row];
+  List<_OrdersTableColumn> _buildColumns(double width) {
+    if (width < 700) {
+      return const [
+        _OrdersTableColumn('orderDate', 'تاريخ الطلب', 118),
+        _OrdersTableColumn('supplierName', 'المورد / العميل', 156),
+        _OrdersTableColumn('orderNumber', 'رقم الطلب', 124),
+        _OrdersTableColumn('fuelQuantity', 'الوقود / الكمية', 168),
+        _OrdersTableColumn('timer', 'الوقت المتبقي', 132),
+        _OrdersTableColumn('statusDriver', 'الحالة / السائق', 156),
+      ];
+    }
+
+    if (width < 1100) {
+      return const [
+        _OrdersTableColumn('orderDate', 'تاريخ الطلب', 120),
+        _OrdersTableColumn('supplierName', 'المورد / العميل', 170),
+        _OrdersTableColumn('requestType', 'نوع الطلب', 96),
+        _OrdersTableColumn('fuelQuantity', 'الوقود / الكمية', 168),
+        _OrdersTableColumn('orderNumber', 'رقم الطلب', 126),
+        _OrdersTableColumn('supplierOrderNumber', 'طلب المورد', 126),
+        _OrdersTableColumn('loadingDate', 'تاريخ التحميل', 126),
+        _OrdersTableColumn('timer', 'الوقت المتبقي', 132),
+        _OrdersTableColumn('statusDriver', 'الحالة / السائق', 156),
+      ];
+    }
+
+    return const [
+      _OrdersTableColumn('orderDate', 'تاريخ الطلب', 134),
+      _OrdersTableColumn('supplierName', 'اسم المورد / العميل', 184),
+      _OrdersTableColumn('requestType', 'نوع الطلب', 106),
+      _OrdersTableColumn('fuelQuantity', 'الوقود / الكمية', 176),
+      _OrdersTableColumn('orderNumber', 'رقم الطلب', 130),
+      _OrdersTableColumn('supplierOrderNumber', 'رقم طلب المورد', 138),
+      _OrdersTableColumn('loadingDate', 'تاريخ التحميل', 132),
+      _OrdersTableColumn('timer', 'الوقت المتبقي', 136),
+      _OrdersTableColumn('statusDriver', 'الحالة / السائق', 168),
+    ];
+  }
+
+  Widget _buildRow(Order order, int index, List<_OrdersTableColumn> columns) {
+    final baseColor = index.isEven
+        ? Colors.white
+        : AppColors.backgroundGray.withValues(alpha: 0.40);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: widget.onRowTap == null ? null : () => widget.onRowTap!(order),
+          child: Row(
+            children: columns.map((column) {
+              return _buildCell(
+                column: column,
+                backgroundColor: baseColor,
+                child: _buildCellContent(column.key, order),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCell({
+    required _OrdersTableColumn column,
+    required Color backgroundColor,
+    required Widget child,
+  }) {
+    return SizedBox(
+      width: column.width,
+      child: Container(
+        height: 46,
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color: AppColors.lightGray.withValues(alpha: 0.26),
+          ),
+        ),
+        alignment: Alignment.centerRight,
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildCellContent(String key, Order order) {
+    switch (key) {
+      case 'orderDate':
+        return _buildText(_formatDate(order.orderDate));
+      case 'supplierName':
+        final customerName = order.customer?.name.trim() ?? '';
+        final supplierName = order.supplierName.trim();
+        final value = order.orderSource == 'عميل'
+            ? (customerName.isNotEmpty ? customerName : '—')
+            : (supplierName.isNotEmpty ? supplierName : '—');
+        return _buildText(value);
+      case 'requestType':
+        return _buildText(_displayRequestType(order));
+      case 'fuelQuantity':
+        return _buildText(_buildFuelQuantityText(order));
+      case 'orderNumber':
+        return _buildText(order.orderNumber);
+      case 'supplierOrderNumber':
+        return _buildText(
+          (order.supplierOrderNumber?.trim().isNotEmpty ?? false)
+              ? order.supplierOrderNumber!.trim()
+              : '—',
+        );
+      case 'loadingDate':
+        return _buildText(_formatDate(order.loadingDate));
+      case 'timer':
+        return _buildTimerCell(order);
+      case 'statusDriver':
+        return _buildStatusCell(order);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildText(String value) {
+    return Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.right,
+      style: const TextStyle(
+        fontFamily: 'Cairo',
+        fontSize: 11.5,
+        fontWeight: FontWeight.w500,
+        color: AppColors.darkGray,
+        height: 1.1,
+      ),
+    );
+  }
 
   String _formatDate(DateTime date) {
     return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
   }
 
   String _buildFuelQuantityText(Order order) {
-    if (order.fuelType == null || order.quantity == null) {
+    final fuelType = order.fuelType?.trim();
+    if (fuelType == null || fuelType.isEmpty || order.quantity == null) {
       return '—';
     }
 
-    final unit = order.unit ?? 'لتر';
-    return '${order.fuelType} • ${order.quantity} $unit';
+    final quantity = order.quantity!;
+    final quantityText = quantity == quantity.roundToDouble()
+        ? quantity.toStringAsFixed(0)
+        : quantity.toStringAsFixed(2);
+    final unit = (order.unit?.trim().isNotEmpty ?? false)
+        ? order.unit!.trim()
+        : 'لتر';
+    return '$fuelType • $quantityText $unit';
   }
 
   String _displayRequestType(Order order) {
-    final type = order.effectiveRequestType;
-    if (type.trim().isEmpty || type == 'غير محدد') {
-      return '—';
-    }
-    return type;
+    final type = order.effectiveRequestType.trim();
+    return type.isEmpty || type == 'غير محدد' ? '—' : type;
   }
 
   Widget _buildTimerCell(Order order) {
-    if (order.loadingTime == null ||
-        order.loadingTime!.isEmpty ||
+    if (order.loadingTime.isEmpty ||
         order.status == 'تم التحميل' ||
         order.status == 'ملغى') {
-      return const Text('—', style: TextStyle(color: Colors.grey));
+      return _buildText('—');
     }
 
-    final parts = order.loadingTime!.split(':');
+    final parts = order.loadingTime.split(':');
     if (parts.length < 2) {
-      return const Text('—', style: TextStyle(color: Colors.grey));
+      return _buildText('—');
     }
 
     final loadingDateTime = DateTime(
@@ -134,34 +301,36 @@ class OrderDataSource extends DataGridSource {
 
     final diff = loadingDateTime.difference(DateTime.now());
     final isLate = diff.inSeconds < 0;
+    final color = isLate ? AppColors.errorRed : AppColors.successGreen;
 
     return Row(
       children: [
-        Icon(
-          Icons.timer,
-          size: 16,
-          color: isLate ? AppColors.errorRed : AppColors.successGreen,
-        ),
-        const SizedBox(width: 6),
-        Text(
-          _formatDuration(diff),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: isLate ? AppColors.errorRed : AppColors.successGreen,
+        Icon(Icons.timer_outlined, size: 13, color: color),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            _formatDuration(diff),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
         ),
       ],
     );
   }
 
-  String _formatDuration(Duration d) {
-    if (d.inSeconds <= 0) return 'انتهى';
+  String _formatDuration(Duration duration) {
+    if (duration.inSeconds <= 0) return 'انتهى';
 
-    final days = d.inDays;
-    final hours = d.inHours % 24;
-    final minutes = d.inMinutes % 60;
-    final seconds = d.inSeconds % 60;
+    final days = duration.inDays;
+    final hours = duration.inHours % 24;
+    final minutes = duration.inMinutes % 60;
+    final seconds = duration.inSeconds % 60;
 
     final parts = <String>[];
     if (days > 0) parts.add('${days}ي');
@@ -173,360 +342,169 @@ class OrderDataSource extends DataGridSource {
   }
 
   Widget _buildStatusCell(Order order) {
-    Color statusColor;
-    switch (order.status) {
-      case 'قيد الانتظار':
-        statusColor = AppColors.pendingYellow;
-        break;
-      case 'قيد التجهيز':
-        statusColor = AppColors.warningOrange;
-        break;
-      case 'جاهز للتحميل':
-        statusColor = AppColors.infoBlue;
-        break;
-      case 'تم التحميل':
-        statusColor = AppColors.successGreen;
-        break;
-      case 'ملغى':
-        statusColor = AppColors.errorRed;
-        break;
-      default:
-        statusColor = AppColors.lightGray;
-    }
+    final color = _statusColor(order.status);
 
-    return Wrap(
-      spacing: 6,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: statusColor, width: 0.8),
-          ),
-          child: Text(
-            order.status,
-            style: TextStyle(
-              color: statusColor,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: color.withValues(alpha: 0.45)),
+            ),
+            child: Text(
+              order.status,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
             ),
           ),
         ),
-        if (order.driverName != null && order.driverName!.isNotEmpty)
-          Text(
-            order.driverName!,
-            style: const TextStyle(fontSize: 10, color: AppColors.mediumGray),
-            overflow: TextOverflow.ellipsis,
+        if (order.driverName != null &&
+            order.driverName!.trim().isNotEmpty) ...[
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              order.driverName!.trim(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 10,
+                color: AppColors.mediumGray,
+              ),
+            ),
           ),
+        ],
       ],
     );
   }
 
-  @override
-  List<DataGridRow> get rows => dataGridRows;
-
-  @override
-  DataGridRowAdapter buildRow(DataGridRow row) {
-    final rowIndex = _rowIndexMap[row] ?? rows.indexOf(row);
-    final isEven = rowIndex.isEven;
-    final cellBackground = isEven
-        ? AppColors.white
-        : AppColors.backgroundGray.withOpacity(0.35);
-    final cellBorder = AppColors.lightGray.withOpacity(0.35);
-
-    return DataGridRowAdapter(
-      color: Colors.transparent,
-      cells: row.getCells().map<Widget>((cell) {
-        if (cell.columnName == 'statusDriver') {
-          final order = _rowToOrder[row];
-          if (order != null) {
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              decoration: BoxDecoration(
-                color: cellBackground,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: cellBorder),
-              ),
-              alignment: Alignment.centerRight,
-              child: _buildStatusCell(order),
-            );
-          }
-        }
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          decoration: BoxDecoration(
-            color: cellBackground,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: cellBorder),
-          ),
-          alignment: Alignment.centerRight,
-          child: cell.value is Widget
-              ? cell.value
-              : Text(
-                  cell.value.toString(),
-                  style: const TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 13,
-                    color: AppColors.darkGray,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  textAlign: TextAlign.right,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-        );
-      }).toList(),
-    );
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'قيد الانتظار':
+        return AppColors.pendingYellow;
+      case 'قيد التجهيز':
+        return AppColors.warningOrange;
+      case 'جاهز للتحميل':
+        return AppColors.infoBlue;
+      case 'تم التحميل':
+      case 'تم التنفيذ':
+      case 'مكتمل':
+        return AppColors.successGreen;
+      case 'ملغى':
+        return AppColors.errorRed;
+      default:
+        return AppColors.lightGray;
+    }
   }
 }
 
-class OrderDataGrid extends StatelessWidget {
-  final OrderDataSource dataSource;
-  final void Function(Order)? onRowTap;
+class _OrdersTableHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _OrdersTableHeaderDelegate({required this.columns});
 
-  const OrderDataGrid({super.key, required this.dataSource, this.onRowTap});
+  final List<_OrdersTableColumn> columns;
 
   @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 600;
-    final isTablet = width >= 600 && width < 1024;
-    final isDesktop = width >= 1024;
-    final gridTheme = SfDataGridThemeData(
-      headerColor: AppColors.primaryBlue.withOpacity(0.08),
-      headerHoverColor: AppColors.primaryBlue.withOpacity(0.12),
-      rowHoverColor: AppColors.primaryBlue.withOpacity(0.06),
-      selectionColor: AppColors.primaryBlue.withOpacity(0.12),
-      gridLineColor: AppColors.lightGray.withOpacity(0.35),
-      sortIconColor: AppColors.primaryBlue,
-      filterIconColor: AppColors.primaryBlue,
-      filterIconHoverColor: AppColors.primaryBlue,
-      filterPopupBackgroundColor: AppColors.white,
-      filterPopupInputBorderColor: AppColors.primaryBlue.withOpacity(0.5),
-      filterPopupTextStyle: const TextStyle(
-        fontFamily: 'Cairo',
-        fontSize: 12,
-        color: AppColors.darkGray,
-      ),
-      filterPopupDisabledTextStyle: const TextStyle(
-        fontFamily: 'Cairo',
-        fontSize: 12,
-        color: AppColors.lightGray,
-      ),
-      filterPopupCheckColor: AppColors.primaryBlue,
-      filterPopupIconColor: AppColors.primaryBlue,
-      filterPopupDisabledIconColor: AppColors.lightGray,
-      okFilteringLabelColor: AppColors.primaryBlue,
-      okFilteringLabelButtonColor: AppColors.primaryBlue.withOpacity(0.12),
-      cancelFilteringLabelColor: AppColors.mediumGray,
-      cancelFilteringLabelButtonColor: AppColors.lightGray.withOpacity(0.2),
-      searchAreaFocusedBorderColor: AppColors.primaryBlue,
-      searchAreaCursorColor: AppColors.primaryBlue,
-      searchIconColor: AppColors.primaryBlue,
-      closeIconColor: AppColors.mediumGray,
-      filterPopupTopDividerColor: AppColors.lightGray.withOpacity(0.3),
-      filterPopupBottomDividerColor: AppColors.lightGray.withOpacity(0.3),
-    );
+  double get minExtent => 44;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final double tableWidth = math
-              .max(
-                constraints.maxWidth,
-                isDesktop ? constraints.maxWidth : 1000,
-              )
-              .toDouble();
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: constraints.maxWidth, // 👈 عرض الشاشة بالكامل
-              child: Align(
-                alignment: Alignment.topCenter, // 👈 توسيط حقيقي
-                child: SizedBox(
-                  width: tableWidth, // 👈 عرض الجدول
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.backgroundGray.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: AppColors.lightGray.withOpacity(0.25),
-                      ),
-                      boxShadow: [
+  @override
+  double get maxExtent => 44;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      color: AppColors.backgroundGray.withValues(
+        alpha: overlapsContent ? 0.98 : 0.94,
+      ),
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: columns.map((column) {
+          return SizedBox(
+            width: column.width,
+            child: Container(
+              height: 42,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                ),
+                boxShadow: overlapsContent
+                    ? [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                         ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(10),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: SfDataGridTheme(
-                        data: gridTheme,
-                        child: SfDataGrid(
-                          source: dataSource,
-                          columns: _buildResponsiveColumns(
-                            width,
-                            isMobile,
-                            isTablet,
-                            isDesktop,
-                          ),
-                          gridLinesVisibility: GridLinesVisibility.none,
-                          headerGridLinesVisibility: GridLinesVisibility.none,
-                          allowSorting: true,
-                          allowFiltering: true,
-                          selectionMode: SelectionMode.single,
-
-                          columnWidthMode: ColumnWidthMode.fill,
-                          rowHeight: 64,
-                          headerRowHeight: 52,
-
-                          onCellTap: (details) {
-                            if (details.rowColumnIndex.rowIndex > 0 &&
-                                onRowTap != null) {
-                              final index = details.rowColumnIndex.rowIndex - 1;
-                              if (index < dataSource.effectiveRows.length) {
-                                final row = dataSource.effectiveRows[index];
-                                final order = dataSource.orderForRow(row);
-                                if (order != null) {
-                                  onRowTap!(order);
-                                }
-                              }
-                            }
-                          },
-                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      column.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryDarkBlue,
+                        height: 1.1,
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.filter_alt_outlined,
+                    size: 13,
+                    color: AppColors.primaryBlue.withValues(alpha: 0.85),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.swap_vert,
+                    size: 13,
+                    color: AppColors.primaryBlue.withValues(alpha: 0.85),
+                  ),
+                ],
               ),
             ),
           );
-        },
+        }).toList(),
       ),
     );
   }
 
-  List<GridColumn> _buildResponsiveColumns(
-    double width,
-    bool isMobile,
-    bool isTablet,
-    bool isDesktop,
-  ) {
-    // تعريف العناوين
-    final columnTitles = {
-      'orderDate': 'تاريخ الطلب',
-      'supplierName': 'اسم المورد / العميل',
-      'requestType': 'نوع الطلب',
-      'fuelQuantity': 'الوقود / الكمية', // 👈 جديد
-      'orderNumber': 'رقم الطلب',
-      'supplierOrderNumber': 'رقم طلب المورد',
-      'loadingDate': 'تاريخ التحميل',
-      'timer': 'الوقت المتبقي',
-      'statusDriver': 'الحالة / السائق',
-    };
-
-    if (isMobile) {
-      // للموبايل: عرض الأعمدة الأساسية فقط
-      return [
-        _createColumn('orderDate', columnTitles['orderDate']!, 85),
-        _createColumn('supplierName', columnTitles['supplierName']!, 115),
-        _createColumn('orderNumber', columnTitles['orderNumber']!, 65),
-        _createColumn('fuelQuantity', columnTitles['fuelQuantity']!, 110),
-
-        _createColumn('timer', columnTitles['timer']!, 95),
-        _createColumn(
-          'statusDriver',
-          columnTitles['statusDriver']!,
-          100,
-        ), // أقل عرضاً
-      ];
-    } else if (isTablet) {
-      // للتابلت: عرض معظم الأعمدة
-      return [
-        _createColumn('orderDate', columnTitles['orderDate']!, 95),
-        _createColumn('supplierName', columnTitles['supplierName']!, 135),
-        _createColumn('orderNumber', columnTitles['orderNumber']!, 85),
-        _createColumn('fuelQuantity', columnTitles['fuelQuantity']!, 130),
-
-        _createColumn('requestType', columnTitles['requestType']!, 95),
-        _createColumn('timer', columnTitles['timer']!, 115),
-        _createColumn(
-          'statusDriver',
-          columnTitles['statusDriver']!,
-          120,
-        ), // أقل عرضاً
-      ];
-    } else {
-      // للكمبيوتر/الويب: عرض جميع الأعمدة
-      return [
-        _createColumn('orderDate', 'تاريخ الطلب', 130),
-
-        _createColumn(
-          'supplierName',
-          'اسم المورد / العميل',
-          170,
-        ), // ⬅️ كان أعرض
-
-        _createColumn('requestType', 'نوع الطلب', 100),
-
-        _createColumn('fuelQuantity', 'الوقود / الكمية', 160),
-
-        _createColumn('orderNumber', 'رقم الطلب', 120),
-
-        _createColumn('supplierOrderNumber', 'رقم طلب المورد', 120),
-
-        _createColumn('loadingDate', 'تاريخ التحميل', 130),
-
-        _createColumn('timer', 'الوقت المتبقي', 130),
-
-        _createColumn('statusDriver', 'الحالة / السائق', 140),
-      ];
-    }
+  @override
+  bool shouldRebuild(covariant _OrdersTableHeaderDelegate oldDelegate) {
+    return oldDelegate.columns != columns;
   }
+}
 
-  GridColumn _createColumn(String name, String title, double width) {
-    final fontSize = width < 600
-        ? 11.0
-        : width < 1024
-        ? 12.0
-        : 14.0;
-    final padding = width < 600
-        ? const EdgeInsets.symmetric(horizontal: 6, vertical: 10)
-        : width < 1024
-        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 10)
-        : const EdgeInsets.all(12);
+class _OrdersTableColumn {
+  const _OrdersTableColumn(this.key, this.title, this.width);
 
-    return GridColumn(
-      columnName: name,
-      minimumWidth: width,
-      columnWidthMode: ColumnWidthMode.fill,
-      allowFiltering: true,
-      label: Container(
-        padding: padding,
-        alignment: Alignment.centerRight,
-        child: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontFamily: 'Cairo',
-            fontSize: fontSize,
-            color: AppColors.primaryDarkBlue,
-            letterSpacing: 0.2,
-          ),
-          textAlign: TextAlign.right,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-    );
+  final String key;
+  final String title;
+  final double width;
+
+  _OrdersTableColumn copyWith({double? width}) {
+    return _OrdersTableColumn(key, title, width ?? this.width);
   }
 }

@@ -6752,7 +6752,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final customerName = _getCustomerName(order);
     final driverName = _getDriverName(order);
     final driverPhone = _getDriverPhone(order);
-
+    final money = NumberFormat.currency(
+      locale: 'ar',
+      symbol: 'ر.س',
+      decimalDigits: 2,
+    );
     // التحقق من null لمنع الأخطاء
     final customer = order.customer;
     final customerCode = customer?.code;
@@ -6914,6 +6918,73 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 'الكمية',
                 '${order.quantity?.toStringAsFixed(0) ?? '0'} ${order.unit ?? 'لتر'}',
               ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          _buildInfoSection(
+            title: 'المعلومات المالية',
+            icon: Icons.calculate_outlined,
+            color: AppColors.successGreen,
+            children: [
+              _buildUiDetailRow(
+                'سعر الوقود/لتر',
+                money.format(order.effectiveFuelPricePerLiter),
+              ),
+              if (order.effectiveRequestType == 'نقل' &&
+                  order.effectiveTransportValue != null)
+                _buildUiDetailRow(
+                  order.effectiveTransportMode == 'per_liter'
+                      ? 'إيجار النقل/لتر'
+                      : 'إيجار النقل',
+                  order.effectiveTransportMode == 'per_liter'
+                      ? '${money.format(order.effectiveTransportValue!)} / لتر'
+                      : money.format(order.effectiveTransportValue!),
+                ),
+              if (order.effectiveRequestType == 'نقل' &&
+                  order.effectiveReturnValue != null)
+                _buildUiDetailRow(
+                  order.effectiveReturnMode == 'per_liter' ? 'الرد/لتر' : 'الرد',
+                  order.effectiveReturnMode == 'per_liter'
+                      ? '${money.format(order.effectiveReturnValue!)} / لتر'
+                      : money.format(order.effectiveReturnValue!),
+                ),
+              if (order.effectiveTransportSourceCity?.trim().isNotEmpty == true)
+                _buildUiDetailRow(
+                  'مدينة المصدر',
+                  order.effectiveTransportSourceCity!,
+                ),
+              if (order.effectiveTransportCapacityLiters != null)
+                _buildUiDetailRow(
+                  'السعة',
+                  '${order.effectiveTransportCapacityLiters} لتر',
+                ),
+              if (order.unitPrice != null || order.hasPricingSnapshot)
+                _buildUiDetailRow(
+                  'سعر الوحدة/لتر',
+                  money.format(order.effectiveUnitPricePerLiter),
+                ),
+              if (order.totalPrice != null || order.hasPricingSnapshot) ...[
+                _buildUiDetailRow(
+                  'الإجمالي قبل الضريبة',
+                  money.format(order.effectiveSubtotal),
+                ),
+                _buildUiDetailRow(
+                  'VAT ${(order.effectiveVatRate * 100).toStringAsFixed(0)}%',
+                  money.format(order.effectiveVatAmount),
+                ),
+                _buildUiDetailRow(
+                  'الإجمالي شامل الضريبة',
+                  money.format(order.effectiveTotalWithVat),
+                ),
+              ],
+              if (order.paymentMethod != null &&
+                  order.paymentMethod!.trim().isNotEmpty)
+                _buildUiDetailRow('طريقة الدفع', order.paymentMethod!),
+              if (order.paymentStatus != null &&
+                  order.paymentStatus!.trim().isNotEmpty)
+                _buildUiDetailRow('حالة الدفع', order.paymentStatus!),
             ],
           ),
 
