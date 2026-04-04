@@ -1954,6 +1954,7 @@ import 'package:order_tracker/providers/station_provider.dart';
 import 'package:order_tracker/services/session_report_pdf_service.dart';
 import 'package:order_tracker/localization/app_localizations.dart' as loc;
 import 'package:order_tracker/utils/constants.dart' show AppColors;
+import 'package:order_tracker/widgets/app_surface_card.dart';
 import 'package:order_tracker/widgets/custom_text_field.dart';
 import 'package:order_tracker/widgets/gradient_button.dart';
 import 'package:provider/provider.dart';
@@ -2439,8 +2440,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     int digitsBefore = 0;
     if (decimalIndex != -1) {
       final fractionalRaw = unsigned.substring(decimalIndex + 1);
-      fractionalDigits =
-          fractionalRaw.replaceAll(RegExp(r'[^0-9]'), '').length;
+      fractionalDigits = fractionalRaw.replaceAll(RegExp(r'[^0-9]'), '').length;
 
       final beforeRaw = unsigned.substring(0, decimalIndex);
       digitsBefore = beforeRaw.replaceAll(RegExp(r'[^0-9]'), '').length;
@@ -2481,8 +2481,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
       final integerPart = integerDigitsCount > 0
           ? digitsOnly.substring(0, integerDigitsCount)
           : '0';
-      final fractionalPart =
-          digitsOnly.substring(digitsOnly.length - fractionalDigits);
+      final fractionalPart = digitsOnly.substring(
+        digitsOnly.length - fractionalDigits,
+      );
       finalNumber = '$integerPart.$fractionalPart';
     } else {
       finalNumber = digitsOnly;
@@ -2667,7 +2668,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     final fuelType = _selectedFuelType == null
         ? ''
         : _normalizeFuelType(_selectedFuelType!);
-    final quantity = _tryParseLocalizedDouble(_fuelQuantityController.text) ?? 0;
+    final quantity =
+        _tryParseLocalizedDouble(_fuelQuantityController.text) ?? 0;
 
     if (fuelType.isEmpty || quantity <= 0) {
       return result;
@@ -2914,10 +2916,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         effectivePriorSupplies = {};
       }
 
-      if (
-        !_hasNonZeroFuelMap(adjustedBase) &&
-        stationProvider.currentStock.isNotEmpty
-      ) {
+      if (!_hasNonZeroFuelMap(adjustedBase) &&
+          stationProvider.currentStock.isNotEmpty) {
         final liveStock = _normalizeFuelMap(
           _buildLiveStockFromCurrentStock(stationProvider.currentStock),
         );
@@ -3213,9 +3213,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
             content: Text(
               ((_closingControllers[key]?.text ?? '').trim().isEmpty)
                   ? 'يرجى إدخال قراءة الغلق لخرطوم '
-                      '${nozzle.nozzleNumber} (${nozzle.fuelType})'
+                        '${nozzle.nozzleNumber} (${nozzle.fuelType})'
                   : 'قراءة الغلق غير صحيحة لخرطوم '
-                      '${nozzle.nozzleNumber} (${nozzle.fuelType})',
+                        '${nozzle.nozzleNumber} (${nozzle.fuelType})',
             ),
             backgroundColor: AppColors.errorRed,
           ),
@@ -3336,8 +3336,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         ...normalizedReturns.keys,
         if (suppliedFuelType.isNotEmpty && suppliedQuantity > 0)
           suppliedFuelType,
-      }.toList()
-        ..sort();
+      }.toList()..sort();
 
       final Map<String, dynamic> closingData = {
         'nozzleReadings': closingNozzles,
@@ -3489,8 +3488,140 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     }
   }
 
+  bool _isCompactPhone(BuildContext context) =>
+      MediaQuery.of(context).size.width < 430;
+
+  double _sectionGap(BuildContext context) =>
+      _isCompactPhone(context) ? 12 : 16;
+
+  EdgeInsets _sectionPadding(BuildContext context) {
+    final compact = _isCompactPhone(context);
+    return EdgeInsets.symmetric(
+      horizontal: compact ? 12 : 14,
+      vertical: compact ? 12 : 14,
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required Widget child,
+    required IconData icon,
+    Color accent = AppColors.primaryBlue,
+    String? subtitle,
+    EdgeInsetsGeometry? padding,
+  }) {
+    final compact = _isCompactPhone(context);
+
+    return AppSurfaceCard(
+      padding: padding ?? _sectionPadding(context),
+      color: Colors.white.withOpacity(0.95),
+      borderRadius: BorderRadius.circular(compact ? 20 : 22),
+      border: Border.all(color: accent.withOpacity(0.12)),
+      boxShadow: [
+        BoxShadow(
+          color: AppColors.primaryDarkBlue.withOpacity(0.05),
+          blurRadius: compact ? 20 : 24,
+          offset: const Offset(0, 10),
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: compact ? 38 : 42,
+                height: compact ? 38 : 42,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(compact ? 12 : 14),
+                ),
+                child: Icon(icon, size: compact ? 18 : 20, color: accent),
+              ),
+              SizedBox(width: compact ? 10 : 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: compact ? 15 : 16.5,
+                        color: AppColors.primaryDarkBlue,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: AppColors.mediumGray,
+                          fontSize: compact ? 11.5 : 12.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: compact ? 12 : 14),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.backgroundGray.withOpacity(0.45),
+              borderRadius: BorderRadius.circular(compact ? 16 : 18),
+              border: Border.all(color: AppColors.silverLight.withOpacity(0.8)),
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(compact ? 10 : 12),
+              child: child,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderBadge({
+    required IconData icon,
+    required String label,
+    bool compact = false,
+  }) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 12,
+        vertical: compact ? 5 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.primaryBlue.withOpacity(0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: compact ? 14 : 15, color: AppColors.primaryBlue),
+          SizedBox(width: compact ? 5 : 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w700,
+              fontSize: compact ? 11.5 : 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMobileLayout() {
     final stationProvider = Provider.of<StationProvider>(context);
+    final compact = _isCompactPhone(context);
+    final pagePadding = compact ? 12.0 : 16.0;
+    final sectionGap = _sectionGap(context);
 
     if (_session == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -3506,219 +3637,82 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(pagePadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Session Info
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'معلومات اليومية',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildMobileSessionInfo(),
-                    ],
-                  ),
-                ),
+              _buildSectionCard(
+                title: 'معلومات اليومية',
+                subtitle: 'بيانات الوردية والمحطة ووقت الفتح',
+                icon: Icons.fact_check_rounded,
+                accent: AppColors.primaryBlue,
+                child: _buildMobileSessionInfo(),
+              ),
+              SizedBox(height: sectionGap),
+              _buildSectionCard(
+                title: 'قراءات الخراطيم',
+                subtitle: 'أدخل قراءة الإغلاق لكل مضخة مع الصورة',
+                icon: Icons.local_gas_station_rounded,
+                accent: AppColors.secondaryTeal,
+                child: _buildMobileNozzleReadings(),
+              ),
+              SizedBox(height: sectionGap),
+              _buildSectionCard(
+                title: 'التحصيل النقدي',
+                subtitle: 'سجّل قيم التحصيل حسب طريقة الدفع',
+                icon: Icons.payments_rounded,
+                accent: AppColors.successGreen,
+                child: _buildMobilePayments(),
+              ),
+              SizedBox(height: sectionGap),
+              _buildSectionCard(
+                title: 'المصروفات',
+                subtitle: 'أضف أي مصروفات مرتبطة بهذه اليومية',
+                icon: Icons.receipt_long_rounded,
+                accent: AppColors.warningOrange,
+                child: _buildMobileExpenses(),
+              ),
+              SizedBox(height: sectionGap),
+              _buildSectionCard(
+                title: 'إرجاع وقود للخزان',
+                subtitle: 'سجّل أي كميات تم إرجاعها للخزان',
+                icon: Icons.keyboard_return_rounded,
+                accent: AppColors.infoBlue,
+                child: _buildMobileFuelReturn(),
+              ),
+              SizedBox(height: sectionGap),
+              _buildSectionCard(
+                title: 'الرصيد والفرق',
+                subtitle: 'مراجعة الرصيد المرحل والفرق النهائي',
+                icon: Icons.balance_rounded,
+                accent: _calculatedDifference >= 0
+                    ? AppColors.successGreen
+                    : AppColors.errorRed,
+                child: _buildMobileBalanceDifference(),
               ),
 
-              const SizedBox(height: 16),
-
-              // Nozzle Readings
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'قراءات الخراطيم',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMobileNozzleReadings(),
-                    ],
-                  ),
+              if (_calculatedDifference < 0 && !_shortageResolved) ...[
+                SizedBox(height: sectionGap),
+                _buildSectionCard(
+                  title: 'تسوية العجز',
+                  subtitle: 'اعتماد سبب العجز قبل إغلاق اليومية',
+                  icon: Icons.rule_folder_rounded,
+                  accent: AppColors.warningOrange,
+                  child: _buildMobileShortageResolution(),
                 ),
+              ],
+
+              SizedBox(height: sectionGap),
+              _buildSectionCard(
+                title: 'ملاحظات',
+                subtitle: 'أي ملاحظات إضافية تخص الإغلاق',
+                icon: Icons.notes_rounded,
+                accent: AppColors.primaryBlue,
+                child: _buildMobileNotes(),
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: compact ? 18 : 24),
 
-              // Payments
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'التحصيل النقدي',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMobilePayments(),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Expenses
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'المصروفات',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMobileExpenses(),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Fuel Return
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'إرجاع وقود للخزان',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMobileFuelReturn(),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Fuel Supply
-              // Card(
-              //   child: Padding(
-              //     padding: const EdgeInsets.all(16),
-              //     child: Column(
-              //       crossAxisAlignment: CrossAxisAlignment.start,
-              //       children: [
-              //         Text(
-              //           'توريد الوقود',
-              //           style: const TextStyle(
-              //             fontWeight: FontWeight.bold,
-              //             fontSize: 16,
-              //           ),
-              //         ),
-              //         const SizedBox(height: 12),
-              //         _buildMobileFuelSupply(),
-              //       ],
-              //     ),
-              //   ),
-              // ),
-
-              // const SizedBox(height: 16),
-
-              // Balance & Difference
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'الرصيد والفرق',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMobileBalanceDifference(),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Shortage Resolution
-              if (_calculatedDifference < 0 && !_shortageResolved)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'تسوية العجز',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildMobileShortageResolution(),
-                      ],
-                    ),
-                  ),
-                ),
-
-              const SizedBox(height: 16),
-
-              // Notes
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ملاحظات',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMobileNotes(),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Submit Button
               GradientButton(
                 onPressed: stationProvider.isLoading ? null : _submitForm,
                 text: stationProvider.isLoading
@@ -3726,8 +3720,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                     : context.tr(loc.AppStrings.closeSession),
                 gradient: AppColors.accentGradient,
                 isLoading: stationProvider.isLoading,
-                height: 50,
+                height: compact ? 46 : 50,
               ),
+              SizedBox(height: compact ? 8 : 12),
             ],
           ),
         ),
@@ -3753,19 +3748,32 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   Widget _buildInfoRow(String label, String value) {
+    final compact = _isCompactPhone(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(vertical: compact ? 3 : 4),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
-              style: TextStyle(color: AppColors.mediumGray, fontSize: 14),
+              style: TextStyle(
+                color: AppColors.mediumGray,
+                fontSize: compact ? 12.5 : 13.5,
+              ),
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: compact ? 12.5 : 13.5,
+                color: AppColors.primaryDarkBlue,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -3773,6 +3781,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   Widget _buildMobileNozzleReadings() {
+    final compact = _isCompactPhone(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: (session.nozzleReadings ?? []).map((nozzle) {
@@ -3785,29 +3795,71 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
             : context.tr(loc.AppStrings.sideRight);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
+          margin: EdgeInsets.only(bottom: compact ? 10 : 12),
+          padding: EdgeInsets.all(compact ? 10 : 12),
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.lightGray),
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
+            border: Border.all(color: AppColors.silverLight.withOpacity(0.9)),
+            borderRadius: BorderRadius.circular(compact ? 14 : 16),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryDarkBlue.withOpacity(0.03),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'المضخة ${nozzle.pumpNumber} - لي ${nozzle.nozzleNumber}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'المضخة ${nozzle.pumpNumber} - لي ${nozzle.nozzleNumber}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: compact ? 13 : 14,
+                        color: AppColors.primaryDarkBlue,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 8 : 10,
+                      vertical: compact ? 4 : 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.infoBlue.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      sideLabel,
+                      style: TextStyle(
+                        color: AppColors.infoBlue,
+                        fontWeight: FontWeight.w700,
+                        fontSize: compact ? 10.5 : 11.5,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               Text(
-                '${nozzle.fuelType} - $sideLabel',
-                style: TextStyle(color: AppColors.mediumGray, fontSize: 12),
+                nozzle.fuelType,
+                style: TextStyle(
+                  color: AppColors.mediumGray,
+                  fontSize: compact ? 11 : 12,
+                ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: compact ? 6 : 8),
               Text(
                 'قراءة الفتح: ${nozzle.openingReading.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 13),
+                style: TextStyle(
+                  fontSize: compact ? 12 : 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: compact ? 8 : 10),
               CustomTextField(
                 controller: controller,
                 labelText: 'قراءة الإغلاق',
@@ -3829,26 +3881,38 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                   _recalculateTotals();
                 },
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: compact ? 8 : 10),
               OutlinedButton.icon(
                 onPressed: () => _pickClosingImage(key),
-                icon: const Icon(Icons.camera_alt, size: 18),
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 12 : 14,
+                    vertical: compact ? 10 : 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(compact ? 12 : 14),
+                  ),
+                  side: BorderSide(
+                    color: AppColors.primaryBlue.withOpacity(0.2),
+                  ),
+                ),
+                icon: Icon(Icons.camera_alt, size: compact ? 16 : 18),
                 label: Text(image == null ? 'إضافة صورة' : 'تغيير الصورة'),
               ),
               if (image != null) ...[
-                const SizedBox(height: 8),
+                SizedBox(height: compact ? 8 : 10),
                 Row(
                   children: [
                     Icon(
                       Icons.check_circle,
                       color: AppColors.successGreen,
-                      size: 16,
+                      size: compact ? 15 : 16,
                     ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         image.name,
-                        style: const TextStyle(fontSize: 12),
+                        style: TextStyle(fontSize: compact ? 11 : 12),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -3896,6 +3960,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   Widget _buildMobileExpenses() {
+    final compact = _isCompactPhone(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3920,7 +3986,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         const SizedBox(height: 12),
         ElevatedButton.icon(
           onPressed: () {
-            final amount = _tryParseLocalizedDouble(_expenseAmountController.text);
+            final amount = _tryParseLocalizedDouble(
+              _expenseAmountController.text,
+            );
             if (_expenseTypeController.text.isEmpty || amount == null) return;
 
             setState(() {
@@ -3942,14 +4010,30 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
           icon: const Icon(Icons.add, size: 18),
           label: const Text('إضافة مصروف'),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: compact ? 12 : 16),
         if (_expenses.isNotEmpty)
           ..._expenses.asMap().entries.map((entry) {
             final index = entry.key;
             final e = entry.value;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
+            return AppSurfaceCard(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 8 : 10,
+                vertical: compact ? 4 : 6,
+              ),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(compact ? 14 : 16),
+              border: Border.all(
+                color: AppColors.warningOrange.withOpacity(0.12),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDarkBlue.withOpacity(0.03),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
+                ),
+              ],
               child: ListTile(
+                dense: compact,
                 title: Text(e.type),
                 subtitle: e.notes?.isNotEmpty == true ? Text(e.notes!) : null,
                 trailing: Row(
@@ -4005,6 +4089,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   Widget _buildMobileFuelReturn() {
+    final compact = _isCompactPhone(context);
     final fuelOptions = _availableFuelTypes();
     final selectedValue = fuelOptions.contains(_selectedReturnFuelType)
         ? _selectedReturnFuelType
@@ -4068,13 +4153,27 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
           label: const Text('إضافة إرجاع'),
         ),
         if (_fuelReturnEntries.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: compact ? 10 : 12),
           ..._fuelReturnEntries.map((entry) {
             final amount =
                 entry.quantity * _resolveFuelUnitPrice(entry.fuelType);
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
+            return AppSurfaceCard(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 8 : 10,
+                vertical: compact ? 4 : 6,
+              ),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(compact ? 14 : 16),
+              border: Border.all(color: AppColors.infoBlue.withOpacity(0.12)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDarkBlue.withOpacity(0.03),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
+                ),
+              ],
               child: ListTile(
+                dense: compact,
                 title: Text(
                   '${entry.fuelType} - ${entry.quantity.toStringAsFixed(2)} لتر',
                 ),
@@ -4110,6 +4209,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   Widget _buildMobileBalanceDifference() {
+    final compact = _isCompactPhone(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4119,15 +4220,15 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
           prefixIcon: Icons.account_balance_wallet,
           keyboardType: TextInputType.number,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: compact ? 12 : 16),
         if (_calculatedDifference != 0)
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(compact ? 10 : 12),
             decoration: BoxDecoration(
               color: _calculatedDifference >= 0
                   ? AppColors.successGreen.withOpacity(0.1)
                   : AppColors.errorRed.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(compact ? 14 : 16),
               border: Border.all(
                 color: _calculatedDifference >= 0
                     ? AppColors.successGreen
@@ -4144,12 +4245,13 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                         ? AppColors.successGreen
                         : AppColors.errorRed,
                     fontWeight: FontWeight.w600,
+                    fontSize: compact ? 12.5 : 13.5,
                   ),
                 ),
                 Text(
                   '${_calculatedDifference.abs().toStringAsFixed(2)} ريال',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: compact ? 14 : 16,
                     fontWeight: FontWeight.bold,
                     color: _calculatedDifference >= 0
                         ? AppColors.successGreen
@@ -4164,6 +4266,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   }
 
   Widget _buildMobileShortageResolution() {
+    final compact = _isCompactPhone(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4179,8 +4283,17 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
           labelText: 'سبب العجز',
           onChanged: (v) => _shortageReason = v,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: compact ? 12 : 16),
         ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 14 : 16,
+              vertical: compact ? 11 : 13,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(compact ? 12 : 14),
+            ),
+          ),
           onPressed: () {
             final amount =
                 _tryParseLocalizedDouble(_shortageAmountController.text) ?? 0;
@@ -4222,6 +4335,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     final stationProvider = Provider.of<StationProvider>(context);
     final width = MediaQuery.of(context).size.width;
     final compactDesktop = width < 1400;
+    final pagePadding = compactDesktop ? 12.0 : 16.0;
 
     if (_session == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -4254,24 +4368,33 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
         ],
       ),
       body: Padding(
-        padding: EdgeInsets.all(compactDesktop ? 12 : 16),
+        padding: EdgeInsets.all(pagePadding),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+              AppSurfaceCard(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compactDesktop ? 16 : 18,
+                  vertical: compactDesktop ? 14 : 16,
                 ),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compactDesktop ? 14 : 18,
-                    vertical: compactDesktop ? 12 : 14,
+                color: Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppColors.primaryBlue.withOpacity(0.10),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryDarkBlue.withOpacity(0.06),
+                    blurRadius: compactDesktop ? 24 : 28,
+                    offset: const Offset(0, 14),
                   ),
+                ],
+                child: Padding(
+                  padding: EdgeInsets.zero,
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
@@ -4282,38 +4405,86 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                               'إغلاق يومية ${session.sessionNumber}',
                               style: TextStyle(
                                 fontSize: compactDesktop ? 17 : 19,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primaryDarkBlue,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            SizedBox(height: compactDesktop ? 4 : 6),
                             Text(
-                              'المحطة: ${session.stationName}',
+                              'مراجعة بيانات الإغلاق وقراءات الخراطيم والتحصيل قبل اعتماد اليومية.',
                               style: TextStyle(
                                 color: AppColors.mediumGray,
-                                fontSize: compactDesktop ? 12.5 : 13.5,
+                                fontSize: compactDesktop ? 12 : 13,
+                                height: 1.4,
                               ),
+                            ),
+                            SizedBox(height: compactDesktop ? 10 : 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildHeaderBadge(
+                                  icon: Icons.local_gas_station_rounded,
+                                  label: session.stationName,
+                                  compact: compactDesktop,
+                                ),
+                                _buildHeaderBadge(
+                                  icon: Icons.schedule_rounded,
+                                  label: 'الوردية: ${session.shiftType}',
+                                  compact: compactDesktop,
+                                ),
+                                _buildHeaderBadge(
+                                  icon: Icons.event_available_rounded,
+                                  label: DateFormat(
+                                    'yyyy/MM/dd HH:mm',
+                                  ).format(session.openingTime),
+                                  compact: compactDesktop,
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            'الوردية: ${session.shiftType}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: compactDesktop ? 12.5 : 13,
-                            ),
+                      SizedBox(width: compactDesktop ? 12 : 16),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: compactDesktop ? 12 : 14,
+                          vertical: compactDesktop ? 10 : 12,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topRight,
+                            end: Alignment.bottomLeft,
+                            colors: [
+                              AppColors.primaryBlue.withOpacity(0.08),
+                              AppColors.secondaryTeal.withOpacity(0.12),
+                            ],
                           ),
-                          Text(
-                            'تاريخ الفتح: ${DateFormat('yyyy/MM/dd HH:mm').format(session.openingTime)}',
-                            style: TextStyle(
-                              color: AppColors.mediumGray,
-                              fontSize: compactDesktop ? 11 : 12,
-                            ),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppColors.primaryBlue.withOpacity(0.10),
                           ),
-                        ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'ملف الإغلاق',
+                              style: TextStyle(
+                                color: AppColors.mediumGray,
+                                fontSize: compactDesktop ? 11.5 : 12.5,
+                              ),
+                            ),
+                            Text(
+                              session.sessionNumber,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: compactDesktop ? 13 : 14,
+                                color: AppColors.primaryDarkBlue,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -4322,84 +4493,85 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
 
               SizedBox(height: compactDesktop ? 12 : 16),
 
-              // Main Content
               Expanded(
-                child: Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                child: AppSurfaceCard(
+                  padding: EdgeInsets.all(compactDesktop ? 14 : 16),
+                  color: Colors.white.withOpacity(0.96),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppColors.primaryBlue.withOpacity(0.08),
                   ),
-                  child: Padding(
-                    padding: EdgeInsets.all(compactDesktop ? 14 : 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Table Header
-                        Padding(
-                          padding: EdgeInsets.only(
-                            bottom: compactDesktop ? 12 : 16,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'بيانات إغلاق اليومية',
-                                style: TextStyle(
-                                  fontSize: compactDesktop ? 16 : 17,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: compactDesktop ? 12 : 16,
-                                  vertical: compactDesktop ? 6 : 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryBlue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.timer,
-                                      size: compactDesktop ? 14 : 16,
-                                      color: AppColors.primaryBlue,
-                                    ),
-                                    SizedBox(width: compactDesktop ? 6 : 8),
-                                    Text(
-                                      'آخر تحديث: ${DateFormat('HH:mm').format(DateTime.now())}',
-                                      style: TextStyle(
-                                        color: AppColors.primaryBlue,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: compactDesktop ? 11.5 : 12.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryDarkBlue.withOpacity(0.05),
+                      blurRadius: 28,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.only(
+                          bottom: compactDesktop ? 10 : 14,
                         ),
-
-                        // Data Table
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: AppColors.lightGray,
-                                width: 1,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'بيانات إغلاق اليومية',
+                              style: TextStyle(
+                                fontSize: compactDesktop ? 16 : 17,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primaryDarkBlue,
                               ),
                             ),
-                            child: _buildWebDataTable(stationProvider),
-                          ),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: compactDesktop ? 12 : 14,
+                                vertical: compactDesktop ? 6 : 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryBlue.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.timer_outlined,
+                                    size: compactDesktop ? 14 : 16,
+                                    color: AppColors.primaryBlue,
+                                  ),
+                                  SizedBox(width: compactDesktop ? 6 : 8),
+                                  Text(
+                                    'آخر تحديث: ${DateFormat('HH:mm').format(DateTime.now())}',
+                                    style: TextStyle(
+                                      color: AppColors.primaryBlue,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: compactDesktop ? 11.5 : 12.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-
-                        // Summary Section
-                        SizedBox(height: compactDesktop ? 12 : 16),
-                        _buildWebSummaryTables(),
-                      ],
-                    ),
+                      ),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: AppColors.silverLight.withOpacity(0.95),
+                              width: 1,
+                            ),
+                          ),
+                          child: _buildWebDataTable(stationProvider),
+                        ),
+                      ),
+                      SizedBox(height: compactDesktop ? 10 : 14),
+                      _buildWebSummaryTables(),
+                    ],
                   ),
                 ),
               ),
@@ -4462,8 +4634,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
             child: DataTable(
               columnSpacing: 0,
               horizontalMargin: 0,
-              headingRowHeight: compactTable ? 44 : 48,
-              dataRowHeight: compactTable ? 52 : 56,
+              headingRowHeight: compactTable ? 40 : 44,
+              dataRowHeight: compactTable ? 48 : 52,
               dividerThickness: 0,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
@@ -4507,7 +4679,9 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                   );
                   final compactSold = _compactFuelMap(_soldLitersByFuel);
                   final compactReturns = _compactFuelMap(_returnsByFuel());
-                  final compactSupplies = _compactFuelMap(_currentSupplyByFuel());
+                  final compactSupplies = _compactFuelMap(
+                    _currentSupplyByFuel(),
+                  );
                   final beforeStock = compactBefore[compactKey];
                   final afterStock = _stockAfterSalesByFuel[stockKey];
                   final computedAfter = beforeStock == null
@@ -4627,7 +4801,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                     decimal: true,
                                   ),
                               onChanged: (v) {
-                                nozzle.closingReading = _tryParseLocalizedDouble(v);
+                                nozzle.closingReading =
+                                    _tryParseLocalizedDouble(v);
                                 _recalculateTotals();
                               },
                             ),
@@ -4737,9 +4912,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                                         color: AppColors.successGreen,
                                         size: compactTable ? 11 : 12,
                                       ),
-                                      SizedBox(
-                                        width: compactTable ? 3 : 4,
-                                      ),
+                                      SizedBox(width: compactTable ? 3 : 4),
                                       SizedBox(
                                         width: compactTable ? 50 : 60,
                                         child: Text(
@@ -5486,9 +5659,8 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
                               ),
                               keyboardType: TextInputType.number,
                               style: TextStyle(fontSize: dataFont),
-                              onChanged: (v) =>
-                                  _shortageAmount =
-                                      _tryParseLocalizedDouble(v) ?? 0,
+                              onChanged: (v) => _shortageAmount =
+                                  _tryParseLocalizedDouble(v) ?? 0,
                             ),
                           ),
                         ),
@@ -5674,32 +5846,46 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     required List<TableRow> rows,
     bool compact = false,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.lightGray),
-        color: Colors.white,
-      ),
+    return AppSurfaceCard(
+      padding: EdgeInsets.zero,
+      color: Colors.white.withOpacity(0.98),
+      borderRadius: BorderRadius.circular(compact ? 18 : 20),
+      border: Border.all(color: AppColors.primaryBlue.withOpacity(0.08)),
+      boxShadow: [
+        BoxShadow(
+          color: AppColors.primaryDarkBlue.withOpacity(0.04),
+          blurRadius: compact ? 18 : 22,
+          offset: const Offset(0, 10),
+        ),
+      ],
       child: Column(
         children: [
           Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(
-              vertical: compact ? 8 : 10,
+              vertical: compact ? 7 : 9,
               horizontal: compact ? 12 : 14,
             ),
             decoration: BoxDecoration(
-              color: AppColors.backgroundGray.withOpacity(0.6),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+                colors: [
+                  AppColors.primaryBlue.withOpacity(0.06),
+                  AppColors.secondaryTeal.withOpacity(0.08),
+                ],
+              ),
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(compact ? 18 : 20),
               ),
             ),
             child: Center(
               child: Text(
                 title,
                 style: TextStyle(
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w800,
                   fontSize: compact ? 11.5 : 12.5,
+                  color: AppColors.primaryDarkBlue,
                 ),
               ),
             ),
@@ -5795,7 +5981,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 6 : 8,
-        vertical: compact ? 6 : 8,
+        vertical: compact ? 5 : 7,
       ),
       child: Center(child: child),
     );
@@ -5804,7 +5990,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
   Widget _buildSummaryInput(TextEditingController controller) {
     final compact = MediaQuery.of(context).size.width < 1280;
     return SizedBox(
-      width: compact ? 104 : 124,
+      width: compact ? 100 : 116,
       child: TextFormField(
         controller: controller,
         textAlign: TextAlign.center,
@@ -5813,7 +5999,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
           hintText: '0',
           contentPadding: EdgeInsets.symmetric(
             horizontal: compact ? 6 : 8,
-            vertical: compact ? 5 : 6,
+            vertical: compact ? 4 : 5,
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(compact ? 8 : 10),
@@ -6081,9 +6267,7 @@ class _CloseSessionScreenState extends State<CloseSessionScreen> {
 
     rows.add(
       DataRow(
-        color: WidgetStatePropertyAll(
-          AppColors.primaryBlue.withOpacity(0.06),
-        ),
+        color: WidgetStatePropertyAll(AppColors.primaryBlue.withOpacity(0.06)),
         cells: [
           DataCell(
             SizedBox(

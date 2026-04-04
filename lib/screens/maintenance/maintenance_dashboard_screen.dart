@@ -59,6 +59,61 @@ class _MaintenanceDashboardScreenState
     await provider.fetchMonthlyStats(_selectedMonth);
   }
 
+  Future<void> _generateNextMonthRecords() async {
+    final provider = context.read<MaintenanceProvider>();
+    final nextMonth = DateFormat(
+      'yyyy-MM',
+    ).format(DateTime.now().add(const Duration(days: 32)));
+
+    try {
+      await provider.generateMaintenanceMonth(nextMonth);
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم إنشاء سجلات شهر $nextMonth'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      setState(() {
+        _selectedMonth = nextMonth;
+        if (!_availableMonths.contains(nextMonth)) {
+          _availableMonths.insert(0, nextMonth);
+        }
+      });
+
+      await _loadData();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فشل إنشاء الشهر: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildQuickNavAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+    required bool isSmallScreen,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      splashRadius: 22,
+      onPressed: onPressed,
+      icon: Icon(
+        icon,
+        size: isSmallScreen ? 20 : 24,
+        color: Colors.white,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<MaintenanceProvider>(context);
@@ -78,6 +133,8 @@ class _MaintenanceDashboardScreenState
         role == 'admin' ||
         role == 'owner' ||
         role == 'manager';
+    final bool canViewArchive =
+        user?.hasAnyPermission(['archive_view', 'archive_manage']) ?? false;
 
     final isLargeScreen = screenWidth > 1200;
     final isMediumScreen = screenWidth > 600;
@@ -176,86 +233,6 @@ class _MaintenanceDashboardScreenState
           SizedBox(width: isSmallScreen ? 8 : 12),
 
           // =========================
-          // 🆕 إنشاء شهر جديد (للمدير فقط)
-          // =========================
-          if (role == 'maintenance_car_management' ||
-              role == 'admin' ||
-              role == 'owner')
-            IconButton(
-              tooltip: 'إنشاء شهر جديد',
-              icon: const Icon(Icons.calendar_month),
-              onPressed: () async {
-                final provider = Provider.of<MaintenanceProvider>(
-                  context,
-                  listen: false,
-                );
-
-                final nextMonth = DateFormat(
-                  'yyyy-MM',
-                ).format(DateTime.now().add(const Duration(days: 32)));
-
-                try {
-                  await provider.generateMaintenanceMonth(nextMonth);
-
-                  if (!context.mounted) return;
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('تم إنشاء سجلات شهر $nextMonth'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-
-                  setState(() {
-                    _selectedMonth = nextMonth;
-                    if (!_availableMonths.contains(nextMonth)) {
-                      _availableMonths.insert(0, nextMonth);
-                    }
-                  });
-
-                  await _loadData();
-                } catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('فشل إنشاء الشهر: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-            ),
-
-          // =========================
-          // ➕ إضافة صيانة (يدوي)
-          // =========================
-          IconButton(
-            tooltip: 'إضافة صيانة',
-            onPressed: () {
-              Navigator.pushNamed(context, '/maintenance/new');
-            },
-            icon: Icon(
-              Icons.add,
-              size: isSmallScreen ? 20 : 24,
-              color: Colors.white,
-            ),
-          ),
-
-          // =========================
-          // 📌 المهام (انتقال)
-          // =========================
-          IconButton(
-            tooltip: 'المهام',
-            onPressed: () {
-              Navigator.pushNamed(context, AppRoutes.tasks);
-            },
-            icon: Icon(
-              Icons.assignment_turned_in,
-              size: isSmallScreen ? 20 : 24,
-              color: Colors.white,
-            ),
-          ),
-          // =========================
           // 👤 البروفايل
           // =========================
           InkWell(
@@ -321,6 +298,68 @@ class _MaintenanceDashboardScreenState
 
           const SizedBox(width: 8),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: Container(
+            height: 52,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.10),
+                ),
+              ),
+            ),
+            child: Center(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (canViewArchive)
+                      _buildQuickNavAction(
+                        icon: Icons.archive_outlined,
+                        tooltip: 'الأرشيف',
+                        onPressed: () {
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes.archiveDocuments,
+                          );
+                        },
+                        isSmallScreen: isSmallScreen,
+                      ),
+                    _buildQuickNavAction(
+                      icon: Icons.assignment_turned_in,
+                      tooltip: 'المهام',
+                      onPressed: () {
+                        Navigator.pushNamed(context, AppRoutes.tasks);
+                      },
+                      isSmallScreen: isSmallScreen,
+                    ),
+                    _buildQuickNavAction(
+                      icon: Icons.add,
+                      tooltip: 'إضافة صيانة',
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/maintenance/new');
+                      },
+                      isSmallScreen: isSmallScreen,
+                    ),
+                    if (role == 'maintenance_car_management' ||
+                        role == 'admin' ||
+                        role == 'owner')
+                      _buildQuickNavAction(
+                        icon: Icons.calendar_month,
+                        tooltip: 'إنشاء شهر جديد',
+                        onPressed: _generateNextMonthRecords,
+                        isSmallScreen: isSmallScreen,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
 
       floatingActionButton: Column(
