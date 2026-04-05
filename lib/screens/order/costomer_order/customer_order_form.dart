@@ -1264,28 +1264,6 @@ class _CustomerOrderFormScreenState extends State<CustomerOrderFormScreen> {
     final pricingPreview = _pricingPreview;
     final qty = _quantityValue;
 
-    if (!pricingPreview.hasFuelPricing) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يرجى ضبط سعر الوقود لهذا العميل أولاً'),
-          backgroundColor: AppColors.errorRed,
-        ),
-      );
-      return;
-    }
-
-    if (_purchaseType == 'نقل' && !pricingPreview.hasTransportPricing) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'حدد مدينة المصدر والسعة أو فعّل التسعيرة اليدوية لهذا الطلب',
-          ),
-          backgroundColor: AppColors.errorRed,
-        ),
-      );
-      return;
-    }
-
     // ===============================
     // ✅ إنشاء الطلب (الموقع اختياري)
     // ===============================

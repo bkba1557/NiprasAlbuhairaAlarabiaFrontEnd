@@ -22,7 +22,8 @@ class RoleRouteGuardObserver extends NavigatorObserver {
     final role = auth.user?.role;
     if (isRouteAllowedForRole(role: role, routeName: routeName)) return;
 
-    if (!isEmployeeRole(role)) return;
+    final redirectRoute = restrictedRoleHomeRoute(role);
+    if (redirectRoute == null) return;
 
     _redirectInProgress = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -33,7 +34,7 @@ class RoleRouteGuardObserver extends NavigatorObserver {
       }
 
       nav2.pushNamedAndRemoveUntil(
-        AppRoutes.marketingStations,
+        redirectRoute,
         (route) => false,
       );
       _redirectInProgress = false;

@@ -30,7 +30,7 @@ class _CustomerTreasuryBranchesScreenState
   }
 
   Future<void> _load() async {
-    if (_loading) return;
+    if (_loading || !mounted) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -53,11 +53,15 @@ class _CustomerTreasuryBranchesScreenState
               CustomerTreasuryBranch.fromJson(Map<String, dynamic>.from(e)))
           .toList();
 
+      if (!mounted) return;
       setState(() => _branches = branches);
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -65,6 +69,7 @@ class _CustomerTreasuryBranchesScreenState
     final nameController = TextEditingController(text: branch?.name ?? '');
     final codeController = TextEditingController(text: branch?.code ?? '');
     var isActive = branch?.isActive ?? true;
+    var isSaving = false;
 
     final result = await showDialog<bool>(
       context: context,
@@ -102,33 +107,63 @@ class _CustomerTreasuryBranchesScreenState
                       contentPadding: EdgeInsets.zero,
                       title: const Text('فعال'),
                       value: isActive,
-                      onChanged: (value) =>
-                          setDialogState(() => isActive = value),
+                      onChanged: isSaving
+                          ? null
+                          : (value) =>
+                              setDialogState(() => isActive = value),
                     ),
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext, false),
                   child: const Text('إلغاء'),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () async {
-                    final name = nameController.text.trim();
-                    final code = codeController.text.trim();
-                    if (name.isEmpty) return;
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final name = nameController.text.trim();
+                          final code = codeController.text.trim();
+                          if (name.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('اسم الفرع مطلوب'),
+                                backgroundColor: AppColors.errorRed,
+                              ),
+                            );
+                            return;
+                          }
 
-                    Navigator.pop(dialogContext, true);
-                    await _saveBranch(
-                      branchId: branch?.id,
-                      name: name,
-                      code: code,
-                      isActive: isActive,
-                    );
-                  },
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('حفظ'),
+                          setDialogState(() => isSaving = true);
+
+                          final saved = await _saveBranch(
+                            branchId: branch?.id,
+                            name: name,
+                            code: code,
+                            isActive: isActive,
+                          );
+
+                          if (!dialogContext.mounted) return;
+
+                          if (saved) {
+                            Navigator.pop(dialogContext, true);
+                            return;
+                          }
+
+                          setDialogState(() => isSaving = false);
+                        },
+                  icon: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(isSaving ? 'جاري الحفظ...' : 'حفظ'),
                 ),
               ],
             );
@@ -143,18 +178,17 @@ class _CustomerTreasuryBranchesScreenState
     if (result != true) return;
   }
 
-  Future<void> _saveBranch({
+  Future<bool> _saveBranch({
     required String? branchId,
     required String name,
     required String code,
     required bool isActive,
   }) async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (!mounted) return false;
+    setState(() => _error = null);
 
     try {
+      await ApiService.loadToken();
       final uri = branchId == null || branchId.isEmpty
           ? Uri.parse('${ApiEndpoints.baseUrl}/customer-treasury/branches')
           : Uri.parse(
@@ -177,8 +211,9 @@ class _CustomerTreasuryBranchesScreenState
 
       _changed = true;
       await _load();
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() => _error = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -186,8 +221,7 @@ class _CustomerTreasuryBranchesScreenState
           backgroundColor: AppColors.errorRed,
         ),
       );
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      return false;
     }
   }
 

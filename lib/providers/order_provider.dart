@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
@@ -280,8 +281,11 @@ class OrderProvider with ChangeNotifier {
         return null;
       }
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final streamedResponse = await request
+          .send()
+          .timeout(const Duration(seconds: 25));
+      final response = await http.Response.fromStream(streamedResponse)
+          .timeout(const Duration(seconds: 25));
       final dynamic payload = response.bodyBytes.isNotEmpty
           ? json.decode(utf8.decode(response.bodyBytes))
           : null;
@@ -305,7 +309,11 @@ class OrderProvider with ChangeNotifier {
       }
       return null;
     } catch (e) {
-      _error = 'حدث خطأ في الاتصال بالسيرفر: ${e.toString()}';
+      if (e is TimeoutException) {
+        _error = 'انتهت مهلة قراءة المستند. حاول مرة أخرى.';
+      } else {
+        _error = 'حدث خطأ في الاتصال بالسيرفر: ${e.toString()}';
+      }
       return null;
     }
   }
@@ -475,6 +483,28 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
+  Future<List<Order>> fetchOrdersSnapshot({
+    Map<String, dynamic>? filters,
+    int page = 1,
+  }) async {
+    try {
+      final response = await http.get(
+        _ordersUri(page: page, filters: filters),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('فشل في جلب البيانات');
+      }
+
+      final data = ApiService.decodeJson(response);
+      return _parseOrdersFromPayload(data);
+    } catch (e) {
+      _error = e.toString();
+      return const <Order>[];
+    }
+  }
+
   // ============================================
   // 📄 جلب طلب محدد
   // ============================================
@@ -576,6 +606,7 @@ class OrderProvider with ChangeNotifier {
       }
 
       request.fields['orderSource'] = order.orderSource;
+      request.fields['entryChannel'] = order.entryChannel;
       request.fields['orderDate'] = order.orderDate.toIso8601String();
       request.fields['loadingDate'] = order.loadingDate.toIso8601String();
       request.fields['loadingTime'] = order.loadingTime;
@@ -1026,6 +1057,57 @@ class OrderProvider with ChangeNotifier {
       } else {
         _error = data['message'] ?? 'فشل في دمج الطلبات';
       }
+    } catch (e) {
+      _error = 'خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> dispatchMovementOrder({
+    required String supplierOrderId,
+    required String customerId,
+    required DateTime customerRequestDate,
+    required DateTime expectedArrivalDate,
+    String? driverId,
+    String? requestType,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.post(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderMovementDispatch(supplierOrderId)}',
+        ),
+        headers: ApiService.headers,
+        body: json.encode({
+          'customerId': customerId,
+          'customerRequestDate': customerRequestDate.toIso8601String(),
+          'expectedArrivalDate': expectedArrivalDate.toIso8601String(),
+          if (driverId != null && driverId.isNotEmpty) 'driverId': driverId,
+          if (requestType != null && requestType.isNotEmpty)
+            'requestType': requestType,
+        }),
+      );
+
+      final data = ApiService.decodeJson(response);
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data['success'] == true) {
+        _syncOrdersFromResponse(data);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'فشل في توجيه طلب الحركة';
     } catch (e) {
       _error = 'خطأ في الاتصال بالسيرفر: $e';
     }

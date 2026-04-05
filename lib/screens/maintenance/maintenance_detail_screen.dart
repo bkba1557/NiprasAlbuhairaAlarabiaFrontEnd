@@ -3,6 +3,8 @@ import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/maintenance_provider.dart';
 import 'package:order_tracker/screens/maintenance/daily_check_screen.dart';
 import 'package:order_tracker/utils/app_routes.dart';
+import 'package:order_tracker/utils/constants.dart';
+import 'package:order_tracker/widgets/app_surface_card.dart';
 import 'package:order_tracker/widgets/maintenance/daily_check_card.dart';
 import 'package:order_tracker/widgets/maintenance/supervisor_action_dialog.dart';
 import 'package:provider/provider.dart';
@@ -562,6 +564,132 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     );
   }
 
+  Widget _buildInfoSectionTitle({
+    required String title,
+    required IconData icon,
+    required bool isLargeScreen,
+    required bool isMediumScreen,
+    Color accent = AppColors.primaryBlue,
+    String? subtitle,
+  }) {
+    final titleSize = isLargeScreen
+        ? 24.0
+        : isMediumScreen
+        ? 20.0
+        : 18.0;
+    final subtitleSize = isMediumScreen ? 12.5 : 11.5;
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: isMediumScreen ? 16 : 14),
+      child: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isMediumScreen ? 16 : 14,
+              vertical: isMediumScreen ? 10 : 8,
+            ),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: accent.withValues(alpha: 0.10)),
+            ),
+            child: Icon(icon, color: accent, size: isMediumScreen ? 20 : 18),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: titleSize,
+              fontWeight: FontWeight.w800,
+              color: AppColors.primaryDarkBlue,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: subtitleSize,
+                color: AppColors.mediumGray,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoSectionShell({
+    required Widget child,
+    required bool isLargeScreen,
+    required bool isMediumScreen,
+    Color accent = AppColors.primaryBlue,
+  }) {
+    return AppSurfaceCard(
+      padding: EdgeInsets.all(
+        isLargeScreen
+            ? 22
+            : isMediumScreen
+            ? 18
+            : 14,
+      ),
+      color: Colors.white.withValues(alpha: 0.94),
+      borderRadius: BorderRadius.circular(isMediumScreen ? 24 : 20),
+      border: Border.all(color: accent.withValues(alpha: 0.08)),
+      boxShadow: [
+        BoxShadow(
+          color: AppColors.primaryDarkBlue.withValues(alpha: 0.05),
+          blurRadius: isMediumScreen ? 24 : 18,
+          offset: const Offset(0, 14),
+        ),
+      ],
+      child: child,
+    );
+  }
+
+  Widget _buildInfoSubsectionTitle(
+    String title,
+    bool isLargeScreen,
+    bool isMediumScreen, {
+    Color accent = AppColors.primaryBlue,
+    IconData icon = Icons.layers_rounded,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: isMediumScreen ? 36 : 32,
+          height: isMediumScreen ? 36 : 32,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            size: isMediumScreen ? 18 : 16,
+            color: accent,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: isLargeScreen
+                ? 18
+                : isMediumScreen
+                ? 16
+                : 14,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primaryDarkBlue,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildInformationTab(
     dynamic record,
     bool isLargeScreen,
@@ -620,10 +748,32 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         ? 900
         : double.infinity;
     final double infoGridAspectRatio = isLargeScreen
-        ? 2.2
+        ? 2.05
         : isMediumScreen
-        ? 1.4
-        : 1.1;
+        ? 2.15
+        : 3.0;
+    final double vehicleInfoGridAspectRatio = isLargeScreen
+        ? 1.55
+        : isMediumScreen
+        ? 1.5
+        : 1.8;
+    final double compactGridAspectRatio = isLargeScreen
+        ? 2.45
+        : isMediumScreen
+        ? 2.2
+        : 3.0;
+    final double statGridAspectRatio = isLargeScreen
+        ? 3.3
+        : isMediumScreen
+        ? 2.3
+        : 2.85;
+    final double sectionSpacing = isLargeScreen
+        ? 28
+        : isMediumScreen
+        ? 24
+        : 20;
+    final double gridCrossSpacing = isLargeScreen ? 18 : 12;
+    final double gridMainSpacing = isLargeScreen ? 14 : 12;
 
     Widget wrapSectionCard(Widget child) {
       return Align(
@@ -651,39 +801,21 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
             // =========================
             // 🚗 Vehicle Information
             // =========================
-            Center(
-              child: Text(
-                'معلومات المركبة',
-                style: TextStyle(
-                  fontSize: isLargeScreen
-                      ? 24
-                      : isMediumScreen
-                      ? 20
-                      : 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            _buildInfoSectionTitle(
+              title: 'معلومات المركبة',
+              subtitle: 'البيانات الأساسية للمركبة واللوحة ونوع الوقود.',
+              icon: Icons.directions_car_filled_rounded,
+              accent: AppColors.infoBlue,
+              isLargeScreen: isLargeScreen,
+              isMediumScreen: isMediumScreen,
             ),
-            const SizedBox(height: 16),
 
             wrapSectionCard(
-              Card(
-                elevation: 5,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(
-                    isLargeScreen
-                        ? 50
-                        : isMediumScreen
-                        ? 20
-                        : 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GridView.builder(
+              _buildInfoSectionShell(
+                isLargeScreen: isLargeScreen,
+                isMediumScreen: isMediumScreen,
+                accent: AppColors.infoBlue,
+                child: GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -692,8 +824,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                               : isMediumScreen
                               ? 2
                               : 1,
-                          crossAxisSpacing: 30,
-                          mainAxisSpacing: 10,
+                          childAspectRatio: vehicleInfoGridAspectRatio,
+                          crossAxisSpacing: gridCrossSpacing,
+                          mainAxisSpacing: gridMainSpacing,
                         ),
                         itemCount: 5,
                         itemBuilder: (context, index) {
@@ -740,55 +873,34 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                           );
                         },
                       ),
-                    ],
-                  ),
-                ),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: sectionSpacing),
 
             // =========================
             // 👤 Driver Information
             // =========================
-            Center(
-              child: Text(
-                'معلومات السائق',
-                style: TextStyle(
-                  fontSize: isLargeScreen
-                      ? 24
-                      : isMediumScreen
-                      ? 20
-                      : 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            _buildInfoSectionTitle(
+              title: 'معلومات السائق',
+              subtitle: 'بيانات السائق الأساسية والهوية والرخصة.',
+              icon: Icons.person_pin_circle_rounded,
+              accent: AppColors.successGreen,
+              isLargeScreen: isLargeScreen,
+              isMediumScreen: isMediumScreen,
             ),
-            const SizedBox(height: 16),
 
             wrapSectionCard(
-              Card(
-                elevation: 5,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(
-                    isLargeScreen
-                        ? 24
-                        : isMediumScreen
-                        ? 20
-                        : 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GridView.count(
+              _buildInfoSectionShell(
+                isLargeScreen: isLargeScreen,
+                isMediumScreen: isMediumScreen,
+                accent: AppColors.successGreen,
+                child: GridView.count(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: isLargeScreen ? 5 : 1,
+                        crossAxisCount: isLargeScreen ? 4 : 1,
                         childAspectRatio: infoGridAspectRatio,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 12,
+                        crossAxisSpacing: gridCrossSpacing,
+                        mainAxisSpacing: gridMainSpacing,
                         children: [
                           _buildInfoCard(
                             'رقم الهوية',
@@ -820,549 +932,458 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: sectionSpacing),
 
             // =========================
             // 📝 License Information
             // =========================
-            Center(
-              child: Text(
-                'معلومات الرخصة',
-                style: TextStyle(
-                  fontSize: isLargeScreen
-                      ? 24
-                      : isMediumScreen
-                      ? 20
-                      : 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            _buildInfoSectionTitle(
+              title: 'معلومات الرخصة',
+              subtitle: 'بيانات رخصة المركبة وسريانها الحالي.',
+              icon: Icons.assignment_rounded,
+              accent: AppColors.warningOrange,
+              isLargeScreen: isLargeScreen,
+              isMediumScreen: isMediumScreen,
             ),
-            const SizedBox(height: 16),
-
             wrapSectionCard(
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(
-                    isLargeScreen
-                        ? 24
-                        : isMediumScreen
-                        ? 20
-                        : 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: isLargeScreen ? 5 : 1,
-                        childAspectRatio: infoGridAspectRatio,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 12,
-                        children: [
-                          _buildInfoCard(
-                            'رقم رخصة المركبة',
-                            record['vehicleLicenseNumber'] ?? '-',
-                            Icons.directions_car_filled,
-                            Colors.blue,
-                          ),
-                          _buildInfoCard(
-                            'انتهاء رخصة المركبة',
-                            vehicleLicenseExpiry != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(vehicleLicenseExpiry)
-                                : '-',
-                            Icons.event_busy,
-                            Colors.red,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+              _buildInfoSectionShell(
+                isLargeScreen: isLargeScreen,
+                isMediumScreen: isMediumScreen,
+                accent: AppColors.warningOrange,
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: isLargeScreen || isMediumScreen ? 2 : 1,
+                  childAspectRatio: compactGridAspectRatio,
+                  crossAxisSpacing: gridCrossSpacing,
+                  mainAxisSpacing: gridMainSpacing,
+                  children: [
+                    _buildInfoCard(
+                      'رقم رخصة المركبة',
+                      record['vehicleLicenseNumber'] ?? '-',
+                      Icons.directions_car_filled,
+                      Colors.blue,
+                    ),
+                    _buildInfoCard(
+                      'انتهاء رخصة المركبة',
+                      vehicleLicenseExpiry != null
+                          ? DateFormat('yyyy-MM-dd').format(vehicleLicenseExpiry)
+                          : '-',
+                      Icons.event_busy,
+                      Colors.red,
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: sectionSpacing),
 
-            // =========================
             // =========================
             // Operating Cards
             // =========================
-            Center(
-              child: Text(
-                'بطاقات التشغيل',
-                style: TextStyle(
-                  fontSize: isLargeScreen
-                      ? 24
-                      : isMediumScreen
-                      ? 20
-                      : 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            _buildInfoSectionTitle(
+              title: 'بطاقات التشغيل',
+              subtitle: 'تفاصيل بطاقات تشغيل المركبة والسائق وتواريخ الصلاحية.',
+              icon: Icons.badge_rounded,
+              accent: AppColors.primaryBlue,
+              isLargeScreen: isLargeScreen,
+              isMediumScreen: isMediumScreen,
             ),
-            const SizedBox(height: 16),
             wrapSectionCard(
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(
-                    isLargeScreen
-                        ? 24
-                        : isMediumScreen
-                        ? 20
-                        : 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'بطاقة تشغيل السيارة',
-                        style: TextStyle(
-                          fontSize: isLargeScreen
-                              ? 18
-                              : isMediumScreen
-                              ? 16
-                              : 14,
-                          fontWeight: FontWeight.w600,
+              _buildInfoSectionShell(
+                isLargeScreen: isLargeScreen,
+                isMediumScreen: isMediumScreen,
+                accent: AppColors.primaryBlue,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInfoSubsectionTitle(
+                      'بطاقة تشغيل المركبة',
+                      isLargeScreen,
+                      isMediumScreen,
+                      accent: AppColors.infoBlue,
+                      icon: Icons.local_shipping_rounded,
+                    ),
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: isLargeScreen
+                          ? 3
+                          : isMediumScreen
+                          ? 2
+                          : 1,
+                      childAspectRatio: compactGridAspectRatio,
+                      crossAxisSpacing: gridCrossSpacing,
+                      mainAxisSpacing: gridMainSpacing,
+                      children: [
+                        _buildInfoCard(
+                          'رقم البطاقة',
+                          record['vehicleOperatingCardNumber'] ?? '-',
+                          Icons.confirmation_number,
+                          Colors.teal,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: isLargeScreen ? 3 : 1,
-                        childAspectRatio: infoGridAspectRatio,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 12,
-                        children: [
-                          _buildInfoCard(
-                            'رقم البطاقة',
-                            record['vehicleOperatingCardNumber'] ?? '-',
-                            Icons.confirmation_number,
-                            Colors.teal,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الإصدار',
-                            vehicleOperatingCardIssueDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(vehicleOperatingCardIssueDate)
-                                : '-',
-                            Icons.event_available,
-                            Colors.green,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الانتهاء',
-                            vehicleOperatingCardExpiryDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(vehicleOperatingCardExpiryDate)
-                                : '-',
-                            Icons.event_busy,
-                            Colors.red,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'بطاقة تشغيل السائق',
-                        style: TextStyle(
-                          fontSize: isLargeScreen
-                              ? 18
-                              : isMediumScreen
-                              ? 16
-                              : 14,
-                          fontWeight: FontWeight.w600,
+                        _buildInfoCard(
+                          'تاريخ الإصدار',
+                          vehicleOperatingCardIssueDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  vehicleOperatingCardIssueDate,
+                                )
+                              : '-',
+                          Icons.event_available,
+                          Colors.green,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: isLargeScreen ? 4 : 1,
-                        childAspectRatio: infoGridAspectRatio,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 12,
-                        children: [
-                          _buildInfoCard(
-                            'اسم السائق',
-                            record['driverOperatingCardName'] ?? '-',
-                            Icons.person,
-                            Colors.blue,
-                          ),
-                          _buildInfoCard(
-                            'رقم البطاقة',
-                            record['driverOperatingCardNumber'] ?? '-',
-                            Icons.credit_card,
-                            Colors.orange,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الإصدار',
-                            driverOperatingCardIssueDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(driverOperatingCardIssueDate)
-                                : '-',
-                            Icons.event_available,
-                            Colors.green,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الانتهاء',
-                            driverOperatingCardExpiryDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(driverOperatingCardExpiryDate)
-                                : '-',
-                            Icons.event_busy,
-                            Colors.red,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        _buildInfoCard(
+                          'تاريخ الانتهاء',
+                          vehicleOperatingCardExpiryDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  vehicleOperatingCardExpiryDate,
+                                )
+                              : '-',
+                          Icons.event_busy,
+                          Colors.red,
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: sectionSpacing * 0.7),
+                    _buildInfoSubsectionTitle(
+                      'بطاقة تشغيل السائق',
+                      isLargeScreen,
+                      isMediumScreen,
+                      accent: AppColors.successGreen,
+                      icon: Icons.person_pin_circle_rounded,
+                    ),
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: isLargeScreen
+                          ? 4
+                          : isMediumScreen
+                          ? 2
+                          : 1,
+                      childAspectRatio: compactGridAspectRatio,
+                      crossAxisSpacing: gridCrossSpacing,
+                      mainAxisSpacing: gridMainSpacing,
+                      children: [
+                        _buildInfoCard(
+                          'اسم السائق',
+                          record['driverOperatingCardName'] ?? '-',
+                          Icons.person,
+                          Colors.blue,
+                        ),
+                        _buildInfoCard(
+                          'رقم البطاقة',
+                          record['driverOperatingCardNumber'] ?? '-',
+                          Icons.credit_card,
+                          Colors.orange,
+                        ),
+                        _buildInfoCard(
+                          'تاريخ الإصدار',
+                          driverOperatingCardIssueDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  driverOperatingCardIssueDate,
+                                )
+                              : '-',
+                          Icons.event_available,
+                          Colors.green,
+                        ),
+                        _buildInfoCard(
+                          'تاريخ الانتهاء',
+                          driverOperatingCardExpiryDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  driverOperatingCardExpiryDate,
+                                )
+                              : '-',
+                          Icons.event_busy,
+                          Colors.red,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: sectionSpacing),
             // =========================
             // Vehicle Registration
             // =========================
-            Center(
-              child: Text(
-                'استمارة السيارة',
-                style: TextStyle(
-                  fontSize: isLargeScreen
-                      ? 24
-                      : isMediumScreen
-                      ? 20
-                      : 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            _buildInfoSectionTitle(
+              title: 'استمارة المركبة',
+              subtitle: 'الرقم التسلسلي ورقم المركبة وتفاصيل سريان الاستمارة.',
+              icon: Icons.description_rounded,
+              accent: Colors.indigo,
+              isLargeScreen: isLargeScreen,
+              isMediumScreen: isMediumScreen,
             ),
-            const SizedBox(height: 16),
             wrapSectionCard(
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(
-                    isLargeScreen
-                        ? 24
-                        : isMediumScreen
-                        ? 20
-                        : 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: isLargeScreen ? 3 : 1,
-                        childAspectRatio: infoGridAspectRatio,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 12,
-                        children: [
-                          _buildInfoCard(
-                            'الرقم التسلسلي',
-                            record['vehicleRegistrationSerialNumber'] ?? '-',
-                            Icons.tag,
-                            Colors.green,
-                          ),
-                          _buildInfoCard(
-                            'رقم السيارة',
-                            record['vehicleRegistrationNumber'] ?? '-',
-                            Icons.directions_car,
-                            Colors.blue,
-                          ),
-                          _buildInfoCard(
-                            'رقم اللوحة',
-                            record['plateNumber'] ?? '-',
-                            Icons.confirmation_number,
-                            Colors.orange,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الإصدار',
-                            vehicleRegistrationIssueDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(vehicleRegistrationIssueDate)
-                                : '-',
-                            Icons.event_available,
-                            Colors.green,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الانتهاء',
-                            vehicleRegistrationExpiryDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(vehicleRegistrationExpiryDate)
-                                : '-',
-                            Icons.event_busy,
-                            Colors.red,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSaudiVehicleLicenseCard(
-                        record: record,
-                        issueDate: vehicleRegistrationIssueDate,
-                        expiryDate: vehicleRegistrationExpiryDate,
-                        isLargeScreen: isLargeScreen,
-                        isMediumScreen: isMediumScreen,
-                      ),
-                    ],
-                  ),
+              _buildInfoSectionShell(
+                isLargeScreen: isLargeScreen,
+                isMediumScreen: isMediumScreen,
+                accent: Colors.indigo,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: isLargeScreen
+                          ? 3
+                          : isMediumScreen
+                          ? 2
+                          : 1,
+                      childAspectRatio: compactGridAspectRatio,
+                      crossAxisSpacing: gridCrossSpacing,
+                      mainAxisSpacing: gridMainSpacing,
+                      children: [
+                        _buildInfoCard(
+                          'الرقم التسلسلي',
+                          record['vehicleRegistrationSerialNumber'] ?? '-',
+                          Icons.tag,
+                          Colors.green,
+                        ),
+                        _buildInfoCard(
+                          'رقم السيارة',
+                          record['vehicleRegistrationNumber'] ?? '-',
+                          Icons.directions_car,
+                          Colors.blue,
+                        ),
+                        _buildInfoCard(
+                          'رقم اللوحة',
+                          record['plateNumber'] ?? '-',
+                          Icons.confirmation_number,
+                          Colors.orange,
+                        ),
+                        _buildInfoCard(
+                          'تاريخ الإصدار',
+                          vehicleRegistrationIssueDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  vehicleRegistrationIssueDate,
+                                )
+                              : '-',
+                          Icons.event_available,
+                          Colors.green,
+                        ),
+                        _buildInfoCard(
+                          'تاريخ الانتهاء',
+                          vehicleRegistrationExpiryDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  vehicleRegistrationExpiryDate,
+                                )
+                              : '-',
+                          Icons.event_busy,
+                          Colors.red,
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: sectionSpacing * 0.65),
+                    _buildInfoSubsectionTitle(
+                      'نسخة الرخصة السعودية',
+                      isLargeScreen,
+                      isMediumScreen,
+                      accent: const Color(0xFF0E8B3A),
+                      icon: Icons.verified_rounded,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildSaudiVehicleLicenseCard(
+                      record: record,
+                      issueDate: vehicleRegistrationIssueDate,
+                      expiryDate: vehicleRegistrationExpiryDate,
+                      isLargeScreen: isLargeScreen,
+                      isMediumScreen: isMediumScreen,
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: sectionSpacing),
             // =========================
             // Periodic Vehicle Inspection (Vehicle Safety Center)
             // =========================
-            Center(
-              child: Text(
-                'الفحص الدوري (مركز سلامة المركبات)',
-                style: TextStyle(
-                  fontSize: isLargeScreen
-                      ? 24
-                      : isMediumScreen
-                      ? 20
-                      : 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            _buildInfoSectionTitle(
+              title: 'الفحص الدوري',
+              subtitle: 'تواريخ فحص سلامة المركبة وسريان الاعتماد الحالي.',
+              icon: Icons.fact_check_rounded,
+              accent: AppColors.warningOrange,
+              isLargeScreen: isLargeScreen,
+              isMediumScreen: isMediumScreen,
             ),
-            const SizedBox(height: 16),
             wrapSectionCard(
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(
-                    isLargeScreen
-                        ? 24
-                        : isMediumScreen
-                        ? 20
-                        : 16,
-                  ),
-                  child: GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: isLargeScreen ? 2 : 1,
-                    childAspectRatio: infoGridAspectRatio,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 12,
-                    children: [
-                      _buildInfoCard(
-                        'تاريخ الإصدار',
-                        vehiclePeriodicInspectionIssueDate != null
-                            ? DateFormat('yyyy-MM-dd')
-                                .format(vehiclePeriodicInspectionIssueDate)
-                            : '-',
-                        Icons.event_available,
-                        Colors.green,
-                      ),
-                      _buildInfoCard(
-                        'تاريخ الانتهاء',
-                        vehiclePeriodicInspectionExpiryDate != null
-                            ? DateFormat('yyyy-MM-dd')
-                                .format(vehiclePeriodicInspectionExpiryDate)
-                            : '-',
-                        Icons.event_busy,
-                        Colors.red,
-                      ),
-                    ],
-                  ),
+              _buildInfoSectionShell(
+                isLargeScreen: isLargeScreen,
+                isMediumScreen: isMediumScreen,
+                accent: AppColors.warningOrange,
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: isLargeScreen || isMediumScreen ? 2 : 1,
+                  childAspectRatio: compactGridAspectRatio,
+                  crossAxisSpacing: gridCrossSpacing,
+                  mainAxisSpacing: gridMainSpacing,
+                  children: [
+                    _buildInfoCard(
+                      'تاريخ الإصدار',
+                      vehiclePeriodicInspectionIssueDate != null
+                          ? DateFormat('yyyy-MM-dd').format(
+                              vehiclePeriodicInspectionIssueDate,
+                            )
+                          : '-',
+                      Icons.event_available,
+                      Colors.green,
+                    ),
+                    _buildInfoCard(
+                      'تاريخ الانتهاء',
+                      vehiclePeriodicInspectionExpiryDate != null
+                          ? DateFormat('yyyy-MM-dd').format(
+                              vehiclePeriodicInspectionExpiryDate,
+                            )
+                          : '-',
+                      Icons.event_busy,
+                      Colors.red,
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: sectionSpacing),
             // =========================
             // Insurance
             // =========================
-            Center(
-              child: Text(
-                'التأمين',
-                style: TextStyle(
-                  fontSize: isLargeScreen
-                      ? 24
-                      : isMediumScreen
-                      ? 20
-                      : 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            _buildInfoSectionTitle(
+              title: 'التأمين',
+              subtitle: 'وثائق تأمين السائق والمركبة وتواريخ الإصدار والانتهاء.',
+              icon: Icons.verified_user_rounded,
+              accent: AppColors.successGreen,
+              isLargeScreen: isLargeScreen,
+              isMediumScreen: isMediumScreen,
             ),
-            const SizedBox(height: 16),
             wrapSectionCard(
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(
-                    isLargeScreen
-                        ? 24
-                        : isMediumScreen
-                        ? 20
-                        : 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'تأمين السائق',
-                        style: TextStyle(
-                          fontSize: isLargeScreen
-                              ? 18
-                              : isMediumScreen
-                              ? 16
-                              : 14,
-                          fontWeight: FontWeight.w600,
+              _buildInfoSectionShell(
+                isLargeScreen: isLargeScreen,
+                isMediumScreen: isMediumScreen,
+                accent: AppColors.successGreen,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInfoSubsectionTitle(
+                      'تأمين السائق',
+                      isLargeScreen,
+                      isMediumScreen,
+                      accent: AppColors.successGreen,
+                      icon: Icons.person_off_rounded,
+                    ),
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: isLargeScreen
+                          ? 3
+                          : isMediumScreen
+                          ? 2
+                          : 1,
+                      childAspectRatio: compactGridAspectRatio,
+                      crossAxisSpacing: gridCrossSpacing,
+                      mainAxisSpacing: gridMainSpacing,
+                      children: [
+                        _buildInfoCard(
+                          'رقم البوليصة',
+                          record['driverInsurancePolicyNumber'] ?? '-',
+                          Icons.numbers,
+                          Colors.indigo,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: isLargeScreen ? 3 : 1,
-                        childAspectRatio: infoGridAspectRatio,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 12,
-                        children: [
-                          _buildInfoCard(
-                            'رقم البوليصة',
-                            record['driverInsurancePolicyNumber'] ?? '-',
-                            Icons.numbers,
-                            Colors.indigo,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الإصدار',
-                            driverInsuranceIssueDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(driverInsuranceIssueDate)
-                                : '-',
-                            Icons.event_available,
-                            Colors.green,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الانتهاء',
-                            driverInsuranceExpiryDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(driverInsuranceExpiryDate)
-                                : '-',
-                            Icons.event_busy,
-                            Colors.red,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'تأمين السيارة',
-                        style: TextStyle(
-                          fontSize: isLargeScreen
-                              ? 18
-                              : isMediumScreen
-                              ? 16
-                              : 14,
-                          fontWeight: FontWeight.w600,
+                        _buildInfoCard(
+                          'تاريخ الإصدار',
+                          driverInsuranceIssueDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  driverInsuranceIssueDate,
+                                )
+                              : '-',
+                          Icons.event_available,
+                          Colors.green,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: isLargeScreen ? 3 : 1,
-                        childAspectRatio: infoGridAspectRatio,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 12,
-                        children: [
-                          _buildInfoCard(
-                            'رقم البوليصة',
-                            record['vehicleInsurancePolicyNumber'] ?? '-',
-                            Icons.numbers,
-                            Colors.indigo,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الإصدار',
-                            vehicleInsuranceIssueDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(vehicleInsuranceIssueDate)
-                                : '-',
-                            Icons.event_available,
-                            Colors.green,
-                          ),
-                          _buildInfoCard(
-                            'تاريخ الانتهاء',
-                            vehicleInsuranceExpiryDate != null
-                                ? DateFormat(
-                                    'yyyy-MM-dd',
-                                  ).format(vehicleInsuranceExpiryDate)
-                                : '-',
-                            Icons.event_busy,
-                            Colors.red,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        _buildInfoCard(
+                          'تاريخ الانتهاء',
+                          driverInsuranceExpiryDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  driverInsuranceExpiryDate,
+                                )
+                              : '-',
+                          Icons.event_busy,
+                          Colors.red,
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: sectionSpacing * 0.7),
+                    _buildInfoSubsectionTitle(
+                      'تأمين المركبة',
+                      isLargeScreen,
+                      isMediumScreen,
+                      accent: AppColors.infoBlue,
+                      icon: Icons.shield_rounded,
+                    ),
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: isLargeScreen
+                          ? 3
+                          : isMediumScreen
+                          ? 2
+                          : 1,
+                      childAspectRatio: compactGridAspectRatio,
+                      crossAxisSpacing: gridCrossSpacing,
+                      mainAxisSpacing: gridMainSpacing,
+                      children: [
+                        _buildInfoCard(
+                          'رقم البوليصة',
+                          record['vehicleInsurancePolicyNumber'] ?? '-',
+                          Icons.numbers,
+                          Colors.indigo,
+                        ),
+                        _buildInfoCard(
+                          'تاريخ الإصدار',
+                          vehicleInsuranceIssueDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  vehicleInsuranceIssueDate,
+                                )
+                              : '-',
+                          Icons.event_available,
+                          Colors.green,
+                        ),
+                        _buildInfoCard(
+                          'تاريخ الانتهاء',
+                          vehicleInsuranceExpiryDate != null
+                              ? DateFormat('yyyy-MM-dd').format(
+                                  vehicleInsuranceExpiryDate,
+                                )
+                              : '-',
+                          Icons.event_busy,
+                          Colors.red,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: sectionSpacing),
             // 📊 Monthly Summary
             // =========================
-            Text(
-              'ملخص الشهر',
-              style: TextStyle(
-                fontSize: isLargeScreen
-                    ? 24
-                    : isMediumScreen
-                    ? 20
-                    : 18,
-                fontWeight: FontWeight.bold,
-              ),
+            _buildInfoSectionTitle(
+              title: 'ملخص الشهر',
+              subtitle: 'صورة سريعة لحالة الإنجاز وإجمالي الأيام خلال الشهر.',
+              icon: Icons.analytics_rounded,
+              accent: AppColors.primaryBlue,
+              isLargeScreen: isLargeScreen,
+              isMediumScreen: isMediumScreen,
             ),
-            const SizedBox(height: 16),
-
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(
-                  isLargeScreen
-                      ? 24
-                      : isMediumScreen
-                      ? 20
-                      : 16,
-                ),
+            wrapSectionCard(
+              _buildInfoSectionShell(
+                isLargeScreen: isLargeScreen,
+                isMediumScreen: isMediumScreen,
+                accent: AppColors.primaryBlue,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1374,9 +1395,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                           : isMediumScreen
                           ? 2
                           : 1,
-                      childAspectRatio: isLargeScreen ? 3 : 1.5,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
+                      childAspectRatio: statGridAspectRatio,
+                      crossAxisSpacing: gridCrossSpacing,
+                      mainAxisSpacing: gridMainSpacing,
                       children: [
                         _buildStatCard(
                           'الأيام المكتملة',
@@ -1404,42 +1425,67 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
-
+                    SizedBox(height: sectionSpacing * 0.6),
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMediumScreen ? 18 : 14,
+                        vertical: isMediumScreen ? 16 : 14,
+                      ),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(
-                          record['monthlyStatus'],
-                        ).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        gradient: LinearGradient(
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                          colors: [
+                            _getStatusColor(
+                              record['monthlyStatus'],
+                            ).withValues(alpha: 0.10),
+                            _getStatusColor(
+                              record['monthlyStatus'],
+                            ).withValues(alpha: 0.04),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: _getStatusColor(
                             record['monthlyStatus'],
-                          ).withOpacity(0.3),
+                          ).withValues(alpha: 0.18),
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 10,
+                        spacing: 12,
                         children: [
                           Text(
-                            'الحالة النهائية:',
+                            'الحالة النهائية',
                             style: TextStyle(
-                              fontSize: isLargeScreen ? 18 : 16,
-                              fontWeight: FontWeight.bold,
+                              fontSize: isLargeScreen
+                                  ? 18
+                                  : isMediumScreen
+                                  ? 16
+                                  : 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primaryDarkBlue,
                             ),
                           ),
                           Chip(
+                            side: BorderSide(
+                              color: _getStatusColor(
+                                record['monthlyStatus'],
+                              ).withValues(alpha: 0.20),
+                            ),
                             label: Text(
                               record['monthlyStatus'] ?? 'غير محدد',
                               style: TextStyle(
                                 color: _getStatusColor(record['monthlyStatus']),
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                             backgroundColor: _getStatusColor(
                               record['monthlyStatus'],
-                            ).withOpacity(0.2),
+                            ).withValues(alpha: 0.12),
                           ),
                         ],
                       ),
@@ -1449,7 +1495,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
               ),
             ),
 
-            const SizedBox(height: 32),
+            SizedBox(height: sectionSpacing + 4),
           ],
         ),
       ),
@@ -2014,48 +2060,94 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bool isCompactHeight = constraints.maxHeight <= 90;
-        final double titleSize = isCompactHeight ? 12 : 14;
-        final double valueSize = isCompactHeight ? 13 : 16;
-        final double spacing = isCompactHeight ? 4 : 8;
+        final bool isCompactCard =
+            constraints.maxHeight <= 120 || constraints.maxWidth <= 220;
+        final double iconBoxSize = isCompactCard ? 34 : 38;
+        final double titleSize = isCompactCard ? 11.5 : 13;
+        final double valueSize = isCompactCard ? 13.5 : 16;
+        final double spacing = isCompactCard ? 8 : 10;
 
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withOpacity(0.1)),
-          ),
+        return AppSurfaceCard(
+          padding: EdgeInsets.all(isCompactCard ? 12 : 14),
+          color: Colors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withValues(alpha: 0.14)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.06),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, size: 20, color: color),
-                  const SizedBox(width: 8),
+                  Container(
+                    width: iconBoxSize,
+                    height: iconBoxSize,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: isCompactCard ? 17 : 19,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       title,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: titleSize,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                        color: AppColors.mediumGray,
                       ),
                     ),
                   ),
                 ],
               ),
               SizedBox(height: spacing),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: valueSize,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
+              Expanded(
+                child: Align(
+                  alignment: Alignment.bottomRight,
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isCompactCard ? 10 : 12,
+                      vertical: isCompactCard ? 10 : 12,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
+                        colors: [
+                          color.withValues(alpha: 0.12),
+                          color.withValues(alpha: 0.04),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: valueSize,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryDarkBlue,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -2071,30 +2163,57 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     IconData icon,
     Color color,
   ) {
-    return Container(
+    return AppSurfaceCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      color: Colors.white.withValues(alpha: 0.96),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withValues(alpha: 0.16)),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: 0.05),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ],
+      child: Row(
         children: [
-          Icon(icon, size: 32, color: color),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-            textAlign: TextAlign.center,
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, size: 24, color: color),
           ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.mediumGray,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -2126,27 +2245,40 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         : 12.0;
 
     Widget buildField(String label, String value) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: labelSize,
-              color: Colors.grey.shade700,
-              fontWeight: FontWeight.w600,
-            ),
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: isMediumScreen ? 14 : 12,
+          vertical: isMediumScreen ? 12 : 10,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0E8B3A).withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFF0E8B3A).withValues(alpha: 0.10),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value.isNotEmpty ? value : '-',
-            style: TextStyle(
-              fontSize: valueSize,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: labelSize,
+                color: AppColors.mediumGray,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              value.isNotEmpty ? value : '-',
+              style: TextStyle(
+                fontSize: valueSize,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primaryDarkBlue,
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -2162,7 +2294,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         ? DateFormat('yyyy/MM/dd').format(expiryDate)
         : '-';
 
-    return Container(
+    return AppSurfaceCard(
       padding: EdgeInsets.all(
         isLargeScreen
             ? 20
@@ -2170,18 +2302,19 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
             ? 16
             : 12,
       ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF0E8B3A), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-        ],
+      color: const Color(0xFFFAFFFB),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(
+        color: const Color(0xFF0E8B3A).withValues(alpha: 0.18),
+        width: 1.4,
       ),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF0E8B3A).withValues(alpha: 0.06),
+          blurRadius: 18,
+          offset: const Offset(0, 10),
+        ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2200,23 +2333,45 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                   : 10,
             ),
             decoration: BoxDecoration(
-              color: const Color(0xFF0E8B3A),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              'رخصة سير مركبة',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: titleSize,
-                fontWeight: FontWeight.bold,
+              gradient: const LinearGradient(
+                begin: Alignment.centerRight,
+                end: Alignment.centerLeft,
+                colors: [Color(0xFF0E8B3A), Color(0xFF19A24E)],
               ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: isMediumScreen ? 34 : 30,
+                  height: isMediumScreen ? 34 : 30,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.verified_rounded,
+                    size: isMediumScreen ? 18 : 16,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'رخصة سير مركبة',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
           SizedBox(height: isLargeScreen ? 16 : 12),
           Row(
             children: [
               Expanded(child: buildField('الرقم التسلسلي', serialNumber)),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(child: buildField('رقم السيارة', vehicleNumber)),
             ],
           ),
@@ -2224,7 +2379,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           Row(
             children: [
               Expanded(child: buildField('رقم اللوحة', plateNumber)),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(child: buildField('تاريخ الإصدار', issueText)),
             ],
           ),

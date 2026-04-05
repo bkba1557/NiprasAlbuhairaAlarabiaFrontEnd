@@ -26,6 +26,17 @@ class Order {
 
   /// ⭐ حالة الدمج (منفصل | في انتظار الدمج | مدمج | مكتمل)
   final String mergeStatus;
+  final String entryChannel;
+  final String? movementState;
+  final String? movementCustomerId;
+  final String? movementCustomerName;
+  final DateTime? movementCustomerRequestDate;
+  final DateTime? movementExpectedArrivalDate;
+  final String? movementCustomerOrderId;
+  final String? movementMergedOrderId;
+  final String? movementMergedOrderNumber;
+  final DateTime? movementDirectedAt;
+  final String? movementDirectedByName;
 
   final String supplierName;
 
@@ -125,6 +136,17 @@ class Order {
     required this.orderDate,
     required this.orderSource,
     required this.mergeStatus,
+    this.entryChannel = 'manual',
+    this.movementState,
+    this.movementCustomerId,
+    this.movementCustomerName,
+    this.movementCustomerRequestDate,
+    this.movementExpectedArrivalDate,
+    this.movementCustomerOrderId,
+    this.movementMergedOrderId,
+    this.movementMergedOrderNumber,
+    this.movementDirectedAt,
+    this.movementDirectedByName,
     required this.supplierName,
     this.requestType,
     required this.orderNumber,
@@ -219,6 +241,7 @@ class Order {
       orderDate: DateTime.now(),
       orderSource: 'مورد', // ⭐ قيمة افتراضية
       mergeStatus: 'منفصل',
+      entryChannel: 'manual',
       supplierName: '',
       orderNumber: '',
       loadingDate: DateTime.now(),
@@ -418,6 +441,37 @@ class Order {
       orderSource: json['orderSource']?.toString() ?? 'مورد',
       mergeStatus: json['mergeStatus']?.toString() ?? 'منفصل',
 
+      entryChannel: json['entryChannel']?.toString() ?? 'manual',
+      movementState: json['movementState']?.toString(),
+      movementCustomerId:
+          json['movementCustomerId']?.toString() ??
+          (json['movementCustomer'] is Map
+              ? json['movementCustomer']['_id']?.toString()
+              : json['movementCustomer']?.toString()),
+      movementCustomerName:
+          json['movementCustomerName']?.toString() ??
+          (json['movementCustomer'] is Map
+              ? json['movementCustomer']['name']?.toString()
+              : null),
+      movementCustomerRequestDate: DateTime.tryParse(
+        json['movementCustomerRequestDate']?.toString() ?? '',
+      ),
+      movementExpectedArrivalDate: DateTime.tryParse(
+        json['movementExpectedArrivalDate']?.toString() ?? '',
+      ),
+      movementCustomerOrderId:
+          json['movementCustomerOrderId'] is Map
+          ? json['movementCustomerOrderId']['_id']?.toString()
+          : json['movementCustomerOrderId']?.toString(),
+      movementMergedOrderId:
+          json['movementMergedOrderId'] is Map
+          ? json['movementMergedOrderId']['_id']?.toString()
+          : json['movementMergedOrderId']?.toString(),
+      movementMergedOrderNumber: json['movementMergedOrderNumber']?.toString(),
+      movementDirectedAt: DateTime.tryParse(
+        json['movementDirectedAt']?.toString() ?? '',
+      ),
+      movementDirectedByName: json['movementDirectedByName']?.toString(),
       supplierName:
           json['supplierName']?.toString() ??
           (supplier != null ? supplier.name : ''),
@@ -566,6 +620,20 @@ class Order {
       'orderDate': orderDate.toIso8601String(),
       'orderSource': orderSource,
       'mergeStatus': mergeStatus,
+      'entryChannel': entryChannel,
+      'movementState': movementState,
+      'movementCustomer': movementCustomerId,
+      'movementCustomerId': movementCustomerId,
+      'movementCustomerName': movementCustomerName,
+      'movementCustomerRequestDate':
+          movementCustomerRequestDate?.toIso8601String(),
+      'movementExpectedArrivalDate':
+          movementExpectedArrivalDate?.toIso8601String(),
+      'movementCustomerOrderId': movementCustomerOrderId,
+      'movementMergedOrderId': movementMergedOrderId,
+      'movementMergedOrderNumber': movementMergedOrderNumber,
+      'movementDirectedAt': movementDirectedAt?.toIso8601String(),
+      'movementDirectedByName': movementDirectedByName,
       'supplierName': supplierName,
       'requestType': requestType,
       'orderNumber': orderNumber,
@@ -673,6 +741,14 @@ class Order {
 
   /// تحقق إذا كان الطلب مدمجاً
   bool get isMerged => mergeStatus == 'مدمج' || mergeStatus == 'مكتمل';
+
+  bool get isMovementOrder => entryChannel == 'movement';
+
+  bool get isMovementPendingDriver => movementState == 'pending_driver';
+
+  bool get isMovementPendingDispatch => movementState == 'pending_dispatch';
+
+  bool get isMovementDirected => movementState == 'directed';
 
   double? pricingNumber(String key) {
     final value = pricingSnapshot?[key];
@@ -1023,6 +1099,17 @@ class Order {
     DateTime? orderDate,
     String? orderSource,
     String? mergeStatus,
+    String? entryChannel,
+    String? movementState,
+    String? movementCustomerId,
+    String? movementCustomerName,
+    DateTime? movementCustomerRequestDate,
+    DateTime? movementExpectedArrivalDate,
+    String? movementCustomerOrderId,
+    String? movementMergedOrderId,
+    String? movementMergedOrderNumber,
+    DateTime? movementDirectedAt,
+    String? movementDirectedByName,
     String? supplierName,
     String? requestType,
     String? orderNumber,
@@ -1096,6 +1183,23 @@ class Order {
       orderDate: orderDate ?? this.orderDate,
       orderSource: orderSource ?? this.orderSource,
       mergeStatus: mergeStatus ?? this.mergeStatus,
+      entryChannel: entryChannel ?? this.entryChannel,
+      movementState: movementState ?? this.movementState,
+      movementCustomerId: movementCustomerId ?? this.movementCustomerId,
+      movementCustomerName: movementCustomerName ?? this.movementCustomerName,
+      movementCustomerRequestDate:
+          movementCustomerRequestDate ?? this.movementCustomerRequestDate,
+      movementExpectedArrivalDate:
+          movementExpectedArrivalDate ?? this.movementExpectedArrivalDate,
+      movementCustomerOrderId:
+          movementCustomerOrderId ?? this.movementCustomerOrderId,
+      movementMergedOrderId:
+          movementMergedOrderId ?? this.movementMergedOrderId,
+      movementMergedOrderNumber:
+          movementMergedOrderNumber ?? this.movementMergedOrderNumber,
+      movementDirectedAt: movementDirectedAt ?? this.movementDirectedAt,
+      movementDirectedByName:
+          movementDirectedByName ?? this.movementDirectedByName,
       supplierName: supplierName ?? this.supplierName,
       requestType: requestType ?? this.requestType,
       orderNumber: orderNumber ?? this.orderNumber,

@@ -8,6 +8,7 @@ import 'package:order_tracker/services/whatsapp_service.dart';
 import 'package:order_tracker/utils/app_navigation.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:order_tracker/utils/role_route_policy.dart';
 import 'package:order_tracker/widgets/chat_floating_button.dart';
 import 'package:order_tracker/widgets/whatsapp_floating_button.dart';
 import 'package:provider/provider.dart';
@@ -233,9 +234,13 @@ class _AppShellState extends State<AppShell>
             final normalizedRoute = currentRouteName == null
                 ? null
                 : (Uri.tryParse(currentRouteName)?.path ?? currentRouteName);
-            final showGlobalChatFab = canShowChat;
+            final restrictToSingleRoute = isRestrictedSingleRouteRole(
+              auth.user?.role,
+            );
+            final showGlobalChatFab = canShowChat && !restrictToSingleRoute;
             final showGlobalWhatsAppFab =
                 auth.isAuthenticated &&
+                !restrictToSingleRoute &&
                 WhatsAppService.canAccessForRole(auth.user?.role);
             if (!showGlobalChatFab && !showGlobalWhatsAppFab) {
               return const SizedBox.shrink();

@@ -1,6 +1,7 @@
 import 'package:order_tracker/utils/app_routes.dart';
 
 const String employeeRoleKey = 'employee';
+const String movementRoleKey = 'movement';
 
 const Set<String> employeeAllowedRoutePaths = <String>{
   AppRoutes.marketingStations,
@@ -17,19 +18,52 @@ const Set<String> employeeAllowedRoutePaths = <String>{
   AppRoutes.support,
 };
 
+const Set<String> movementAllowedRoutePaths = <String>{
+  AppRoutes.movement,
+};
+
 String normalizeRoutePath(String routeName) {
   final uri = Uri.tryParse(routeName);
   return uri?.path ?? routeName;
 }
 
-bool isEmployeeRole(String? role) {
-  return role?.trim().toLowerCase() == employeeRoleKey;
+String normalizeRoleKey(String? role) => role?.trim().toLowerCase() ?? '';
+
+bool isEmployeeRole(String? role) => normalizeRoleKey(role) == employeeRoleKey;
+
+bool isMovementRole(String? role) => normalizeRoleKey(role) == movementRoleKey;
+
+Set<String>? _allowedRoutesForRole(String? role) {
+  switch (normalizeRoleKey(role)) {
+    case employeeRoleKey:
+      return employeeAllowedRoutePaths;
+    case movementRoleKey:
+      return movementAllowedRoutePaths;
+    default:
+      return null;
+  }
 }
 
-bool isRouteAllowedForRole({required String? role, required String routeName}) {
-  final path = normalizeRoutePath(routeName);
-  if (isEmployeeRole(role)) {
-    return employeeAllowedRoutePaths.contains(path);
+String? restrictedRoleHomeRoute(String? role) {
+  switch (normalizeRoleKey(role)) {
+    case employeeRoleKey:
+      return AppRoutes.marketingStations;
+    case movementRoleKey:
+      return AppRoutes.movement;
+    default:
+      return null;
   }
-  return true;
+}
+
+bool isRestrictedSingleRouteRole(String? role) =>
+    restrictedRoleHomeRoute(role) != null;
+
+bool isRouteAllowedForRole({required String? role, required String routeName}) {
+  final allowedRoutes = _allowedRoutesForRole(role);
+  if (allowedRoutes == null) {
+    return true;
+  }
+
+  final path = normalizeRoutePath(routeName);
+  return allowedRoutes.contains(path);
 }

@@ -27,6 +27,7 @@ const List<String> _roleOptions = [
   'maintenance_car_management',
   'finance_manager',
   'driver',
+  'movement',
 ];
 
 const Map<String, String> _roleLabels = {
@@ -45,6 +46,7 @@ const Map<String, String> _roleLabels = {
   'maintenance_car_management': 'مدير صيانة المركبات',
   'finance_manager': 'المدير المالي',
   'driver': 'السائق',
+  'movement': 'الحركة',
 };
 
 String _roleDisplay(String role) => _roleLabels[role] ?? role;
@@ -77,6 +79,8 @@ Color _roleColor(String role) {
       return const Color(0xFF2E7D32);
     case 'driver':
       return AppColors.statusGold;
+    case 'movement':
+      return AppColors.appBarBlue;
     default:
       return AppColors.mediumGray;
   }

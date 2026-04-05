@@ -218,6 +218,8 @@ String _roleHomeRoute(String? role) {
       return AppRoutes.stationMaintenanceTechnician;
     case 'employee':
       return AppRoutes.marketingStations;
+    case 'movement':
+      return AppRoutes.movement;
     case 'finance_manager':
       return AppRoutes.custodyDashboard;
     case 'sales_manager_statiun':

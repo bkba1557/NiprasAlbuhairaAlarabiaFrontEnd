@@ -9,7 +9,7 @@ class ApiConfig {
       'https://system-albuhairaalarabia.cloud/api';
 
   // Local/LAN API URL used in development (so mobile devices can reach it too).
-  static const String devLanBaseUrl = 'http://192.168.8.212:6030/api';
+  static const String devLanBaseUrl = 'http://192.168.8.219:6030/api';
 
   static const String _envKey = 'API_BASE_URL';
 

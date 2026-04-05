@@ -1186,6 +1186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ].contains(user?.role);
 
     final canViewCirculars = user?.role == 'owner' || user?.role == 'manager';
+    final canViewMovementPage = user?.role == 'owner' || user?.role == 'admin';
     final canManageSystemPause = user?.role == 'owner';
     final canSendDailyReport = user != null;
 
@@ -1220,6 +1221,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: AppColors.secondaryTeal,
           onTap: () =>
               _navigateFromMobileDrawer(context, AppRoutes.mergeOrders),
+        ),
+      if (canViewMovementPage)
+        _DashboardDrawerItemData(
+          icon: Icons.alt_route_rounded,
+          title: 'الحركة',
+          color: AppColors.appBarBlue,
+          onTap: () =>
+              _navigateFromMobileDrawer(context, AppRoutes.movement),
         ),
     ];
 
@@ -5972,6 +5981,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final canViewCirculars =
         authProvider.user?.role == 'owner' || authProvider.user?.role == 'manager';
+    final canViewMovementPage =
+        authProvider.user?.role == 'owner' || authProvider.user?.role == 'admin';
     final canSendDailyReport = authProvider.user != null;
 
     final ordersChildren = <Widget>[
@@ -6000,6 +6011,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.add_circle_outline,
           title: 'دمج الطلبات',
           onTap: () => Navigator.pushNamed(context, AppRoutes.mergeOrders),
+        ),
+      if (canViewMovementPage)
+        _buildDesktopFolderItem(
+          icon: Icons.alt_route_outlined,
+          title: 'سير الحركة',
+          onTap: () => Navigator.pushNamed(context, AppRoutes.movement),
         ),
     ];
 
@@ -8590,6 +8607,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final canViewAuthDevices =
         user?.hasPermission('auth_devices_view') ?? false;
     final canViewReports = user?.hasPermission('reports_view') ?? false;
+    final canViewMovementPage = user?.role == 'owner' || user?.role == 'admin';
     final canAccessStationMaintenance = [
       'owner',
       'admin',
@@ -8658,6 +8676,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 color: AppColors.successGreen,
                 onTap: () =>
                     Navigator.pushNamed(context, AppRoutes.mergeOrders),
+              ),
+            if (canViewMovementPage)
+              _navItem(
+                icon: Icons.alt_route_outlined,
+                title: 'الحركة',
+                color: AppColors.appBarBlue,
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRoutes.movement),
               ),
             if (canViewCustomers)
               _navItem(

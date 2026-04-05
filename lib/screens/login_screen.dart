@@ -402,6 +402,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return AppRoutes.stationMaintenanceTechnician;
       case 'employee':
         return AppRoutes.marketingStations;
+      case 'movement':
+        return AppRoutes.movement;
       case 'finance_manager':
         return AppRoutes.custodyDocuments;
       case 'sales_manager_statiun':

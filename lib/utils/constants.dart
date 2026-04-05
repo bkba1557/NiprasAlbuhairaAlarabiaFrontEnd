@@ -683,6 +683,7 @@ class ApiEndpoints {
   static const String aiAssistantChat = '/ai-assistant/chat';
 
   static String orderById(String id) => '/orders/$id';
+  static String orderMovementDispatch(String id) => '/orders/$id/movement/dispatch';
   static String trackingDriverById(String id) => '/tracking/drivers/$id';
   static String driverLocationHistory(String id) =>
       '/driver-locations/$id/history';
