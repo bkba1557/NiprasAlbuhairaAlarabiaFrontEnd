@@ -48,6 +48,7 @@ class AuthProvider with ChangeNotifier {
   String? get stationId => _user?.stationId;
   List<String> get stationIds =>
       List.unmodifiable(_user?.stationIds ?? const <String>[]);
+  String? get supplierId => _user?.supplierId;
   String? get stationName => _user?.stationName;
 
   bool get isStationBoy => _user?.role == 'station_boy';

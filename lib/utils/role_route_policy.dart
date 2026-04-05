@@ -2,6 +2,7 @@ import 'package:order_tracker/utils/app_routes.dart';
 
 const String employeeRoleKey = 'employee';
 const String movementRoleKey = 'movement';
+const String supplierRoleKey = 'supplier';
 
 const Set<String> employeeAllowedRoutePaths = <String>{
   AppRoutes.marketingStations,
@@ -20,6 +21,11 @@ const Set<String> employeeAllowedRoutePaths = <String>{
 
 const Set<String> movementAllowedRoutePaths = <String>{
   AppRoutes.movement,
+  AppRoutes.supplierPortal,
+};
+
+const Set<String> supplierAllowedRoutePaths = <String>{
+  AppRoutes.supplierPortal,
 };
 
 String normalizeRoutePath(String routeName) {
@@ -33,12 +39,16 @@ bool isEmployeeRole(String? role) => normalizeRoleKey(role) == employeeRoleKey;
 
 bool isMovementRole(String? role) => normalizeRoleKey(role) == movementRoleKey;
 
+bool isSupplierRole(String? role) => normalizeRoleKey(role) == supplierRoleKey;
+
 Set<String>? _allowedRoutesForRole(String? role) {
   switch (normalizeRoleKey(role)) {
     case employeeRoleKey:
       return employeeAllowedRoutePaths;
     case movementRoleKey:
       return movementAllowedRoutePaths;
+    case supplierRoleKey:
+      return supplierAllowedRoutePaths;
     default:
       return null;
   }
@@ -50,6 +60,8 @@ String? restrictedRoleHomeRoute(String? role) {
       return AppRoutes.marketingStations;
     case movementRoleKey:
       return AppRoutes.movement;
+    case supplierRoleKey:
+      return AppRoutes.supplierPortal;
     default:
       return null;
   }

@@ -54,6 +54,9 @@ dependencies:
   dropdown_button2: ^2.0.0
   data_table_2: ^2.4.1
   flutter_svg: ^2.0.10
+  flutter_dropzone: ^4.1.0
+  desktop_drop: ^0.4.3
+  cross_file: ^0.3.4+2
   cached_network_image: ^3.3.0
   shimmer: ^3.0.0
   flutter_typeahead: ^5.2.0

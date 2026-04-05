@@ -96,6 +96,12 @@ const Set<String> _driverDefaultPermissions = {
   'tasks_view',
 };
 
+const Set<String> _supplierDefaultPermissions = {
+  'orders_view',
+  'orders_create_supplier',
+  'suppliers_view',
+};
+
 const Set<String> _employeeDefaultPermissions = {'tasks_view'};
 
 List<String> defaultPermissionsForRole(String role) {
@@ -123,6 +129,8 @@ List<String> defaultPermissionsForRole(String role) {
           .toList();
     case 'driver':
       return permissionKeys.where(_driverDefaultPermissions.contains).toList();
+    case 'supplier':
+      return permissionKeys.where(_supplierDefaultPermissions.contains).toList();
     default:
       return const <String>[];
   }

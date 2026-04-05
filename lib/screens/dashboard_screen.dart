@@ -5983,6 +5983,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         authProvider.user?.role == 'owner' || authProvider.user?.role == 'manager';
     final canViewMovementPage =
         authProvider.user?.role == 'owner' || authProvider.user?.role == 'admin';
+    final canViewSupplierPortal = [
+      'owner',
+      'admin',
+      'manager',
+      'movement',
+    ].contains(authProvider.user?.role);
     final canSendDailyReport = authProvider.user != null;
 
     final ordersChildren = <Widget>[
@@ -6076,6 +6082,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () => Navigator.pushNamed(
             context,
             AppRoutes.orderManagementTransportOrders,
+          ),
+        ),
+      if (canViewSupplierPortal)
+        _buildDesktopFolderItem(
+          icon: Icons.add_business_rounded,
+          title: 'بوابة الموردين',
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.supplierPortal,
           ),
         ),
       if (canViewCustomers)

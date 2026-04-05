@@ -146,7 +146,7 @@ packages:
     source: hosted
     version: "3.1.2"
   cross_file:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: cross_file
       sha256: "701dcfc06da0882883a2657c445103380e53e647060ad8d9dfb710c100996608"
@@ -193,6 +193,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.11"
+  desktop_drop:
+    dependency: "direct main"
+    description:
+      name: desktop_drop
+      sha256: d55a010fe46c8e8fcff4ea4b451a9ff84a162217bdb3b2a0aa1479776205e15d
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.4"
   dio:
     dependency: "direct main"
     description:
@@ -390,6 +398,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.4.1"
+  flutter_dropzone:
+    dependency: "direct main"
+    description:
+      name: flutter_dropzone
+      sha256: d0917c4e366ebb3a98c9c02faac79223d119af5e236967c70e7e4002cdfb20d3
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2.1"
+  flutter_dropzone_platform_interface:
+    dependency: transitive
+    description:
+      name: flutter_dropzone_platform_interface
+      sha256: "96d2c51c86063ba150551c3b40fd26c5a18785bee071c0c751502d28a545df3b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
+  flutter_dropzone_web:
+    dependency: transitive
+    description:
+      name: flutter_dropzone_web
+      sha256: "03b216f9443add6ad1d075ab513a354a47edf3d1b87d830a8ed314f0d3a2beac"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2.0"
   flutter_form_builder:
     dependency: "direct main"
     description:

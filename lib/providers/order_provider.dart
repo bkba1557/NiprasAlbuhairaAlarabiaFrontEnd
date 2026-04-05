@@ -601,6 +601,26 @@ class OrderProvider with ChangeNotifier {
         request.fields['supplierName'] = order.supplierName;
       }
 
+      if (order.portalCustomerId?.isNotEmpty == true) {
+        request.fields['portalCustomer'] = order.portalCustomerId!;
+      }
+
+      if (order.portalCustomerName?.isNotEmpty == true) {
+        request.fields['portalCustomerName'] = order.portalCustomerName!;
+      }
+
+      if (order.destinationStationId?.isNotEmpty == true) {
+        request.fields['destinationStationId'] = order.destinationStationId!;
+      }
+
+      if (order.destinationStationName?.isNotEmpty == true) {
+        request.fields['destinationStationName'] = order.destinationStationName!;
+      }
+
+      if (order.carrierName?.isNotEmpty == true) {
+        request.fields['carrierName'] = order.carrierName!;
+      }
+
       if (order.requestType != null) {
         request.fields['requestType'] = order.requestType!;
       }
@@ -861,6 +881,10 @@ class OrderProvider with ChangeNotifier {
         'status',
         'mergeStatus',
         'requestType',
+        'portalCustomer',
+        'destinationStationId',
+        'destinationStationName',
+        'portalCustomerName',
         'driverEarnings',
         'distance',
         'deliveryDuration',
@@ -1113,6 +1137,35 @@ class OrderProvider with ChangeNotifier {
     }
 
     _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> sendOrderWhatsAppToDriver(String orderId) async {
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.post(
+        ApiEndpoints.orderWhatsAppDriver(orderId),
+        const {},
+      );
+      final data = ApiService.decodeJson(response);
+
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          (data['success'] == true || data['ok'] == true)) {
+        return true;
+      }
+
+      _error =
+          data['message']?.toString() ??
+          data['error']?.toString() ??
+          'تعذر إرسال الواتساب للسائق';
+    } catch (e) {
+      _error = 'خطأ في الاتصال بالسيرفر: $e';
+    }
+
     notifyListeners();
     return false;
   }
@@ -2002,6 +2055,63 @@ class OrderProvider with ChangeNotifier {
       _error = data['error'] ?? data['message'] ?? 'فشل تحديث الطلب المدمج';
     } catch (e) {
       _error = 'حدث خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> reviewSupplierPortalOrder({
+    required String orderId,
+    String? decision,
+    String? note,
+    String? destinationStationId,
+    String? driverId,
+    String? portalCustomerId,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final payload = <String, dynamic>{
+        if (decision != null && decision.trim().isNotEmpty)
+          'decision': decision.trim(),
+        if (note != null) 'note': note,
+        if (destinationStationId != null)
+          'destinationStationId': destinationStationId,
+        if (driverId != null) 'driverId': driverId,
+        if (portalCustomerId != null) 'portalCustomer': portalCustomerId,
+      };
+
+      final response = await http.post(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderSupplierReview(orderId)}',
+        ),
+        headers: ApiService.headers,
+        body: json.encode(payload),
+      );
+
+      final data = ApiService.decodeJson(response);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final rawOrder =
+            data['order'] ?? data['data'] ?? data['updatedOrder'] ?? data;
+        final updatedOrder = Order.fromJson(
+          Map<String, dynamic>.from(rawOrder as Map),
+        );
+        _upsertOrderLocally(updatedOrder);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'تعذر تنفيذ مراجعة طلب المورد';
+    } catch (e) {
+      _error = 'خطأ في الاتصال بالسيرفر: $e';
     }
 
     _isLoading = false;

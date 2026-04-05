@@ -220,6 +220,8 @@ String _roleHomeRoute(String? role) {
       return AppRoutes.marketingStations;
     case 'movement':
       return AppRoutes.movement;
+    case 'supplier':
+      return AppRoutes.supplierPortal;
     case 'finance_manager':
       return AppRoutes.custodyDashboard;
     case 'sales_manager_statiun':

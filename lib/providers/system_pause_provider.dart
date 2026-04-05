@@ -69,21 +69,35 @@ class SystemPauseProvider with ChangeNotifier {
   Future<bool> activate({
     required String title,
     required String message,
-    required String developerName,
+    required String actorName,
+    required String targetScope,
+    List<String> targetUserIds = const <String>[],
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final response = await ApiService.post(
-        ApiEndpoints.systemPauseActivate,
-        <String, dynamic>{
-          'title': title.trim(),
-          'message': message.trim(),
-          'developerName': developerName.trim(),
-        },
-      );
+      final normalizedActorName = actorName.trim();
+      final normalizedTargetUserIds = targetUserIds
+          .map((userId) => userId.trim())
+          .where((userId) => userId.isNotEmpty)
+          .toSet()
+          .toList();
+
+      final response = await ApiService.post(ApiEndpoints.systemPauseActivate, <
+        String,
+        dynamic
+      >{
+        'title': title.trim(),
+        'message': message.trim(),
+        'developerName': normalizedActorName,
+        if (normalizedActorName.isNotEmpty)
+          'createdByName': normalizedActorName,
+        'targetScope': targetScope.trim().isEmpty ? 'all' : targetScope.trim(),
+        if (targetScope.trim() == 'selected')
+          'targetUserIds': normalizedTargetUserIds,
+      });
       final data = ApiService.decodeJsonMap(response);
       final noticeJson = data['notice'];
       if (noticeJson is Map) {
@@ -144,4 +158,3 @@ class SystemPauseProvider with ChangeNotifier {
     super.dispose();
   }
 }
-

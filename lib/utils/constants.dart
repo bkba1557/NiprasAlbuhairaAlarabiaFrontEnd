@@ -684,6 +684,8 @@ class ApiEndpoints {
 
   static String orderById(String id) => '/orders/$id';
   static String orderMovementDispatch(String id) => '/orders/$id/movement/dispatch';
+  static String orderSupplierReview(String id) => '/orders/$id/supplier-review';
+  static String orderWhatsAppDriver(String id) => '/orders/$id/whatsapp/driver';
   static String trackingDriverById(String id) => '/tracking/drivers/$id';
   static String driverLocationHistory(String id) =>
       '/driver-locations/$id/history';

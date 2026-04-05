@@ -16,7 +16,12 @@ class OrderDataGrid extends StatefulWidget {
 
 class _OrderDataGridState extends State<OrderDataGrid> {
   final ScrollController _horizontalController = ScrollController();
+  final TextEditingController _columnFilterController = TextEditingController();
+  final FocusNode _columnFilterFocusNode = FocusNode();
+  final Map<String, String> _columnFilters = {};
+
   Timer? _ticker;
+  String? _activeFilterColumnKey;
 
   @override
   void initState() {
@@ -31,6 +36,8 @@ class _OrderDataGridState extends State<OrderDataGrid> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _columnFilterFocusNode.dispose();
+    _columnFilterController.dispose();
     _horizontalController.dispose();
     super.dispose();
   }
@@ -55,6 +62,20 @@ class _OrderDataGridState extends State<OrderDataGrid> {
         final columns = baseColumns
             .map((column) => column.copyWith(width: column.width * scale))
             .toList();
+        final visibleColumnKeys = columns.map((column) => column.key).toSet();
+        final activeFilterColumnKey =
+            visibleColumnKeys.contains(_activeFilterColumnKey)
+            ? _activeFilterColumnKey
+            : null;
+        final effectiveColumnFilters = Map<String, String>.fromEntries(
+          _columnFilters.entries.where(
+            (entry) => visibleColumnKeys.contains(entry.key),
+          ),
+        );
+        final filteredOrders = _applyColumnFilters(
+          widget.orders,
+          effectiveColumnFilters,
+        );
         final tableWidth = columns.fold<double>(
           0,
           (sum, column) => sum + column.width,
@@ -95,15 +116,36 @@ class _OrderDataGridState extends State<OrderDataGrid> {
                     slivers: [
                       SliverPersistentHeader(
                         pinned: true,
-                        delegate: _OrdersTableHeaderDelegate(columns: columns),
+                        delegate: _OrdersTableHeaderDelegate(
+                          columns: columns,
+                          activeFilterColumnKey: activeFilterColumnKey,
+                          activeFilterText: activeFilterColumnKey == null
+                              ? ''
+                              : effectiveColumnFilters[activeFilterColumnKey] ??
+                                    '',
+                          activeFilterCount: effectiveColumnFilters.length,
+                          controller: _columnFilterController,
+                          focusNode: _columnFilterFocusNode,
+                          onFilterPressed: _handleFilterPressed,
+                          onFilterChanged: _handleFilterChanged,
+                          onClearActiveFilter: _clearActiveFilter,
+                          hasActiveFilter: (columnKey) =>
+                              effectiveColumnFilters.containsKey(columnKey),
+                        ),
                       ),
-                      SliverList.builder(
-                        itemCount: widget.orders.length,
-                        itemBuilder: (context, index) {
-                          final order = widget.orders[index];
-                          return _buildRow(order, index, columns);
-                        },
-                      ),
+                      if (filteredOrders.isEmpty)
+                        const SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _OrdersGridEmptyState(),
+                        )
+                      else
+                        SliverList.builder(
+                          itemCount: filteredOrders.length,
+                          itemBuilder: (context, index) {
+                            final order = filteredOrders[index];
+                            return _buildRow(order, index, columns);
+                          },
+                        ),
                     ],
                   ),
                 ),
@@ -113,6 +155,116 @@ class _OrderDataGridState extends State<OrderDataGrid> {
         );
       },
     );
+  }
+
+  void _handleFilterPressed(String columnKey) {
+    final isCurrentColumn = _activeFilterColumnKey == columnKey;
+    final nextValue = isCurrentColumn ? '' : (_columnFilters[columnKey] ?? '');
+
+    setState(() {
+      _activeFilterColumnKey = isCurrentColumn ? null : columnKey;
+      _columnFilterController.value = TextEditingValue(
+        text: nextValue,
+        selection: TextSelection.collapsed(offset: nextValue.length),
+      );
+    });
+
+    if (!isCurrentColumn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _columnFilterFocusNode.requestFocus();
+        }
+      });
+    }
+  }
+
+  void _handleFilterChanged(String value) {
+    final activeKey = _activeFilterColumnKey;
+    if (activeKey == null) return;
+
+    final normalizedValue = value.trim();
+    setState(() {
+      if (normalizedValue.isEmpty) {
+        _columnFilters.remove(activeKey);
+      } else {
+        _columnFilters[activeKey] = normalizedValue;
+      }
+    });
+  }
+
+  void _clearActiveFilter() {
+    final activeKey = _activeFilterColumnKey;
+    if (activeKey == null) return;
+
+    setState(() {
+      _columnFilters.remove(activeKey);
+      _columnFilterController.clear();
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _columnFilterFocusNode.requestFocus();
+      }
+    });
+  }
+
+  List<Order> _applyColumnFilters(
+    List<Order> orders,
+    Map<String, String> filters,
+  ) {
+    if (filters.isEmpty) return orders;
+
+    return orders.where((order) {
+      for (final entry in filters.entries) {
+        if (!_matchesColumnFilter(order, entry.key, entry.value)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
+  bool _matchesColumnFilter(Order order, String columnKey, String filterValue) {
+    final normalizedFilter = filterValue.trim().toLowerCase();
+    if (normalizedFilter.isEmpty) return true;
+
+    return _filterValuesForColumn(columnKey, order).any((value) {
+      return value.toLowerCase().contains(normalizedFilter);
+    });
+  }
+
+  List<String> _filterValuesForColumn(String columnKey, Order order) {
+    switch (columnKey) {
+      case 'orderDate':
+        return [_formatDate(order.orderDate)];
+      case 'supplierName':
+        return [
+          _partnerDisplayName(order),
+          order.supplierName.trim(),
+          order.customer?.name.trim() ?? '',
+        ];
+      case 'requestType':
+        return [_displayRequestType(order)];
+      case 'fuelQuantity':
+        return [
+          _buildFuelQuantityText(order),
+          order.fuelType?.trim() ?? '',
+          if (order.quantity != null) order.quantity!.toString(),
+          order.unit?.trim() ?? '',
+        ];
+      case 'orderNumber':
+        return [order.orderNumber.trim()];
+      case 'supplierOrderNumber':
+        return [_supplierOrderNumberText(order)];
+      case 'loadingDate':
+        return [_formatDate(order.loadingDate), order.loadingTime.trim()];
+      case 'timer':
+        return [_timerText(order)];
+      case 'statusDriver':
+        return [order.status.trim(), order.driverName?.trim() ?? ''];
+      default:
+        return const [];
+    }
   }
 
   List<_OrdersTableColumn> _buildColumns(double width) {
@@ -209,12 +361,7 @@ class _OrderDataGridState extends State<OrderDataGrid> {
       case 'orderDate':
         return _buildText(_formatDate(order.orderDate));
       case 'supplierName':
-        final customerName = order.customer?.name.trim() ?? '';
-        final supplierName = order.supplierName.trim();
-        final value = order.orderSource == 'عميل'
-            ? (customerName.isNotEmpty ? customerName : '—')
-            : (supplierName.isNotEmpty ? supplierName : '—');
-        return _buildText(value);
+        return _buildText(_partnerDisplayName(order));
       case 'requestType':
         return _buildText(_displayRequestType(order));
       case 'fuelQuantity':
@@ -222,11 +369,7 @@ class _OrderDataGridState extends State<OrderDataGrid> {
       case 'orderNumber':
         return _buildText(order.orderNumber);
       case 'supplierOrderNumber':
-        return _buildText(
-          (order.supplierOrderNumber?.trim().isNotEmpty ?? false)
-              ? order.supplierOrderNumber!.trim()
-              : '—',
-        );
+        return _buildText(_supplierOrderNumberText(order));
       case 'loadingDate':
         return _buildText(_formatDate(order.loadingDate));
       case 'timer':
@@ -258,6 +401,15 @@ class _OrderDataGridState extends State<OrderDataGrid> {
     return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
   }
 
+  String _partnerDisplayName(Order order) {
+    final customerName = order.customer?.name.trim() ?? '';
+    final supplierName = order.supplierName.trim();
+    if (order.orderSource == 'عميل') {
+      return customerName.isNotEmpty ? customerName : '—';
+    }
+    return supplierName.isNotEmpty ? supplierName : '—';
+  }
+
   String _buildFuelQuantityText(Order order) {
     final fuelType = order.fuelType?.trim();
     if (fuelType == null || fuelType.isEmpty || order.quantity == null) {
@@ -277,6 +429,34 @@ class _OrderDataGridState extends State<OrderDataGrid> {
   String _displayRequestType(Order order) {
     final type = order.effectiveRequestType.trim();
     return type.isEmpty || type == 'غير محدد' ? '—' : type;
+  }
+
+  String _supplierOrderNumberText(Order order) {
+    final value = order.supplierOrderNumber?.trim() ?? '';
+    return value.isEmpty ? '—' : value;
+  }
+
+  String _timerText(Order order) {
+    if (order.loadingTime.isEmpty ||
+        order.status == 'تم التحميل' ||
+        order.status == 'ملغى') {
+      return '—';
+    }
+
+    final parts = order.loadingTime.split(':');
+    if (parts.length < 2) {
+      return '—';
+    }
+
+    final loadingDateTime = DateTime(
+      order.loadingDate.year,
+      order.loadingDate.month,
+      order.loadingDate.day,
+      int.tryParse(parts[0]) ?? 0,
+      int.tryParse(parts[1]) ?? 0,
+    );
+
+    return _formatDuration(loadingDateTime.difference(DateTime.now()));
   }
 
   Widget _buildTimerCell(Order order) {
@@ -408,15 +588,37 @@ class _OrderDataGridState extends State<OrderDataGrid> {
 }
 
 class _OrdersTableHeaderDelegate extends SliverPersistentHeaderDelegate {
-  const _OrdersTableHeaderDelegate({required this.columns});
+  const _OrdersTableHeaderDelegate({
+    required this.columns,
+    required this.activeFilterColumnKey,
+    required this.activeFilterText,
+    required this.activeFilterCount,
+    required this.controller,
+    required this.focusNode,
+    required this.onFilterPressed,
+    required this.onFilterChanged,
+    required this.onClearActiveFilter,
+    required this.hasActiveFilter,
+  });
 
   final List<_OrdersTableColumn> columns;
+  final String? activeFilterColumnKey;
+  final String activeFilterText;
+  final int activeFilterCount;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onFilterPressed;
+  final ValueChanged<String> onFilterChanged;
+  final VoidCallback onClearActiveFilter;
+  final bool Function(String columnKey) hasActiveFilter;
+
+  bool get _showFilterField => activeFilterColumnKey != null;
 
   @override
-  double get minExtent => 44;
+  double get minExtent => _showFilterField ? 92 : 44;
 
   @override
-  double get maxExtent => 44;
+  double get maxExtent => _showFilterField ? 92 : 44;
 
   @override
   Widget build(
@@ -429,71 +631,217 @@ class _OrdersTableHeaderDelegate extends SliverPersistentHeaderDelegate {
         alpha: overlapsContent ? 0.98 : 0.94,
       ),
       padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        children: columns.map((column) {
-          return SizedBox(
-            width: column.width,
-            child: Container(
-              height: 42,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                ),
-                boxShadow: overlapsContent
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
+      child: Column(
+        children: [
+          Row(
+            children: columns.map((column) {
+              final isColumnActive = activeFilterColumnKey == column.key;
+              final columnHasFilter = hasActiveFilter(column.key);
+              final iconColor = isColumnActive || columnHasFilter
+                  ? AppColors.primaryBlue
+                  : AppColors.primaryBlue.withValues(alpha: 0.85);
+
+              return SizedBox(
+                width: column.width,
+                child: Container(
+                  height: 42,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: (isColumnActive || columnHasFilter)
+                          ? AppColors.primaryBlue.withValues(alpha: 0.34)
+                          : AppColors.primaryBlue.withValues(alpha: 0.12),
+                    ),
+                    boxShadow: overlapsContent
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          column.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryDarkBlue,
+                            height: 1.1,
+                          ),
                         ),
-                      ]
-                    : null,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      column.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primaryDarkBlue,
-                        height: 1.1,
                       ),
+                      const SizedBox(width: 4),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () => onFilterPressed(column.key),
+                        child: Padding(
+                          padding: const EdgeInsets.all(3),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Icon(
+                                Icons.filter_alt_outlined,
+                                size: 14,
+                                color: iconColor,
+                              ),
+                              if (columnHasFilter)
+                                Positioned(
+                                  top: -1,
+                                  right: -1,
+                                  child: Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.successGreen,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.swap_vert,
+                        size: 13,
+                        color: AppColors.primaryBlue.withValues(alpha: 0.85),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (_showFilterField) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: columns.map((column) {
+                if (column.key != activeFilterColumnKey) {
+                  return SizedBox(width: column.width);
+                }
+
+                return SizedBox(
+                  width: column.width,
+                  child: Container(
+                    height: 38,
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    child: TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      onChanged: onFilterChanged,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'اكتب للتصفية',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 9,
+                        ),
+                        prefixIcon: const Icon(Icons.search, size: 16),
+                        suffixIcon: activeFilterText.isEmpty
+                            ? (activeFilterCount > 1
+                                  ? const Tooltip(
+                                      message: 'يوجد فلاتر نشطة في أعمدة أخرى',
+                                      child: Icon(
+                                        Icons.filter_alt_outlined,
+                                        size: 16,
+                                        color: AppColors.primaryBlue,
+                                      ),
+                                    )
+                                  : null)
+                            : IconButton(
+                                tooltip: 'مسح',
+                                onPressed: onClearActiveFilter,
+                                icon: const Icon(Icons.close, size: 16),
+                              ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primaryBlue.withValues(
+                              alpha: 0.18,
+                            ),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primaryBlue.withValues(
+                              alpha: 0.18,
+                            ),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primaryBlue.withValues(
+                              alpha: 0.48,
+                            ),
+                          ),
+                        ),
+                      ),
+                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 11),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.filter_alt_outlined,
-                    size: 13,
-                    color: AppColors.primaryBlue.withValues(alpha: 0.85),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    Icons.swap_vert,
-                    size: 13,
-                    color: AppColors.primaryBlue.withValues(alpha: 0.85),
-                  ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
-          );
-        }).toList(),
+          ],
+        ],
       ),
     );
   }
 
   @override
   bool shouldRebuild(covariant _OrdersTableHeaderDelegate oldDelegate) {
-    return oldDelegate.columns != columns;
+    return oldDelegate.columns != columns ||
+        oldDelegate.activeFilterColumnKey != activeFilterColumnKey ||
+        oldDelegate.activeFilterText != activeFilterText ||
+        oldDelegate.activeFilterCount != activeFilterCount;
+  }
+}
+
+class _OrdersGridEmptyState extends StatelessWidget {
+  const _OrdersGridEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.filter_alt_off_outlined, size: 42, color: Colors.grey),
+            SizedBox(height: 10),
+            Text(
+              'لا توجد صفوف مطابقة للفلاتر الحالية.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                color: AppColors.mediumGray,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -5,11 +5,15 @@ import 'package:order_tracker/models/models.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/driver_provider.dart';
 import 'package:order_tracker/providers/station_provider.dart';
+import 'package:order_tracker/providers/supplier_provider.dart';
 import 'package:order_tracker/providers/user_management_provider.dart';
 import 'package:order_tracker/utils/access_control.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/permission_definitions.dart';
 import 'package:provider/provider.dart';
+
+
+//momen111985@gmail.com
 
 const List<String> _roleOptions = [
   'owner',
@@ -28,6 +32,7 @@ const List<String> _roleOptions = [
   'finance_manager',
   'driver',
   'movement',
+  'supplier',
 ];
 
 const Map<String, String> _roleLabels = {
@@ -47,6 +52,7 @@ const Map<String, String> _roleLabels = {
   'finance_manager': 'المدير المالي',
   'driver': 'السائق',
   'movement': 'الحركة',
+  'supplier': 'المورد',
 };
 
 String _roleDisplay(String role) => _roleLabels[role] ?? role;
@@ -81,6 +87,8 @@ Color _roleColor(String role) {
       return AppColors.statusGold;
     case 'movement':
       return AppColors.appBarBlue;
+    case 'supplier':
+      return const Color(0xFF00695C);
     default:
       return AppColors.mediumGray;
   }
@@ -192,10 +200,18 @@ class _UserManagementViewState extends State<_UserManagementView> {
     final provider = context.read<UserManagementProvider>();
     final stationProvider = context.read<StationProvider>();
     final driverProvider = context.read<DriverProvider>();
+    final supplierProvider = context.read<SupplierProvider>();
 
     if ((user?.role == 'station_boy' || user?.role == 'owner_station') &&
         stationProvider.stations.isEmpty) {
       await stationProvider.fetchStations();
+    }
+
+    if ((user?.role == 'supplier' || user?.supplierId != null) &&
+        supplierProvider.suppliers.isEmpty) {
+      await supplierProvider.fetchSuppliers(
+        filters: <String, dynamic>{'isActive': 'true'},
+      );
     }
 
     List<Driver> availableDrivers = const [];
@@ -215,6 +231,7 @@ class _UserManagementViewState extends State<_UserManagementView> {
       ...user?.stationIds ?? const <String>[],
     };
     String? selectedDriverId = user?.driverId;
+    String? selectedSupplierId = user?.supplierId;
 
     final isEditing = user != null;
     final nameController = TextEditingController(text: user?.name ?? '');
@@ -245,6 +262,7 @@ class _UserManagementViewState extends State<_UserManagementView> {
             final isStationsLoading = context
                 .watch<StationProvider>()
                 .isStationsLoading;
+            final suppliers = context.watch<SupplierProvider>().suppliers;
 
             // تحديد الحجم بناءً على نوع الجهاز
             final isMobile = MediaQuery.of(context).size.width < 600;
@@ -384,6 +402,9 @@ class _UserManagementViewState extends State<_UserManagementView> {
                                 if (value != 'driver') {
                                   selectedDriverId = null;
                                 }
+                                if (value != 'supplier') {
+                                  selectedSupplierId = null;
+                                }
                                 selectedPermissions
                                   ..clear()
                                   ..addAll(nextDefaults);
@@ -413,6 +434,13 @@ class _UserManagementViewState extends State<_UserManagementView> {
                                       ? [...drivers, currentDriver]
                                       : drivers;
                                 });
+                              }
+
+                              if (value == 'supplier' &&
+                                  supplierProvider.suppliers.isEmpty) {
+                                await supplierProvider.fetchSuppliers(
+                                  filters: <String, dynamic>{'isActive': 'true'},
+                                );
                               }
                             },
                           ),
@@ -448,6 +476,44 @@ class _UserManagementViewState extends State<_UserManagementView> {
                               onChanged: (value) {
                                 setModalState(() {
                                   selectedDriverId = value;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          if (roleValue == 'supplier') ...[
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              value: suppliers.any(
+                                (supplier) => supplier.id == selectedSupplierId,
+                              )
+                                  ? selectedSupplierId
+                                  : null,
+                              decoration: const InputDecoration(
+                                labelText: 'المورد المرتبط',
+                              ),
+                              items: suppliers
+                                  .map(
+                                    (supplier) => DropdownMenuItem<String>(
+                                      value: supplier.id,
+                                      child: Text(
+                                        supplier.company.trim().isEmpty
+                                            ? supplier.name
+                                            : '${supplier.name} - ${supplier.company}',
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              validator: (value) {
+                                if (roleValue != 'supplier') return null;
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'يرجى اختيار المورد المرتبط';
+                                }
+                                return null;
+                              },
+                              onChanged: (value) {
+                                setModalState(() {
+                                  selectedSupplierId = value;
                                 });
                               },
                             ),
@@ -782,6 +848,9 @@ class _UserManagementViewState extends State<_UserManagementView> {
                                         'role': roleValue,
                                         'driverId': roleValue == 'driver'
                                             ? selectedDriverId
+                                            : null,
+                                        'supplierId': roleValue == 'supplier'
+                                            ? selectedSupplierId
                                             : null,
                                         'permissions': selectedPermissions
                                             .toList(),
@@ -1479,6 +1548,22 @@ class _UserManagementViewState extends State<_UserManagementView> {
                         user.company,
                         style: TextStyle(color: Colors.grey[600], fontSize: 14),
                       ),
+                      if ((user.supplierName ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.business_outlined, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Text(
+                              user.supplierName!,
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       if (user.phone!.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Row(
@@ -1678,6 +1763,14 @@ class _UserManagementViewState extends State<_UserManagementView> {
                         user.company,
                         style: TextStyle(color: Colors.grey[600], fontSize: 14),
                       ),
+                      if ((user.supplierName ?? '').trim().isNotEmpty)
+                        Text(
+                          'المورد: ${user.supplierName}',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 13,
+                          ),
+                        ),
                     ],
                   ),
                 ),

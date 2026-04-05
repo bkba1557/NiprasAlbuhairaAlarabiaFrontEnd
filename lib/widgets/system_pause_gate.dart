@@ -22,7 +22,10 @@ class SystemPauseGate extends StatelessWidget {
         final isOwner = role.trim().toLowerCase() == 'owner';
 
         final shouldBlock =
-            isLoggedIn && !isOwner && (notice?.isActive ?? false);
+            isLoggedIn &&
+            !isOwner &&
+            notice != null &&
+            notice.appliesToUserId(auth.user?.id);
 
         return Stack(
           children: [
@@ -71,35 +74,79 @@ class _SystemPauseOwnerBanner extends StatelessWidget {
       child: Align(
         alignment: Alignment.topCenter,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 900),
+          constraints: const BoxConstraints(maxWidth: 980),
           margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
           child: Material(
-            color: const Color(0xFFFFF7ED),
-            elevation: 6,
-            shadowColor: Colors.black.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(18),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: const LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [Color(0xFFFFF8E8), Color(0xFFFFF2D8)],
+                ),
+                border: Border.all(
+                  color: AppColors.warningOrange.withValues(alpha: 0.24),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.10),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.pause_circle_filled_rounded,
-                    color: AppColors.warningOrange,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      title,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primaryDarkBlue,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.warningOrange.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.pause_circle_filled_rounded,
+                      color: AppColors.warningOrange,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          title,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.primaryDarkBlue,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _BannerPill(
+                              icon: Icons.groups_rounded,
+                              label: notice.audienceSummary,
+                            ),
+                            _BannerPill(
+                              icon: Icons.person_outline_rounded,
+                              label: 'بواسطة: ${notice.actorDisplayName}',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   IconButton(
                     tooltip: 'تحديث',
                     onPressed: isRefreshing ? null : onRefresh,
@@ -129,3 +176,35 @@ class _SystemPauseOwnerBanner extends StatelessWidget {
   }
 }
 
+class _BannerPill extends StatelessWidget {
+  const _BannerPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.primaryBlue),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.primaryDarkBlue,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

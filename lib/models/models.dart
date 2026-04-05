@@ -14,6 +14,8 @@ class User {
   final String? stationId;
   final List<String> stationIds;
   final String? driverId;
+  final String? supplierId;
+  final String? supplierName;
   final String? stationName;
   final String? stationCode;
   final bool isBlocked;
@@ -31,6 +33,8 @@ class User {
     this.stationId,
     this.stationIds = const [],
     this.driverId,
+    this.supplierId,
+    this.supplierName,
     this.stationName,
     this.stationCode,
     this.isBlocked = false,
@@ -95,6 +99,16 @@ class User {
       parsedDriverId = rawDriverId.toString();
     }
 
+    String? parsedSupplierId;
+    final rawSupplierId = json['supplierId'];
+    if (rawSupplierId is Map) {
+      final supplierMap = Map<String, dynamic>.from(rawSupplierId);
+      parsedSupplierId =
+          supplierMap['_id']?.toString() ?? supplierMap[r'$oid']?.toString();
+    } else if (rawSupplierId != null) {
+      parsedSupplierId = rawSupplierId.toString();
+    }
+
     return User(
       id: (json['_id'] ?? json['id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
@@ -109,6 +123,8 @@ class User {
       stationId: parsedStationId,
       stationIds: parsedStationIds,
       driverId: parsedDriverId,
+      supplierId: parsedSupplierId,
+      supplierName: json['supplierName']?.toString(),
       stationName: json['stationName']?.toString(),
       stationCode: json['stationCode']?.toString(),
       isBlocked: parsedIsBlocked,
@@ -132,6 +148,8 @@ class User {
       'stationId': stationId,
       'stationIds': stationIds,
       'driverId': driverId,
+      'supplierId': supplierId,
+      'supplierName': supplierName,
       'stationName': stationName,
       'stationCode': stationCode,
       'isBlocked': isBlocked,

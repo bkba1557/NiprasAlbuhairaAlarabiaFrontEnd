@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:order_tracker/models/customer_model.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/customer_provider.dart';
+import 'package:order_tracker/providers/station_provider.dart';
+import 'package:order_tracker/providers/supplier_provider.dart';
 import 'package:order_tracker/screens/tasks/task_location_picker_screen.dart';
 import 'package:order_tracker/services/whatsapp_service.dart';
 import 'package:order_tracker/utils/constants.dart';
@@ -47,6 +49,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   final _contactPersonPhoneController = TextEditingController();
   final _notesController = TextEditingController();
   late final Map<String, TextEditingController> _fuelPricingControllers;
+  String? _selectedSupplierId;
+  final Set<String> _selectedSupplierStationIds = <String>{};
 
   bool _showDocumentSection = false;
   double? _selectedLatitude;
@@ -68,6 +72,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     if (widget.customerToEdit != null) {
       _initializeFormWithCustomer();
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bootstrapLookups();
+    });
   }
 
   @override
@@ -110,10 +117,27 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     }
     _selectedLatitude = customer.latitude;
     _selectedLongitude = customer.longitude;
+    _selectedSupplierId = customer.supplierId;
+    _selectedSupplierStationIds
+      ..clear()
+      ..addAll(customer.supplierStationIds);
     _showDocumentSection = customer.documents.isNotEmpty;
     _currentDocuments
       ..clear()
       ..addAll(customer.documents);
+  }
+
+  Future<void> _bootstrapLookups() async {
+    final supplierProvider = context.read<SupplierProvider>();
+    final stationProvider = context.read<StationProvider>();
+    if (supplierProvider.suppliers.isEmpty) {
+      await supplierProvider.fetchSuppliers(
+        filters: <String, dynamic>{'isActive': 'true'},
+      );
+    }
+    if (stationProvider.stations.isEmpty) {
+      await stationProvider.fetchStations(limit: 0);
+    }
   }
 
   bool get _hasSelectedLocation =>
@@ -973,6 +997,66 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     return result;
   }
 
+  Future<void> _pickSupplierStations(List<dynamic> stations) async {
+    final tempSelection = Set<String>.from(_selectedSupplierStationIds);
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('ربط محطات المورد'),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: stations.map<Widget>((station) {
+                      final isChecked = tempSelection.contains(station.id);
+                      return CheckboxListTile(
+                        value: isChecked,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(station.stationName),
+                        subtitle: Text(station.city),
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            if (value == true) {
+                              tempSelection.add(station.id);
+                            } else {
+                              tempSelection.remove(station.id);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, tempSelection),
+                  child: const Text('تطبيق'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    setState(() {
+      _selectedSupplierStationIds
+        ..clear()
+        ..addAll(result);
+    });
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -1009,6 +1093,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       'contactPersonPhone': _contactPersonPhoneController.text.trim().isNotEmpty
           ? _contactPersonPhoneController.text.trim()
           : null,
+      'supplier': _selectedSupplierId,
+      'supplierStationIds': _selectedSupplierStationIds.toList(),
       'notes': _notesController.text.trim().isNotEmpty
           ? _notesController.text.trim()
           : null,
@@ -1080,7 +1166,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<CustomerProvider>();
+    final supplierProvider = context.watch<SupplierProvider>();
+    final stationProvider = context.watch<StationProvider>();
     final isEditing = widget.customerToEdit != null;
+    final suppliers = supplierProvider.suppliers;
+    final stations = stationProvider.stations;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1170,6 +1260,107 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                     ),
                                   ],
                                 ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'ربط المورد ومحطاته',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'اختر المورد المرتبط بهذا العميل ثم حدد المحطات التي ستظهر له داخل بوابة المورد.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: AppColors.mediumGray),
+                                ),
+                                const SizedBox(height: 20),
+                                DropdownButtonFormField<String>(
+                                  value: suppliers.any(
+                                    (supplier) => supplier.id == _selectedSupplierId,
+                                  )
+                                      ? _selectedSupplierId
+                                      : null,
+                                  decoration: const InputDecoration(
+                                    labelText: 'المورد المرتبط',
+                                    prefixIcon: Icon(Icons.business_outlined),
+                                  ),
+                                  items: suppliers
+                                      .map(
+                                        (supplier) => DropdownMenuItem<String>(
+                                          value: supplier.id,
+                                          child: Text(
+                                            supplier.company.trim().isEmpty
+                                                ? supplier.name
+                                                : '${supplier.name} - ${supplier.company}',
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedSupplierId = value;
+                                      _selectedSupplierStationIds.clear();
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                OutlinedButton.icon(
+                                  onPressed: _selectedSupplierId == null || stations.isEmpty
+                                      ? null
+                                      : () => _pickSupplierStations(stations),
+                                  icon: const Icon(Icons.alt_route_rounded),
+                                  label: Text(
+                                    _selectedSupplierStationIds.isEmpty
+                                        ? 'اختيار محطات المورد'
+                                        : 'المحطات المختارة (${_selectedSupplierStationIds.length})',
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                if (_selectedSupplierId == null)
+                                  const Text(
+                                    'اختر المورد أولاً لربط المحطات.',
+                                    style: TextStyle(color: AppColors.mediumGray),
+                                  )
+                                else if (_selectedSupplierStationIds.isEmpty)
+                                  const Text(
+                                    'لم يتم اختيار أي محطة لهذا المورد بعد.',
+                                    style: TextStyle(color: AppColors.mediumGray),
+                                  )
+                                else
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: stations
+                                        .where(
+                                          (station) => _selectedSupplierStationIds
+                                              .contains(station.id),
+                                        )
+                                        .map(
+                                          (station) => Chip(
+                                            label: Text(
+                                              '${station.stationName} - ${station.city}',
+                                            ),
+                                            backgroundColor: AppColors.primaryBlue
+                                                .withOpacity(0.08),
+                                            side: BorderSide(
+                                              color: AppColors.primaryBlue
+                                                  .withOpacity(0.18),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
                               ],
                             ),
                           ),

@@ -55,6 +55,7 @@ import 'package:order_tracker/screens/order_management/customer_liters_report_sc
 import 'package:order_tracker/screens/order_management/customer_pricing_screen.dart';
 import 'package:order_tracker/screens/order_management/movement_dashboard_screen.dart';
 import 'package:order_tracker/screens/order_management/order_management_dashboard_screen.dart';
+import 'package:order_tracker/screens/order_management/supplier_portal_screen.dart';
 import 'package:order_tracker/screens/order_management/tax_settings_screen.dart';
 import 'package:order_tracker/screens/order_management/transport_orders_screen.dart';
 import 'package:order_tracker/screens/order_management/treasury/customer_accounts_screen.dart';
@@ -193,6 +194,7 @@ class AppRoutes {
   static const String supplierDetails = '/supplier/details';
   static const String mergeOrders = '/merge-orders';
   static const String movement = '/movement';
+  static const String supplierPortal = '/suppliers/portal';
 
   // Order Management
   static const String orderManagementDashboard = '/orders/management';
@@ -337,6 +339,7 @@ class AppRoutes {
     customers: (_) => const CustomersScreen(),
     orderManagementDashboard: (_) => const OrderManagementDashboardScreen(),
     movement: (_) => const MovementDashboardScreen(),
+    supplierPortal: (_) => const SupplierPortalScreen(),
     orderManagementCustomerAccounts: (_) => const CustomerAccountsScreen(),
     orderManagementFuelPricing: (_) =>
         const CustomerPricingScreen(mode: CustomerPricingMode.fuel),

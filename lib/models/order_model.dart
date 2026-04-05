@@ -37,6 +37,15 @@ class Order {
   final String? movementMergedOrderNumber;
   final DateTime? movementDirectedAt;
   final String? movementDirectedByName;
+  final String? portalStatus;
+  final String? portalReviewNotes;
+  final DateTime? portalReviewedAt;
+  final String? portalReviewedByName;
+  final String? portalCustomerId;
+  final String? portalCustomerName;
+  final String? destinationStationId;
+  final String? destinationStationName;
+  final String? carrierName;
 
   final String supplierName;
 
@@ -147,6 +156,15 @@ class Order {
     this.movementMergedOrderNumber,
     this.movementDirectedAt,
     this.movementDirectedByName,
+    this.portalStatus,
+    this.portalReviewNotes,
+    this.portalReviewedAt,
+    this.portalReviewedByName,
+    this.portalCustomerId,
+    this.portalCustomerName,
+    this.destinationStationId,
+    this.destinationStationName,
+    this.carrierName,
     required this.supplierName,
     this.requestType,
     required this.orderNumber,
@@ -472,6 +490,25 @@ class Order {
         json['movementDirectedAt']?.toString() ?? '',
       ),
       movementDirectedByName: json['movementDirectedByName']?.toString(),
+      portalStatus: json['portalStatus']?.toString(),
+      portalReviewNotes: json['portalReviewNotes']?.toString(),
+      portalReviewedAt: DateTime.tryParse(
+        json['portalReviewedAt']?.toString() ?? '',
+      ),
+      portalReviewedByName: json['portalReviewedByName']?.toString(),
+      portalCustomerId: json['portalCustomer'] is Map
+          ? json['portalCustomer']['_id']?.toString()
+          : json['portalCustomer']?.toString(),
+      portalCustomerName: json['portalCustomer'] is Map
+          ? json['portalCustomer']['name']?.toString()
+          : json['portalCustomerName']?.toString(),
+      destinationStationId: json['destinationStationId'] is Map
+          ? json['destinationStationId']['_id']?.toString()
+          : json['destinationStationId']?.toString(),
+      destinationStationName: json['destinationStationId'] is Map
+          ? json['destinationStationId']['stationName']?.toString()
+          : json['destinationStationName']?.toString(),
+      carrierName: json['carrierName']?.toString(),
       supplierName:
           json['supplierName']?.toString() ??
           (supplier != null ? supplier.name : ''),
@@ -634,6 +671,15 @@ class Order {
       'movementMergedOrderNumber': movementMergedOrderNumber,
       'movementDirectedAt': movementDirectedAt?.toIso8601String(),
       'movementDirectedByName': movementDirectedByName,
+      'portalStatus': portalStatus,
+      'portalReviewNotes': portalReviewNotes,
+      'portalReviewedAt': portalReviewedAt?.toIso8601String(),
+      'portalReviewedByName': portalReviewedByName,
+      'portalCustomer': portalCustomerId,
+      'portalCustomerName': portalCustomerName,
+      'destinationStationId': destinationStationId,
+      'destinationStationName': destinationStationName,
+      'carrierName': carrierName,
       'supplierName': supplierName,
       'requestType': requestType,
       'orderNumber': orderNumber,
@@ -743,6 +789,14 @@ class Order {
   bool get isMerged => mergeStatus == 'مدمج' || mergeStatus == 'مكتمل';
 
   bool get isMovementOrder => entryChannel == 'movement';
+
+  bool get isSupplierPortalOrder => entryChannel == 'supplier_portal';
+
+  bool get isPortalPendingReview => portalStatus == 'pending_review';
+
+  bool get isPortalApproved => portalStatus == 'approved';
+
+  bool get isPortalRejected => portalStatus == 'rejected';
 
   bool get isMovementPendingDriver => movementState == 'pending_driver';
 
@@ -1110,6 +1164,15 @@ class Order {
     String? movementMergedOrderNumber,
     DateTime? movementDirectedAt,
     String? movementDirectedByName,
+    String? portalStatus,
+    String? portalReviewNotes,
+    DateTime? portalReviewedAt,
+    String? portalReviewedByName,
+    String? portalCustomerId,
+    String? portalCustomerName,
+    String? destinationStationId,
+    String? destinationStationName,
+    String? carrierName,
     String? supplierName,
     String? requestType,
     String? orderNumber,
@@ -1200,6 +1263,17 @@ class Order {
       movementDirectedAt: movementDirectedAt ?? this.movementDirectedAt,
       movementDirectedByName:
           movementDirectedByName ?? this.movementDirectedByName,
+      portalStatus: portalStatus ?? this.portalStatus,
+      portalReviewNotes: portalReviewNotes ?? this.portalReviewNotes,
+      portalReviewedAt: portalReviewedAt ?? this.portalReviewedAt,
+      portalReviewedByName:
+          portalReviewedByName ?? this.portalReviewedByName,
+      portalCustomerId: portalCustomerId ?? this.portalCustomerId,
+      portalCustomerName: portalCustomerName ?? this.portalCustomerName,
+      destinationStationId: destinationStationId ?? this.destinationStationId,
+      destinationStationName:
+          destinationStationName ?? this.destinationStationName,
+      carrierName: carrierName ?? this.carrierName,
       supplierName: supplierName ?? this.supplierName,
       requestType: requestType ?? this.requestType,
       orderNumber: orderNumber ?? this.orderNumber,

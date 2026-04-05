@@ -73,6 +73,9 @@ class Customer {
   final String? postalCode;
   final String? contactPerson;
   final String? contactPersonPhone;
+  final String? supplierId;
+  final String? supplierName;
+  final List<String> supplierStationIds;
   final String? notes;
   final String? company;
   final String? taxNumber;
@@ -112,6 +115,9 @@ class Customer {
     this.postalCode,
     this.contactPerson,
     this.contactPersonPhone,
+    this.supplierId,
+    this.supplierName,
+    this.supplierStationIds = const [],
     this.notes,
     this.company,
     this.taxNumber,
@@ -225,6 +231,21 @@ class Customer {
       postalCode: json['postalCode']?.toString(),
       contactPerson: json['contactPerson']?.toString(),
       contactPersonPhone: json['contactPersonPhone']?.toString(),
+      supplierId: json['supplier'] is Map
+          ? json['supplier']['_id']?.toString()
+          : json['supplier']?.toString(),
+      supplierName: json['supplier'] is Map
+          ? json['supplier']['name']?.toString()
+          : json['supplierName']?.toString(),
+      supplierStationIds: (json['supplierStationIds'] as List<dynamic>? ?? [])
+          .map((entry) {
+            if (entry is Map<String, dynamic>) {
+              return entry['_id']?.toString() ?? '';
+            }
+            return entry?.toString() ?? '';
+          })
+          .where((entry) => entry.trim().isNotEmpty)
+          .toList(),
       notes: json['notes']?.toString(),
       company: json['company']?.toString(),
       taxNumber: json['taxNumber']?.toString(),
@@ -266,6 +287,9 @@ class Customer {
       'postalCode': postalCode,
       'contactPerson': contactPerson,
       'contactPersonPhone': contactPersonPhone,
+      'supplier': supplierId,
+      'supplierName': supplierName,
+      'supplierStationIds': supplierStationIds,
       'notes': notes,
       'company': company,
       'taxNumber': taxNumber,
