@@ -1,0 +1,79 @@
+1222:     return DefaultTabController(
+1223:       length: tabs.length,
+1224:       child: PopScope(
+1225:         canPop: !_isSupplierRole,
+1226:         child: Theme(
+1227:           data: theme.copyWith(
+1228:             textTheme: theme.textTheme.apply(
+1229:               fontFamily: 'Cairo',
+1230:               bodyColor: AppColors.primaryDarkBlue,
+1231:               displayColor: AppColors.primaryDarkBlue,
+1232:             ),
+1233:             primaryTextTheme: theme.primaryTextTheme.apply(
+1234:               fontFamily: 'Cairo',
+1235:               bodyColor: Colors.white,
+1236:             ),
+1237:             appBarTheme: theme.appBarTheme.copyWith(
+1238:               titleTextStyle: const TextStyle(
+1239:                 fontFamily: 'Cairo',
+1240:                 fontWeight: FontWeight.w500,
+1241:                 fontSize: 20,
+1242:                 color: Colors.white,
+1243:               ),
+1244:               toolbarTextStyle: const TextStyle(
+1245:                 fontFamily: 'Cairo',
+1246:                 fontWeight: FontWeight.w400,
+1247:                 color: Colors.white,
+1248:               ),
+1249:             ),
+1250:             scaffoldBackgroundColor: const Color(0xFFEDF3FB),
+1251:             inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+1252:               filled: true,
+1253:               fillColor: Colors.white,
+1254:               contentPadding: const EdgeInsets.symmetric(
+1255:                 vertical: 16,
+1256:                 horizontal: 18,
+1257:               ),
+1258:               border: OutlineInputBorder(
+1259:                 borderRadius: BorderRadius.circular(18),
+1260:                 borderSide: BorderSide.none,
+1261:               ),
+1262:             ),
+1263:             cardTheme: theme.cardTheme.copyWith(
+1264:               color: Colors.white,
+1265:               elevation: 0,
+1266:               shape: RoundedRectangleBorder(
+1267:                 borderRadius: BorderRadius.circular(24),
+1268:               ),
+1269:             ),
+1270:           ),
+1271:           child: Scaffold(
+1272:             backgroundColor: Colors.transparent,
+1273:             appBar: AppBar(
+1274:               automaticallyImplyLeading: !_isSupplierRole,
+1275:               title: Text(
+1276:                 _isSupplierRole ? '\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646' : '\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646',
+1277:               ),
+1278:               flexibleSpace: const DecoratedBox(
+1279:                 decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+1280:               ),
+1281:               actions: <Widget>[
+1282:               IconButton(
+1283:                 onPressed: _refreshing ? null : () => _loadOrders(),
+1284:                 icon: _refreshing
+1285:                     ? const SizedBox(
+1286:                         width: 18,
+1287:                         height: 18,
+1288:                         child: CircularProgressIndicator(
+1289:                           strokeWidth: 2,
+1290:                           color: Colors.white,
+1291:                         ),
+1292:                       )
+1293:                     : const Icon(Icons.refresh_rounded),
+1294:                 tooltip: '\u062a\u062d\u062f\u064a\u062b',
+1295:               ),
+1296:               NotificationBell(
+1297:                 onPressed: _openNotificationsSheet,
+1298:                 iconColor: Colors.white,
+1299:               ),
+1300:               IconButton(

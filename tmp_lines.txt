@@ -1,0 +1,39 @@
+1210:         ? const <Tab>[
+1211:             Tab(text: '\u0625\u062f\u062e\u0627\u0644', icon: Icon(Icons.add_box_outlined)),
+1212:             Tab(text: '\u0627\u0644\u0633\u062c\u0644', icon: Icon(Icons.history_rounded)),
+1213:           ]
+1214:         : const <Tab>[
+1215:             Tab(text: '\u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629', icon: Icon(Icons.fact_check_outlined)),
+1216:             Tab(text: '\u0627\u0644\u0633\u062c\u0644', icon: Icon(Icons.history_rounded)),
+1217:           ];
+1218: 
+1219:     final theme = Theme.of(context);
+1220:     final busy = _booting || _submitting || _autofilling || _actionBusy;
+1221: 
+1222:     return DefaultTabController(
+1223:       length: tabs.length,
+1224:       child: PopScope(
+1225:         canPop: !_isSupplierRole,
+1226:         child: Theme(
+1227:           data: theme.copyWith(
+1228:             textTheme: theme.textTheme.apply(
+1229:               fontFamily: 'Cairo',
+1230:               bodyColor: AppColors.primaryDarkBlue,
+1231:               displayColor: AppColors.primaryDarkBlue,
+1232:             ),
+1233:             primaryTextTheme: theme.primaryTextTheme.apply(
+1234:               fontFamily: 'Cairo',
+1235:               bodyColor: Colors.white,
+1236:             ),
+1237:             appBarTheme: theme.appBarTheme.copyWith(
+1238:               titleTextStyle: const TextStyle(
+1239:                 fontFamily: 'Cairo',
+1240:                 fontWeight: FontWeight.w500,
+1241:                 fontSize: 20,
+1242:                 color: Colors.white,
+1243:               ),
+1244:               toolbarTextStyle: const TextStyle(
+1245:                 fontFamily: 'Cairo',
+1246:                 fontWeight: FontWeight.w400,
+1247:                 color: Colors.white,
+1248:               ),

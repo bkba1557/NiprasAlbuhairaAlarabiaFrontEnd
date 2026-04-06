@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -50,6 +51,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _areaController = TextEditingController();
+  final TextEditingController _supplierNameController = TextEditingController();
   final TextEditingController _loadingTimeController = TextEditingController(
     text: '08:00',
   );
@@ -64,6 +66,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   String _carrierValue = _carrierName;
   String? _selectedCustomerId;
   String? _selectedStationId;
+  String _searchQuery = '';
   PlatformFile? _document;
 
   bool _booting = true;
@@ -99,7 +102,9 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   }
 
   List<Order> get _portalOrders {
-    final items = _orders.where((order) => order.isSupplierPortalOrder).toList();
+    final items = _orders
+        .where((order) => order.isSupplierPortalOrder)
+        .toList();
     items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return items;
   }
@@ -128,6 +133,28 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
     return stations;
   }
 
+  List<Customer> get _availableCustomersForSupplier {
+    // إذا كان المستخدم مورد، يعرض جميع العملاء المرتبطين به
+    // إذا كان مستخدم آخر (مراجع)، يعرض جميع العملاء
+    return _customers..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  List<Order> get _filteredOrders {
+    if (_searchQuery.trim().isEmpty) {
+      return _portalOrders;
+    }
+    final query = _searchQuery.toLowerCase().trim();
+    return _portalOrders.where((order) {
+      return order.orderNumber.toLowerCase().contains(query) ||
+          (order.supplierOrderNumber?.toLowerCase().contains(query) ?? false) ||
+          (order.portalCustomerName?.toLowerCase().contains(query) ?? false) ||
+          (order.destinationStationName?.toLowerCase().contains(query) ??
+              false) ||
+          (order.driverName?.toLowerCase().contains(query) ?? false) ||
+          (order.supplierName.toLowerCase().contains(query));
+    }).toList();
+  }
+
   int get _approvedCount =>
       _portalOrders.where((order) => order.portalStatus == 'approved').length;
 
@@ -144,6 +171,22 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       )
       .length;
 
+  List<MapEntry<String, int>> get _topStations {
+    final stationCounts = <String, int>{};
+    for (final order in _portalOrders) {
+      if (order.destinationStationId != null &&
+          order.destinationStationId!.isNotEmpty) {
+        final stationName = order.destinationStationName ?? 'محطة غير معروفة';
+        stationCounts[stationName] = (stationCounts[stationName] ?? 0) + 1;
+      }
+    }
+
+    final sortedStations = stationCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return sortedStations.take(10).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -159,6 +202,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
     _notesController.dispose();
     _cityController.dispose();
     _areaController.dispose();
+    _supplierNameController.dispose();
     _loadingTimeController.dispose();
     _arrivalTimeController.dispose();
     super.dispose();
@@ -188,6 +232,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
     }
 
     if (!mounted) return;
+    final auth = context.read<AuthProvider>();
     setState(() {
       _customers = List<Customer>.from(customerProvider.customers)
         ..sort((a, b) => a.name.compareTo(b.name));
@@ -195,6 +240,8 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
         ..sort((a, b) => a.stationName.compareTo(b.stationName));
       _drivers = List<Driver>.from(drivers)
         ..sort((a, b) => a.name.compareTo(b.name));
+      _supplierNameController.text =
+          auth.user?.supplierName ?? auth.user?.company ?? '';
       _booting = false;
     });
   }
@@ -228,16 +275,108 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   }
 
   String? _text(dynamic value) {
-    final text = value?.toString().trim();
-    if (text == null || text.isEmpty) return null;
-    return text;
+    if (value == null) return null;
+
+    var text = value.toString().trim();
+    if (text.isEmpty) return null;
+
+    // تنظيف شامل ودقيق جداً للنصوص
+
+    // 1. إزالة أحرف التحكم تماماً
+    text = text.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
+
+    // 2. إزالة جميع الأحرف غير المطبوعة والرموز الخاصة
+    text = text.replaceAll(
+      RegExp(r'[\u200b-\u200d\ufeff\u061c\u202a-\u202e]'),
+      '',
+    );
+
+    // 3. إزالة علامات التشكيل والنقاط الضائعة
+    text = text.replaceAll(RegExp(r'[\u064b-\u065f\u0670\u0640]'), '');
+
+    // 4. الحفاظ على الأحرف الآمنة فقط:
+    // - أحرف عربية (ء - ي)
+    // - أحرف إنجليزية (a-z, A-Z)
+    // - أرقام (0-9 و أرقام عربية)
+    // - علامات ترقيم آمنة وفوارغ
+    text = text.replaceAll(
+      RegExp(
+        r'[^\u0600-\u064aa-zA-Z0-9\u0660-\u0669\u06F0-\u06F9\s\-—\(\)\.\,\:\؛]',
+      ),
+      '',
+    );
+
+    // 5. توحيد الفوارغ المتعددة
+    text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return text.isEmpty ? null : text;
   }
 
   double? _quantityValue(dynamic value) {
     final raw = _text(value);
     if (raw == null) return null;
-    final normalized = raw.replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.]'), '');
-    return double.tryParse(normalized);
+
+    // تحويل الأرقام العربية إلى إنجليزية
+    var normalized = raw
+        .replaceAll('٠', '0')
+        .replaceAll('١', '1')
+        .replaceAll('٢', '2')
+        .replaceAll('٣', '3')
+        .replaceAll('٤', '4')
+        .replaceAll('٥', '5')
+        .replaceAll('٦', '6')
+        .replaceAll('٧', '7')
+        .replaceAll('٨', '8')
+        .replaceAll('٩', '9');
+
+    // إزالة الفوارغ (spaces) والفواصل الألفية
+    normalized = normalized.replaceAll(' ', '');
+
+    // معالجة الفواصل العشرية والألفية بذكاء
+    // إذا كانت آخر فاصلة متبوعة بـ 3 أرقام أو أقل = فاصلة ألفية
+    // وإلا فهي فاصلة عشرية
+    List<String> decimalSeparators = ['.', ',', '،'];
+    String? decimalPoint;
+    int decimalPointIndex = -1;
+
+    for (final sep in decimalSeparators) {
+      if (normalized.contains(sep)) {
+        final lastIndex = normalized.lastIndexOf(sep);
+        final afterSeparator = normalized.substring(lastIndex + 1);
+
+        // إذا كان بعد الفاصلة 3 أرقام أو أقل = فاصلة عشرية
+        if (afterSeparator.length <= 3 && afterSeparator.isNotEmpty) {
+          decimalPoint = sep;
+          decimalPointIndex = lastIndex;
+          break;
+        }
+      }
+    }
+
+    if (decimalPoint != null) {
+      // إزالة جميع الفواصل ما عدا الفاصلة العشرية
+      for (final sep in decimalSeparators) {
+        if (sep != decimalPoint) {
+          normalized = normalized.replaceAll(sep, '');
+        }
+      }
+      // استبدال الفاصلة العشرية بنقطة إنجليزية
+      normalized = normalized.replaceAll(decimalPoint, '.');
+    } else {
+      // لا توجد فاصلة عشرية، إزالة جميع الفواصل
+      for (final sep in decimalSeparators) {
+        normalized = normalized.replaceAll(sep, '');
+      }
+    }
+
+    // إزالة أي أحرف متبقية ما عدا الأرقام والنقاط
+    normalized = normalized.replaceAll(RegExp(r'[^0-9.]'), '');
+
+    if (normalized.isEmpty || normalized == '.') return null;
+
+    final parsed = double.tryParse(normalized);
+    // التحقق من أن القيمة منطقية (أكبر من 0) وأقل من حد معقول
+    return parsed != null && parsed > 0 && parsed < 999999999 ? parsed : null;
   }
 
   DateTime? _dateValue(dynamic value) {
@@ -259,10 +398,21 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   }
 
   String _normalize(String value) {
-    return value
-        .trim()
+    // تنظيف قوي جداً من الأحرف الغريبة
+    var cleaned = value
+        .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '') // أحرف التحكم
+        .replaceAll(
+          RegExp(r'[\u200b-\u200d\ufeff\u061c\u202a-\u202e]'),
+          '',
+        ) // أحرف غير مطبوعة
+        .replaceAll(
+          RegExp(r'[\u064b-\u065f\u0670\u0640]'),
+          '',
+        ) // علامات التشكيل
+        .trim();
+
+    return cleaned
         .toLowerCase()
-        .replaceAll(RegExp(r'[\u064b-\u065f\u0670]'), '')
         .replaceAll('أ', 'ا')
         .replaceAll('إ', 'ا')
         .replaceAll('آ', 'ا')
@@ -294,10 +444,12 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       if (!mounted) return;
 
       final draft = data?['draft'];
+      final meta = data?['meta'];
       final suggestedLocation = data?['suggestedLocation'];
       if (draft is! Map) {
         _showSnack(
-          context.read<OrderProvider>().error ?? 'تعذر استخراج بيانات الطلب من الملف',
+          context.read<OrderProvider>().error ??
+              'تعذر استخراج بيانات الطلب من الملف',
           AppColors.errorRed,
         );
         return;
@@ -314,28 +466,24 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
 
         final quantity = _quantityValue(mapDraft['quantity']);
         if (quantity != null) {
-          _quantityController.text = quantity.toStringAsFixed(
-            quantity.truncateToDouble() == quantity ? 0 : 2,
-          );
+          // عرض الأرقام الكبيرة بدقة - بدون علامات علمية
+          String quantityText;
+          if (quantity.truncateToDouble() == quantity) {
+            // إذا كانت عدد صحيح
+            quantityText = quantity.toStringAsFixed(0);
+          } else {
+            // إذا كانت عدد عشري
+            quantityText = quantity
+                .toStringAsFixed(2)
+                .replaceAll(RegExp(r'\.?0+$'), '');
+          }
+          _quantityController.text = quantityText;
           changed += 1;
         }
 
         final notes = _text(mapDraft['notes']);
         if (notes != null) {
           _notesController.text = notes;
-          changed += 1;
-        }
-
-        final city = _text(mapDraft['city']) ?? _text(suggestedLocation?['city']);
-        if (city != null) {
-          _cityController.text = city;
-          changed += 1;
-        }
-
-        final area = _text(mapDraft['region'] ?? mapDraft['area']) ??
-            _text(suggestedLocation?['area']);
-        if (area != null) {
-          _areaController.text = area;
           changed += 1;
         }
 
@@ -369,20 +517,43 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
           changed += 1;
         }
 
-        final normalizedFuel = _normalize(_text(mapDraft['fuelType']) ?? '');
-        if (normalizedFuel.isNotEmpty) {
-          if (normalizedFuel.contains('95') || normalizedFuel.contains('ممتاز')) {
-            _fuelType = 'بنزين 95';
-            changed += 1;
-          } else if (normalizedFuel.contains('91')) {
-            _fuelType = 'بنزين 91';
-            changed += 1;
-          } else if (normalizedFuel.contains('كيروسين')) {
-            _fuelType = 'كيروسين';
-            changed += 1;
-          } else if (normalizedFuel.contains('ديزل') ||
-              normalizedFuel.contains('سولار')) {
-            _fuelType = 'ديزل';
+        final fuelRaw = _text(mapDraft['fuelType']);
+        if (fuelRaw != null && fuelRaw.isNotEmpty) {
+          final normalized = _normalize(fuelRaw);
+          String? detectedFuel;
+
+          // البحث عن بنزين 95
+          if (normalized.contains('95') ||
+              normalized.contains('ممتاز') ||
+              normalized.contains('ممتازة') ||
+              normalized.contains('supreme') ||
+              normalized.contains('95 RON')) {
+            detectedFuel = 'بنزين 95';
+          }
+          // البحث عن بنزين 91
+          else if (normalized.contains('91') ||
+              normalized.contains('regular') ||
+              normalized.contains('91 RON') ||
+              (normalized.contains('بنزين') && !normalized.contains('95'))) {
+            detectedFuel = 'بنزين 91';
+          }
+          // البحث عن الديزل
+          else if (normalized.contains('ديزل') ||
+              normalized.contains('سولار') ||
+              normalized.contains('diesel') ||
+              (normalized.contains('سوله') && !normalized.contains('بنزين'))) {
+            detectedFuel = 'ديزل';
+          }
+          // البحث عن الكيروسين
+          else if (normalized.contains('كيروسين') ||
+              normalized.contains('كيروسين') ||
+              normalized.contains('kerosene') ||
+              normalized.contains('kero')) {
+            detectedFuel = 'كيروسين';
+          }
+
+          if (detectedFuel != null) {
+            _fuelType = detectedFuel;
             changed += 1;
           }
         }
@@ -409,16 +580,18 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
         .where((item) => item.id == _selectedStationId)
         .cast<Station?>()
         .firstWhere((item) => item != null, orElse: () => null);
-    final quantity = double.tryParse(_quantityController.text.trim());
+
+    // قراءة الكمية بنفس الطريقة الدقيقة المستخدمة في الملف
+    final quantity = _quantityValue(_quantityController.text.trim());
 
     if (customer == null) {
       _showSnack('اختر الجهة المرتبطة بالمورد أولاً', AppColors.errorRed);
       return;
     }
-    if (station == null) {
-      _showSnack('اختر محطة التفريغ الخاصة بهذه الجهة', AppColors.errorRed);
-      return;
-    }
+    // if (station == null) {
+    //   _showSnack('اختر محطة التفريغ الخاصة بهذه الجهة', AppColors.errorRed);
+    //   return;
+    // }
     if (quantity == null || quantity <= 0) {
       _showSnack('أدخل الكمية بشكل صحيح', AppColors.errorRed);
       return;
@@ -457,13 +630,15 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
-      city: station.city.isNotEmpty ? station.city : _cityController.text.trim(),
-      area: station.stationName.isNotEmpty
-          ? station.stationName
-          : _areaController.text.trim(),
-      address: station.location.isNotEmpty
-          ? station.location
-          : '${_cityController.text.trim()} - ${_areaController.text.trim()}',
+      // // city: station.city.isNotEmpty
+      // //     ? station.city
+      //     : _cityController.text.trim(),
+      // area: station.stationName.isNotEmpty
+      //     ? station.stationName
+      //     : _areaController.text.trim(),
+      // address: station.location.isNotEmpty
+      //     ? station.location
+      //     : '${_cityController.text.trim()} - ${_areaController.text.trim()}',
       attachments: const <Attachment>[],
       createdById: auth.user?.id ?? '',
       createdByName: auth.user?.name,
@@ -471,8 +646,8 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       updatedAt: DateTime.now(),
       portalCustomerId: customer.id,
       portalCustomerName: customer.name,
-      destinationStationId: station.id,
-      destinationStationName: station.stationName,
+      // destinationStationId: station.id,
+      // destinationStationName: station.stationName,
       carrierName: _carrierValue,
     );
 
@@ -503,12 +678,15 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   }
 
   void _resetForm() {
+    final auth = context.read<AuthProvider>();
     setState(() {
       _supplierOrderNumberController.clear();
       _quantityController.clear();
       _notesController.clear();
       _cityController.clear();
       _areaController.clear();
+      _supplierNameController.text =
+          auth.user?.supplierName ?? auth.user?.company ?? '';
       _loadingTimeController.text = '08:00';
       _arrivalTimeController.text = '10:00';
       _orderDate = DateTime.now();
@@ -526,6 +704,17 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
     setState(() {
       _selectedCustomerId = value;
       _selectedStationId = null;
+    });
+  }
+
+  void _handleStationDropdownChanged(String? customerId) {
+    if (customerId == null) return;
+    setState(() {
+      _selectedCustomerId = customerId;
+      _selectedStationId = null;
+      // تحديث حقول المدينة والمنطقة
+      _cityController.clear();
+      _areaController.clear();
     });
   }
 
@@ -560,14 +749,14 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   }
 
   Future<void> _pickTime({required TextEditingController controller}) async {
-    final initial = _parseTime(controller.text) ??
-        const TimeOfDay(hour: 8, minute: 0);
+    final initial =
+        _parseTime(controller.text) ?? const TimeOfDay(hour: 8, minute: 0);
     final picked = await showTimePicker(
       context: context,
       initialTime: initial,
       builder: (context, child) {
         return Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: ui.TextDirection.rtl,
           child: child ?? const SizedBox.shrink(),
         );
       },
@@ -667,7 +856,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                     'تفاصيل الطلب',
                     style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.primaryDarkBlue,
                     ),
                   ),
@@ -686,7 +875,8 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                         value: detailedOrder.carrierName ?? _carrierName,
                         color: AppColors.primaryBlue,
                       ),
-                      if ((detailedOrder.destinationStationName ?? '').isNotEmpty)
+                      if ((detailedOrder.destinationStationName ?? '')
+                          .isNotEmpty)
                         _detailChip(
                           label: 'المحطة',
                           value: detailedOrder.destinationStationName!,
@@ -720,14 +910,29 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                             ? '${detailedOrder.quantity!.toStringAsFixed(detailedOrder.quantity!.truncateToDouble() == detailedOrder.quantity ? 0 : 2)} ${detailedOrder.unit ?? ''}'
                             : '-',
                       ),
-                      _infoRow('تاريخ الطلب', _formatDate(detailedOrder.orderDate)),
-                      _infoRow('موعد التحميل', detailedOrder.formattedLoadingDateTime),
-                      _infoRow('موعد الوصول', detailedOrder.formattedArrivalDateTime),
+                      _infoRow(
+                        'تاريخ الطلب',
+                        _formatDate(detailedOrder.orderDate),
+                      ),
+                      _infoRow(
+                        'موعد التحميل',
+                        detailedOrder.formattedLoadingDateTime,
+                      ),
+                      _infoRow(
+                        'موعد الوصول',
+                        detailedOrder.formattedArrivalDateTime,
+                      ),
                       _infoRow('الحالة التنفيذية', detailedOrder.status),
-                      _infoRow('أضيف بواسطة', detailedOrder.createdByName ?? '-'),
+                      _infoRow(
+                        'أضيف بواسطة',
+                        detailedOrder.createdByName ?? '-',
+                      ),
                       _infoRow('السائق', detailedOrder.driverName ?? '-'),
                       if ((detailedOrder.portalReviewNotes ?? '').isNotEmpty)
-                        _infoRow('ملاحظات الحركة', detailedOrder.portalReviewNotes!),
+                        _infoRow(
+                          'ملاحظات الحركة',
+                          detailedOrder.portalReviewNotes!,
+                        ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -760,15 +965,12 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
     var stationId = order.destinationStationId;
     var driverId = order.driverId;
 
-    final supplierCustomers = _customers
-        .where((customer) {
-          if (order.supplierId == null || order.supplierId!.isEmpty) {
-            return true;
-          }
-          return customer.supplierId == order.supplierId;
-        })
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final supplierCustomers = _customers.where((customer) {
+      if (order.supplierId == null || order.supplierId!.isEmpty) {
+        return true;
+      }
+      return customer.supplierId == order.supplierId;
+    }).toList()..sort((a, b) => a.name.compareTo(b.name));
 
     List<Station> stationsForCustomer(String? selectedCustomerId) {
       final customer = supplierCustomers.firstWhere(
@@ -885,7 +1087,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                         'مراجعة طلب المورد',
                         style: TextStyle(
                           fontSize: 22,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.primaryDarkBlue,
                         ),
                       ),
@@ -924,7 +1126,10 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
-                        value: supplierCustomers.any((item) => item.id == customerId)
+                        value:
+                            supplierCustomers.any(
+                              (item) => item.id == customerId,
+                            )
                             ? customerId
                             : null,
                         decoration: const InputDecoration(
@@ -948,7 +1153,8 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
-                        value: stationOptions.any((item) => item.id == stationId)
+                        value:
+                            stationOptions.any((item) => item.id == stationId)
                             ? stationId
                             : null,
                         decoration: const InputDecoration(
@@ -970,7 +1176,8 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                         },
                       ),
                       const SizedBox(height: 14),
-                      if (action == 'approved' || order.portalStatus == 'approved')
+                      if (action == 'approved' ||
+                          order.portalStatus == 'approved')
                         DropdownButtonFormField<String>(
                           value: _drivers.any((item) => item.id == driverId)
                               ? driverId
@@ -991,7 +1198,8 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                             setSheetState(() => driverId = value);
                           },
                         ),
-                      if (action == 'approved' || order.portalStatus == 'approved')
+                      if (action == 'approved' ||
+                          order.portalStatus == 'approved')
                         const SizedBox(height: 14),
                       TextFormField(
                         controller: noteController,
@@ -1079,7 +1287,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                             'الإشعارات',
                             style: TextStyle(
                               fontSize: 22,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                               color: AppColors.primaryDarkBlue,
                             ),
                           ),
@@ -1104,7 +1312,8 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                           )
                         : ListView.separated(
                             itemCount: items.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final item = items[index];
                               final currentUserId = provider.getCurrentUserId();
@@ -1118,10 +1327,11 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                                   }
                                 },
                                 leading: CircleAvatar(
-                                  backgroundColor: (isRead
-                                          ? AppColors.primaryBlue
-                                          : AppColors.warningOrange)
-                                      .withValues(alpha: 0.12),
+                                  backgroundColor:
+                                      (isRead
+                                              ? AppColors.primaryBlue
+                                              : AppColors.warningOrange)
+                                          .withValues(alpha: 0.12),
                                   child: Icon(
                                     isRead
                                         ? Icons.notifications_none_rounded
@@ -1136,7 +1346,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                                   style: TextStyle(
                                     fontWeight: isRead
                                         ? FontWeight.w600
-                                        : FontWeight.w900,
+                                        : FontWeight.w600,
                                   ),
                                 ),
                                 subtitle: Column(
@@ -1180,9 +1390,9 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   }
 
   void _showSnack(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
 
   String _formatDate(DateTime value) {
@@ -1195,13 +1405,11 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       return Scaffold(
         appBar: AppBar(
           title: const Text(
-            'بوابة الموردين',
+            'شركة البحيرة العربية ALBUHAIRA ALARABIA ',
             style: TextStyle(color: Colors.white),
           ),
         ),
-        body: const Center(
-          child: Text('غير مصرح لك بالدخول إلى هذه الصفحة'),
-        ),
+        body: const Center(child: Text('غير مصرح لك بالدخول إلى هذه الصفحة')),
       );
     }
 
@@ -1215,67 +1423,168 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
             Tab(text: 'السجل', icon: Icon(Icons.history_rounded)),
           ];
 
+    final theme = Theme.of(context);
     final busy = _booting || _submitting || _autofilling || _actionBusy;
 
     return DefaultTabController(
       length: tabs.length,
       child: PopScope(
         canPop: !_isSupplierRole,
-        child: Scaffold(
-          appBar: AppBar(
-            automaticallyImplyLeading: !_isSupplierRole,
-            title: Text(
-              _isSupplierRole ? 'بوابة الموردين' : 'طلبات الموردين',
-              style: const TextStyle(color: Colors.white),
+        child: Theme(
+          data: theme.copyWith(
+            textTheme: theme.textTheme.apply(
+              fontFamily: 'Cairo',
+              bodyColor: AppColors.primaryDarkBlue,
+              displayColor: AppColors.primaryDarkBlue,
             ),
-            flexibleSpace: const DecoratedBox(
-              decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+            primaryTextTheme: theme.primaryTextTheme.apply(
+              fontFamily: 'Cairo',
+              bodyColor: Colors.white,
             ),
-            actions: <Widget>[
-              IconButton(
-                onPressed: _refreshing ? null : () => _loadOrders(),
-                icon: _refreshing
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.refresh_rounded),
-                tooltip: 'تحديث',
+            appBarTheme: theme.appBarTheme.copyWith(
+              titleTextStyle: const TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w500,
+                fontSize: 20,
+                color: Colors.white,
               ),
-              NotificationBell(
-                onPressed: _openNotificationsSheet,
-                iconColor: Colors.white,
+              toolbarTextStyle: const TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w400,
+                color: Colors.white,
               ),
-              IconButton(
-                onPressed: _logout,
-                icon: const Icon(Icons.logout_rounded),
-                tooltip: 'تسجيل الخروج',
+            ),
+            scaffoldBackgroundColor: const Color(0xFFEDF3FB),
+            inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 16,
+                horizontal: 18,
               ),
-              const SizedBox(width: 6),
-            ],
-            bottom: TabBar(
-              indicatorColor: Colors.white,
-              indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              tabs: tabs,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            cardTheme: theme.cardTheme.copyWith(
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
             ),
           ),
-          body: Stack(
-            children: <Widget>[
-              const AppSoftBackground(),
-              if (!_booting)
-                TabBarView(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              automaticallyImplyLeading: !_isSupplierRole,
+              toolbarHeight: 42,
+              title: Text(
+                _isSupplierRole ? 'شركة البحيرة العربية ' : 'طلبات الموردين',
+              ),
+              flexibleSpace: const DecoratedBox(
+                decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+              ),
+              actions: <Widget>[
+                IconButton(
+                  onPressed: _refreshing ? null : () => _loadOrders(),
+                  icon: _refreshing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.refresh_rounded),
+                  tooltip: 'تحديث',
+                ),
+                NotificationBell(
+                  onPressed: _openNotificationsSheet,
+                  iconColor: Colors.white,
+                ),
+                IconButton(
+                  onPressed: _logout,
+                  icon: const Icon(Icons.logout_rounded),
+                  tooltip: 'تسجيل الخروج',
+                ),
+                const SizedBox(width: 6),
+              ],
+            ),
+            body: Stack(
+              children: <Widget>[
+                const AppSoftBackground(),
+                Column(
                   children: <Widget>[
-                    if (_isSupplierRole) _buildEntryTab() else _buildReviewTab(),
-                    _buildHistoryTab(),
+                    _buildGlassyNavBar(tabs),
+                    Expanded(
+                      child: !_booting
+                          ? TabBarView(
+                              children: <Widget>[
+                                if (_isSupplierRole)
+                                  _buildEntryTab()
+                                else
+                                  _buildReviewTab(),
+                                _buildHistoryTab(),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
                   ],
                 ),
-              if (busy) _buildBusyOverlay(),
+                if (busy) _buildBusyOverlay(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassyNavBar(List<Tab> tabs) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: AppColors.appBarGradient,
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: TabBar(
+                  indicatorColor: Colors.white,
+                  indicatorWeight: 3,
+                  labelStyle: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white.withOpacity(0.85),
+                  tabs: tabs,
+                ),
+              ),
             ],
           ),
         ),
@@ -1295,7 +1604,9 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
           child: Column(
             children: <Widget>[
               _buildHeroCard(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
+              SizedBox(width: double.infinity, child: _buildSmallStatCards()),
+              const SizedBox(height: 18),
               Wrap(
                 spacing: 16,
                 runSpacing: 16,
@@ -1314,7 +1625,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                               'إضافة طلب مورد',
                               style: TextStyle(
                                 fontSize: 22,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 color: AppColors.primaryDarkBlue,
                               ),
                             ),
@@ -1346,17 +1657,21 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                                     setState(() => _carrierValue = value);
                                   },
                                 ),
-                                DropdownButtonFormField<String>(
-                                  value: _customers.any(
-                                    (item) => item.id == _selectedCustomerId,
-                                  )
-                                      ? _selectedCustomerId
-                                      : null,
+                                TextFormField(
+                                  controller: _supplierNameController,
+                                  readOnly: true,
                                   decoration: const InputDecoration(
-                                    labelText: 'الجهة التابعة للمورد',
-                                    prefixIcon: Icon(Icons.apartment_rounded),
+                                    labelText: 'اسم المورد',
+                                    prefixIcon: Icon(Icons.business_outlined),
                                   ),
-                                  items: _customers
+                                ),
+                                DropdownButtonFormField<String>(
+                                  value: _selectedCustomerId,
+                                  decoration: const InputDecoration(
+                                    labelText: 'محطة التفريغ',
+                                    prefixIcon: Icon(Icons.place_outlined),
+                                  ),
+                                  items: _availableCustomersForSupplier
                                       .map(
                                         (customer) => DropdownMenuItem<String>(
                                           value: customer.id,
@@ -1366,40 +1681,38 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                                       .toList(),
                                   validator: (value) {
                                     if (value == null || value.trim().isEmpty) {
-                                      return 'اختر الجهة';
-                                    }
-                                    return null;
-                                  },
-                                  onChanged: _handleCustomerChanged,
-                                ),
-                                DropdownButtonFormField<String>(
-                                  value: _availableStationsForCustomer.any(
-                                    (item) => item.id == _selectedStationId,
-                                  )
-                                      ? _selectedStationId
-                                      : null,
-                                  decoration: const InputDecoration(
-                                    labelText: 'محطة التفريغ',
-                                    prefixIcon: Icon(Icons.place_outlined),
-                                  ),
-                                  items: _availableStationsForCustomer
-                                      .map(
-                                        (station) => DropdownMenuItem<String>(
-                                          value: station.id,
-                                          child: Text(
-                                            '${station.stationName} - ${station.city}',
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
                                       return 'اختر محطة التفريغ';
                                     }
                                     return null;
                                   },
-                                  onChanged: _handleStationChanged,
+                                  onChanged: _handleStationDropdownChanged,
                                 ),
+                                if (_selectedCustomerId != null)
+                                  DropdownButtonFormField<String>(
+                                    value: _selectedStationId,
+                                    decoration: const InputDecoration(
+                                      labelText: 'محطة التوزيع',
+                                      prefixIcon: Icon(
+                                        Icons.local_gas_station_outlined,
+                                      ),
+                                    ),
+                                    items: _availableStationsForCustomer
+                                        .map(
+                                          (station) => DropdownMenuItem<String>(
+                                            value: station.id,
+                                            child: Text(station.stationName),
+                                          ),
+                                        )
+                                        .toList(),
+                                    validator: (value) {
+                                      if (value == null ||
+                                          value.trim().isEmpty) {
+                                        return 'اختر محطة التوزيع';
+                                      }
+                                      return null;
+                                    },
+                                    onChanged: _handleStationChanged,
+                                  ),
                                 TextFormField(
                                   controller: _supplierOrderNumberController,
                                   decoration: const InputDecoration(
@@ -1411,13 +1724,11 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                                   controller: _quantityController,
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
+                                        decimal: true,
+                                      ),
                                   decoration: const InputDecoration(
                                     labelText: 'الكمية',
-                                    prefixIcon: Icon(
-                                      Icons.water_drop_outlined,
-                                    ),
+                                    prefixIcon: Icon(Icons.water_drop_outlined),
                                     suffixText: 'لتر',
                                   ),
                                   validator: (value) {
@@ -1507,16 +1818,6 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                                     ),
                                   ),
                                 ),
-                                TextFormField(
-                                  controller: _areaController,
-                                  readOnly: true,
-                                  decoration: const InputDecoration(
-                                    labelText: 'المحطة المختارة',
-                                    prefixIcon: Icon(
-                                      Icons.alt_route_outlined,
-                                    ),
-                                  ),
-                                ),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -1529,33 +1830,6 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                                 alignLabelWithHint: true,
                               ),
                             ),
-                            const SizedBox(height: 20),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _submitting ? null : _submitOrder,
-                                icon: _submitting
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Icon(Icons.send_rounded),
-                                label: Text(
-                                  _submitting
-                                      ? 'جاري الإرسال...'
-                                      : 'إرسال الطلب للمراجعة',
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primaryBlue,
-                                  foregroundColor: Colors.white,
-                                  minimumSize: const Size.fromHeight(52),
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -1565,7 +1839,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                     width: isWide ? 420 : double.infinity,
                     child: Column(
                       children: <Widget>[
-                        _buildStatCards(),
+                        _buildTopStationsCard(),
                         const SizedBox(height: 16),
                         AppSurfaceCard(
                           padding: const EdgeInsets.all(20),
@@ -1576,7 +1850,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                                 'متابعة الطلبات',
                                 style: TextStyle(
                                   fontSize: 18,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                   color: AppColors.primaryDarkBlue,
                                 ),
                               ),
@@ -1616,9 +1890,11 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
         children: <Widget>[
           _buildHeroCard(),
           const SizedBox(height: 16),
+          _buildSearchBar(),
+          const SizedBox(height: 16),
           _buildStatCards(),
           const SizedBox(height: 16),
-          if (_pendingOrders.isEmpty)
+          if (_filteredOrders.isEmpty)
             AppSurfaceCard(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -1633,7 +1909,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                     'لا توجد طلبات موردين قيد المراجعة حالياً',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                       color: AppColors.primaryDarkBlue,
                     ),
                   ),
@@ -1641,12 +1917,13 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
               ),
             )
           else
-            ..._pendingOrders.map((order) {
+            ..._filteredOrders.map((order) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 14),
                 child: _orderCard(
                   order: order,
-                  primaryActionLabel: order.portalStatus == 'approved' &&
+                  primaryActionLabel:
+                      order.portalStatus == 'approved' &&
                           (order.driverId == null || order.driverId!.isEmpty)
                       ? 'تعيين سائق'
                       : 'مراجعة',
@@ -1668,9 +1945,11 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
         children: <Widget>[
           _buildHeroCard(),
           const SizedBox(height: 16),
+          _buildSearchBar(),
+          const SizedBox(height: 16),
           _buildStatCards(),
           const SizedBox(height: 16),
-          if (_historyOrders.isEmpty)
+          if (_filteredOrders.isEmpty)
             AppSurfaceCard(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -1685,7 +1964,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                     'لا توجد طلبات في السجل حتى الآن',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                       color: AppColors.primaryDarkBlue,
                     ),
                   ),
@@ -1693,13 +1972,14 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
               ),
             )
           else
-            ..._historyOrders.map((order) {
+            ..._filteredOrders.map((order) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 14),
                 child: _orderCard(
                   order: order,
-                  primaryActionLabel:
-                      _canReviewSupplierOrders ? 'تحديث' : 'التفاصيل',
+                  primaryActionLabel: _canReviewSupplierOrders
+                      ? 'تحديث'
+                      : 'التفاصيل',
                   onPrimaryAction: _canReviewSupplierOrders
                       ? () => _openReviewSheet(order)
                       : () => _showOrderDetails(order),
@@ -1714,15 +1994,16 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
 
   Widget _buildHeroCard() {
     final auth = context.read<AuthProvider>();
+    final greeting = _isSupplierRole ? 'أهلاً وسهلاً! 👋' : 'مرحباً بك 👋';
     final subtitle = _isSupplierRole
-        ? 'ترفع الطلبات هنا باسم المورد فقط، وتُراجع من قسم الحركة قبل التنفيذ.'
-        : 'متابعة واعتماد ورفض وتحويل طلبات الموردين مع تعيين السائق وتبديل محطة التفريغ.';
+        ? 'ارفع طلباتك بسهولة واتابع مراجعتها'
+        : 'إدارة وراجعة طلبات الموردين بكل سهولة';
 
     return AppSurfaceCard(
       padding: EdgeInsets.zero,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: <Color>[
@@ -1733,7 +2014,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
           ),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1741,72 +2022,116 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
             Row(
               children: <Widget>[
                 Container(
-                  width: 62,
-                  height: 62,
-                  padding: const EdgeInsets.all(10),
+                  width: 170,
+                  height: 160,
+                  padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      // BoxShadow(
+                      //   color: Colors.black.withOpacity(0.15),
+                      //   blurRadius: 14,
+                      //   offset: const Offset(0, 4),
+                      // ),
+                    ],
                   ),
-                  child: Image.asset(AppImages.logo, fit: BoxFit.contain),
+                  child: Image.asset(
+                    AppImages.logo,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        _isSupplierRole
-                            ? 'بوابة الموردين - شركة البحيرة العربية'
-                            : 'مراقبة طلبات الموردين - شركة البحيرة العربية',
+                        greeting,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         subtitle,
                         style: const TextStyle(
                           color: Colors.white70,
-                          height: 1.6,
+                          fontSize: 13,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        auth.user?.name ?? '-',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              children: <Widget>[
-                _heroPill('المستخدم', auth.user?.name ?? '-'),
-                _heroPill(
-                  'الدور',
-                  _isSupplierRole ? 'مورد' : 'حركة / إدارة',
-                ),
-                _heroPill('الناقل المعتمد', _carrierName),
+                if (_isSupplierRole &&
+                    _linkedSupplierId != null &&
+                    _linkedSupplierId!.isNotEmpty)
+                  SizedBox(
+                    height: 36,
+                    child: ElevatedButton.icon(
+                      onPressed: _submitting ? null : _submitOrder,
+                      icon: _submitting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.send_rounded, size: 16),
+                      label: Text(
+                        _submitting ? 'إرسال...' : 'إرسال',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.primaryDarkBlue,
+                        elevation: 3,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
             if (_isSupplierRole &&
                 (_linkedSupplierId == null || _linkedSupplierId!.isEmpty)) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Text(
-                  'هذا المستخدم غير مرتبط بسجل مورد بعد. اربطه من إدارة المستخدمين ليتمكن من الإضافة والاطلاع على طلباته فقط.',
+                  'غير مرتبط بسجل مورد. اطلب تفعيل حسابك من الإدارة',
                   style: TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    height: 1.6,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                    height: 1.5,
                   ),
                 ),
               ),
@@ -1894,7 +2219,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                     item['value'].toString(),
                     style: TextStyle(
                       fontSize: 26,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       color: color,
                     ),
                   ),
@@ -1903,7 +2228,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                     item['label'].toString(),
                     style: const TextStyle(
                       color: AppColors.mediumGray,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -1912,6 +2237,108 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildSmallStatCards() {
+    final items = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'label': 'إجمالي الطلبات',
+        'value': _portalOrders.length,
+        'color': AppColors.primaryBlue,
+        'icon': Icons.inventory_2_outlined,
+      },
+      <String, dynamic>{
+        'label': 'تحت المراجعة',
+        'value': _pendingOrders.length,
+        'color': AppColors.warningOrange,
+        'icon': Icons.pending_actions_outlined,
+      },
+      <String, dynamic>{
+        'label': 'معتمدة',
+        'value': _approvedCount,
+        'color': AppColors.successGreen,
+        'icon': Icons.check_circle_outline_rounded,
+      },
+      <String, dynamic>{
+        'label': 'مرفوضة',
+        'value': _rejectedCount,
+        'color': AppColors.errorRed,
+        'icon': Icons.cancel_outlined,
+      },
+      <String, dynamic>{
+        'label': 'جاهزة أو منقولة',
+        'value': _inTransitCount,
+        'color': AppColors.secondaryTeal,
+        'icon': Icons.local_shipping_outlined,
+      },
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: items
+            .map((item) {
+              final color = item['color'] as Color;
+              return SizedBox(
+                width: 130,
+                child: AppSurfaceCard(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          item['icon'] as IconData,
+                          color: color,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item['value'].toString(),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        item['label'].toString(),
+                        style: const TextStyle(
+                          color: AppColors.mediumGray,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            })
+            .toList()
+            .asMap()
+            .entries
+            .map(
+              (e) => Padding(
+                padding: EdgeInsets.only(
+                  right: e.key < items.length - 1 ? 10 : 0,
+                ),
+                child: e.value,
+              ),
+            )
+            .toList(),
+      ),
     );
   }
 
@@ -1954,13 +2381,15 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                         ? 'أرفق ملف الطلب ليتم تعبئة الحقول تلقائياً'
                         : _document!.name,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                       color: AppColors.primaryDarkBlue,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _document == null ? 'PDF أو صورة فقط' : 'تم إرفاق الملف بنجاح',
+                    _document == null
+                        ? 'PDF أو صورة فقط'
+                        : 'تم إرفاق الملف بنجاح',
                     style: const TextStyle(color: AppColors.mediumGray),
                   ),
                 ],
@@ -2010,10 +2439,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
   }) {
     return DropdownButtonFormField<T>(
       value: value,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-      ),
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       items: items,
       onChanged: onChanged,
     );
@@ -2029,13 +2455,10 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-        ),
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
         child: Text(
           _formatDate(value),
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(fontWeight: FontWeight.w500),
         ),
       ),
     );
@@ -2051,13 +2474,10 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-        ),
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
         child: Text(
           controller.text,
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(fontWeight: FontWeight.w500),
         ),
       ),
     );
@@ -2103,7 +2523,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                       order.supplierName.isEmpty ? 'مورد' : order.supplierName,
                       style: const TextStyle(
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         color: AppColors.primaryDarkBlue,
                       ),
                     ),
@@ -2133,7 +2553,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                   _portalStatusLabel(order),
                   style: TextStyle(
                     color: statusColor,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -2169,7 +2589,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
               child: Text(
                 'ملاحظات الحركة: ${order.portalReviewNotes}',
                 style: const TextStyle(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                   color: AppColors.primaryDarkBlue,
                 ),
               ),
@@ -2207,56 +2627,55 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
         color: Colors.black.withValues(alpha: 0.18),
         child: Center(
           child: SizedBox(
-            width: 320,
+            width: 500,
             child: AppSurfaceCard(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
               color: Colors.white.withValues(alpha: 0.94),
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(32),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   Container(
-                    width: 88,
-                    height: 88,
-                    padding: const EdgeInsets.all(12),
+                    width: 260,
+                    height: 230,
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: <BoxShadow>[
-                        BoxShadow(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.14),
-                          blurRadius: 20,
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
+                      // boxShadow: <BoxShadow>[
+                      //   // BoxShadow(
+                      //   //   color: AppColors.primaryBlue.withValues(alpha: 0.14),
+                      //   //   blurRadius: 24,
+                      //   //   offset: const Offset(0, 14),
+                      //   // ),
+                      // ],
                     ),
                     child: Image.asset(AppImages.logo, fit: BoxFit.contain),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   const Text(
-                    'البحيرة العربية',
+                    'شركة البحيرة العربية ',
                     style: TextStyle(
-                      fontSize: 21,
-                      fontWeight: FontWeight.w900,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.primaryDarkBlue,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
                     _busyMessage,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: AppColors.mediumGray,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
                       height: 1.7,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   const SizedBox(
-                    width: 26,
-                    height: 26,
+                    width: 32,
+                    height: 32,
                     child: CircularProgressIndicator(
-                      strokeWidth: 3,
+                      strokeWidth: 3.5,
                       color: AppColors.primaryBlue,
                     ),
                   ),
@@ -2265,6 +2684,212 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
+        decoration: InputDecoration(
+          hintText: 'ابحث عن رقم الطلب أو الجهة أو المحطة...',
+          hintStyle: const TextStyle(color: AppColors.lightGray, fontSize: 14),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: AppColors.primaryBlue,
+          ),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () {
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 14,
+            horizontal: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(
+              color: Colors.grey.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(
+              color: AppColors.primaryBlue,
+              width: 2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopStationsCard() {
+    final stations = _topStations;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.location_on_outlined,
+                  color: AppColors.primaryBlue,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const <Widget>[
+                    Text(
+                      'أكثر المحطات طلباً',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryDarkBlue,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'أكثر 10 محطات تلقت طلبات',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.mediumGray,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (stations.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Text(
+                  'لم تتلق أي محطات طلبات بعد',
+                  style: TextStyle(color: AppColors.lightGray, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: stations
+                  .asMap()
+                  .entries
+                  .map(
+                    (e) => Padding(
+                      padding: EdgeInsets.only(
+                        bottom: e.key < stations.length - 1 ? 10 : 0,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBlue.withValues(
+                                alpha: 0.15,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${e.key + 1}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primaryBlue,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  e.value.key,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primaryDarkBlue,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondaryTeal.withValues(
+                                alpha: 0.15,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${e.value.value}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.secondaryTeal,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+        ],
       ),
     );
   }
@@ -2282,15 +2907,17 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
             TextSpan(
               text: '$label: ',
               style: const TextStyle(
+                fontFamily: 'Cairo',
                 color: Colors.white70,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
             TextSpan(
               text: value,
               style: const TextStyle(
+                fontFamily: 'Cairo',
                 color: Colors.white,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -2312,18 +2939,12 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       ),
       child: Text(
         '$label: $value',
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w900,
-        ),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
       ),
     );
   }
 
-  Widget _infoSection({
-    required String title,
-    required List<Widget> children,
-  }) {
+  Widget _infoSection({required String title, required List<Widget> children}) {
     return AppSurfaceCard(
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -2333,7 +2954,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
             title,
             style: const TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               color: AppColors.primaryDarkBlue,
             ),
           ),
@@ -2356,7 +2977,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
               label,
               style: const TextStyle(
                 color: AppColors.mediumGray,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -2365,7 +2986,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
               value,
               style: const TextStyle(
                 color: AppColors.primaryDarkBlue,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
                 height: 1.5,
               ),
             ),
@@ -2406,13 +3027,15 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
                 child: Text(
                   activity.activityType,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: AppColors.primaryDarkBlue,
                   ),
                 ),
               ),
               Text(
-                DateFormat('yyyy/MM/dd HH:mm').format(activity.createdAt.toLocal()),
+                DateFormat(
+                  'yyyy/MM/dd HH:mm',
+                ).format(activity.createdAt.toLocal()),
                 style: const TextStyle(
                   color: AppColors.mediumGray,
                   fontSize: 12,
@@ -2425,7 +3048,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
             activity.description,
             style: const TextStyle(
               color: AppColors.primaryDarkBlue,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
               height: 1.5,
             ),
           ),
@@ -2434,16 +3057,16 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
             'بواسطة: ${activity.performedByName}',
             style: const TextStyle(color: AppColors.mediumGray),
           ),
-          if (activity.changes.isNotEmpty) ...<Widget>[
+          if (activity.changes?.isNotEmpty ?? false) ...<Widget>[
             const SizedBox(height: 10),
-            ...activity.changes.entries.map(
+            ...activity.changes!.entries.map(
               (entry) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   '${entry.key}: ${entry.value}',
                   style: const TextStyle(
                     color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -2464,7 +3087,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
       child: Text(
         '$label: $value',
         style: const TextStyle(
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w500,
           color: AppColors.primaryDarkBlue,
         ),
       ),
@@ -2491,7 +3114,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
               text,
               style: const TextStyle(
                 color: AppColors.primaryDarkBlue,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 height: 1.6,
               ),
             ),

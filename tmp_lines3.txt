@@ -1,0 +1,60 @@
+1301:                 onPressed: _logout,
+1302:                 icon: const Icon(Icons.logout_rounded),
+1303:                 tooltip: '\u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062e\u0631\u0648\u062c',
+1304:               ),
+1305:               const SizedBox(width: 6),
+1306:             ],
+1307:             bottom: TabBar(
+1308:               indicatorColor: Colors.white,
+1309:               indicatorWeight: 3,
+1310:               labelStyle: const TextStyle(
+1311:                 fontFamily: 'Cairo',
+1312:                 fontWeight: FontWeight.w500,
+1313:               ),
+1314:               unselectedLabelStyle: const TextStyle(
+1315:                 fontFamily: 'Cairo',
+1316:                 fontWeight: FontWeight.w400,
+1317:               ),
+1318:               labelColor: Colors.white,
+1319:               unselectedLabelColor: Colors.white70,
+1320:               tabs: tabs,
+1321:             ),
+1322:           ),
+1323:           body: Stack(
+1324:             children: <Widget>[
+1325:               const AppSoftBackground(),
+1326:               if (!_booting)
+1327:                 TabBarView(
+1328:                   children: <Widget>[
+1329:                     if (_isSupplierRole) _buildEntryTab() else _buildReviewTab(),
+1330:                     _buildHistoryTab(),
+1331:                   ],
+1332:                 ),
+1333:               if (busy) _buildBusyOverlay(),
+1334:             ],
+1335:           ),
+1336:         ),
+1337:       ),
+1338:     );
+1339:   }
+1340: 
+1341:   Widget _buildEntryTab() {
+1342:     final width = MediaQuery.sizeOf(context).width;
+1343:     final isWide = width >= 1120;
+1344: 
+1345:     return SingleChildScrollView(
+1346:       padding: const EdgeInsets.all(18),
+1347:       child: Center(
+1348:         child: ConstrainedBox(
+1349:           constraints: const BoxConstraints(maxWidth: 1320),
+1350:           child: Column(
+1351:             children: <Widget>[
+1352:               _buildHeroCard(),
+1353:               const SizedBox(height: 16),
+1354:               Wrap(
+1355:                 spacing: 16,
+1356:                 runSpacing: 16,
+1357:                 crossAxisAlignment: WrapCrossAlignment.start,
+1358:                 children: <Widget>[
+1359:                   SizedBox(
+1360:                     width: isWide ? 860 : double.infinity,

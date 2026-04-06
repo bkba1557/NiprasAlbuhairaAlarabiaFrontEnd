@@ -1,0 +1,119 @@
+1222   1     return DefaultTabController(
+1223   1       length: tabs.length,
+1224   2       child: PopScope(
+1225   2         canPop: !_isSupplierRole,
+1226   3         child: Theme(
+1227   4           data: theme.copyWith(
+1228   5             textTheme: theme.textTheme.apply(
+1229   5               fontFamily: 'Cairo',
+1230   5               bodyColor: AppColors.primaryDarkBlue,
+1231   5               displayColor: AppColors.primaryDarkBlue,
+1232   4             ),
+1233   5             primaryTextTheme: theme.primaryTextTheme.apply(
+1234   5               fontFamily: 'Cairo',
+1235   5               bodyColor: Colors.white,
+1236   4             ),
+1237   5             appBarTheme: theme.appBarTheme.copyWith(
+1238   6               titleTextStyle: const TextStyle(
+1239   6                 fontFamily: 'Cairo',
+1240   6                 fontWeight: FontWeight.w500,
+1241   6                 fontSize: 20,
+1242   6                 color: Colors.white,
+1243   5               ),
+1244   6               toolbarTextStyle: const TextStyle(
+1245   6                 fontFamily: 'Cairo',
+1246   6                 fontWeight: FontWeight.w400,
+1247   6                 color: Colors.white,
+1248   5               ),
+1249   4             ),
+1250   4             scaffoldBackgroundColor: const Color(0xFFEDF3FB),
+1251   5             inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+1252   5               filled: true,
+1253   5               fillColor: Colors.white,
+1254   6               contentPadding: const EdgeInsets.symmetric(
+1255   6                 vertical: 16,
+1256   6                 horizontal: 18,
+1257   5               ),
+1258   6               border: OutlineInputBorder(
+1259   6                 borderRadius: BorderRadius.circular(18),
+1260   6                 borderSide: BorderSide.none,
+1261   5               ),
+1262   4             ),
+1263   5             cardTheme: theme.cardTheme.copyWith(
+1264   5               color: Colors.white,
+1265   5               elevation: 0,
+1266   6               shape: RoundedRectangleBorder(
+1267   6                 borderRadius: BorderRadius.circular(24),
+1268   5               ),
+1269   4             ),
+1270   3           ),
+1271   4           child: Scaffold(
+1272   4             backgroundColor: Colors.transparent,
+1273   5             appBar: AppBar(
+1274   5               automaticallyImplyLeading: !_isSupplierRole,
+1275   6               title: Text(
+1276   6                 _isSupplierRole ? '\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646' : '\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646',
+1277   5               ),
+1278   6               flexibleSpace: const DecoratedBox(
+1279   6                 decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+1280   5               ),
+1281   5               actions: <Widget>[
+1282   6               IconButton(
+1283   6                 onPressed: _refreshing ? null : () => _loadOrders(),
+1284   6                 icon: _refreshing
+1285   7                     ? const SizedBox(
+1286   7                         width: 18,
+1287   7                         height: 18,
+1288   8                         child: CircularProgressIndicator(
+1289   8                           strokeWidth: 2,
+1290   8                           color: Colors.white,
+1291   7                         ),
+1292   6                       )
+1293   6                     : const Icon(Icons.refresh_rounded),
+1294   6                 tooltip: '\u062a\u062d\u062f\u064a\u062b',
+1295   5               ),
+1296   6               NotificationBell(
+1297   6                 onPressed: _openNotificationsSheet,
+1298   6                 iconColor: Colors.white,
+1299   5               ),
+1300   6               IconButton(
+1301   6                 onPressed: _logout,
+1302   6                 icon: const Icon(Icons.logout_rounded),
+1303   6                 tooltip: '\u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062e\u0631\u0648\u062c',
+1304   5               ),
+1305   5               const SizedBox(width: 6),
+1306   5             ],
+1307   6             bottom: TabBar(
+1308   6               indicatorColor: Colors.white,
+1309   6               indicatorWeight: 3,
+1310   7               labelStyle: const TextStyle(
+1311   7                 fontFamily: 'Cairo',
+1312   7                 fontWeight: FontWeight.w500,
+1313   6               ),
+1314   7               unselectedLabelStyle: const TextStyle(
+1315   7                 fontFamily: 'Cairo',
+1316   7                 fontWeight: FontWeight.w400,
+1317   6               ),
+1318   6               labelColor: Colors.white,
+1319   6               unselectedLabelColor: Colors.white70,
+1320   6               tabs: tabs,
+1321   5             ),
+1322   4           ),
+1323   5           body: Stack(
+1324   5             children: <Widget>[
+1325   5               const AppSoftBackground(),
+1326   5               if (!_booting)
+1327   6                 TabBarView(
+1328   6                   children: <Widget>[
+1329   6                     if (_isSupplierRole) _buildEntryTab() else _buildReviewTab(),
+1330   6                     _buildHistoryTab(),
+1331   6                   ],
+1332   5                 ),
+1333   5               if (busy) _buildBusyOverlay(),
+1334   5             ],
+1335   4           ),
+1336   3         ),
+1337   2       ),
+1338   1     );
+1339   1   }
+final count: 1
