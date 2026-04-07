@@ -8,6 +8,7 @@ import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/language_provider.dart';
 import 'package:order_tracker/providers/notification_provider.dart';
 import 'package:order_tracker/providers/order_provider.dart';
+import 'package:order_tracker/screens/driver_history_screen.dart';
 import 'package:order_tracker/screens/tracking/driver_delivery_tracking_screen.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
@@ -15,6 +16,7 @@ import 'package:order_tracker/utils/driver_background_location_permission.dart';
 import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
 import 'package:order_tracker/widgets/notification_item.dart';
+import 'package:order_tracker/widgets/slide_action_button.dart';
 import 'package:order_tracker/widgets/tracking/tracking_page_shell.dart';
 import 'package:provider/provider.dart';
 
@@ -35,6 +37,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     loc.AppLanguage.urdu,
     loc.AppLanguage.pashto,
   ];
+  static const double _floatingTabBarReservedSpace = 92;
 
   Timer? _refreshTimer;
 
@@ -83,6 +86,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   bool _isLoadingStationStage(Order order) {
+    if (_isWaitingMovementDispatch(order)) {
+      return false;
+    }
     const delivered = <String>{
       'تم التحميل',
       'في الطريق',
@@ -94,7 +100,21 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     return !delivered.contains(order.status.trim());
   }
 
+  bool _isWaitingMovementDispatch(Order order) {
+    return order.isMovementOrder &&
+        order.isMovementPendingDispatch &&
+        order.status.trim() == 'تم التحميل';
+  }
+
+  bool _isDeliveringStage(Order order) {
+    if (_isWaitingMovementDispatch(order)) return false;
+    return const {'تم التحميل', 'في الطريق'}.contains(order.status.trim());
+  }
+
   String _destinationText(Order order) {
+    if (_isWaitingMovementDispatch(order)) {
+      return context.tr(loc.AppStrings.driverWaitingForDispatchDestination);
+    }
     if (_isLoadingStationStage(order)) {
       if (order.supplierAddress?.trim().isNotEmpty == true) {
         return order.supplierAddress!.trim();
@@ -121,20 +141,63 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   String _stageLabel(Order order) {
+    if (_isWaitingMovementDispatch(order)) {
+      return context.tr(loc.AppStrings.driverWaitingForDispatch);
+    }
     return _isLoadingStationStage(order)
         ? context.tr(loc.AppStrings.driverHeadingToLoadingStation)
         : context.tr(loc.AppStrings.driverHeadingToCustomer);
   }
 
-  Future<void> _openOrder(Order order) async {
+  Future<void> _openOrder(Order order, {bool showMap = true}) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => DriverDeliveryTrackingScreen(initialOrder: order),
+        builder: (_) =>
+            DriverDeliveryTrackingScreen(initialOrder: order, showMap: showMap),
       ),
     );
     if (!mounted) return;
     await _refreshAll(silent: true);
+  }
+
+  Future<void> _startOrder(Order order) async {
+    if (_isLoadingStationStage(order) || _isWaitingMovementDispatch(order)) {
+      return _openOrder(order, showMap: true);
+    }
+
+    final option = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.map_outlined),
+                  title: const Text('فتح الخريطة'),
+                  subtitle: const Text('عرض الاتجاهات داخل التطبيق'),
+                  onTap: () => Navigator.pop(sheetContext, true),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.do_not_disturb_on_outlined),
+                  title: const Text('بدون خريطة'),
+                  subtitle: const Text('تنفيذ الطلب بدون عرض الخريطة'),
+                  onTap: () => Navigator.pop(sheetContext, false),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || option == null) return;
+    await _openOrder(order, showMap: option);
   }
 
   Future<void> _confirmLogout() async {
@@ -322,6 +385,25 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         '${order.unit ?? context.tr(loc.AppStrings.driverLitersUnit)}';
   }
 
+  DateTime _combineDateAndTime(DateTime date, String? time) {
+    final parts = (time ?? '').trim().split(':');
+    final hour = parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0;
+    final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    return DateTime(date.year, date.month, date.day, hour, minute);
+  }
+
+  bool _hasCustomerArrivalPassed(Order order) {
+    if (_isLoadingStationStage(order) || _isWaitingMovementDispatch(order)) {
+      return false;
+    }
+    final arrivalDeadline = _combineDateAndTime(order.arrivalDate, order.arrivalTime);
+    return DateTime.now().isAfter(arrivalDeadline);
+  }
+
+  bool _isDriverEndedOrder(Order order) {
+    return order.isFinalStatus || _hasCustomerArrivalPassed(order);
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -334,26 +416,17 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       child: Consumer2<OrderProvider, NotificationProvider>(
         builder: (context, orderProvider, notificationProvider, _) {
           final orders = orderProvider.orders;
+          final activeOrders = orders.where((o) => !_isDriverEndedOrder(o)).toList();
           final unreadCount = notificationProvider.unreadCount;
-          final loadingCount = orders.where(_isLoadingStationStage).length;
-          final deliveringCount = orders
-              .where(
-                (o) =>
-                    const {'تم التحميل', 'في الطريق'}.contains(o.status.trim()),
-              )
-              .length;
+          final loadingCount = activeOrders.where(_isLoadingStationStage).length;
+          final deliveringCount =
+              activeOrders.where(_isDeliveringStage).length;
           final completedCount = orders
-              .where(
-                (o) => const {
-                  'تم التسليم',
-                  'تم التنفيذ',
-                  'مكتمل',
-                }.contains(o.status.trim()),
-              )
+              .where(_isDriverEndedOrder)
               .length;
 
           return Scaffold(
-            appBar: _buildAppBar(unreadCount),
+            appBar: _buildAppBar(),
             body: Stack(
               children: [
                 const AppSoftBackground(),
@@ -362,7 +435,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     children: [
                       _buildOrdersTab(
                         userName: userName,
-                        orders: orders,
+                        orders: activeOrders,
                         unreadCount: unreadCount,
                         loadingCount: loadingCount,
                         deliveringCount: deliveringCount,
@@ -371,7 +444,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                       ),
                       _buildNotificationsTab(
                         userName: userName,
-                        ordersCount: orders.length,
+                        ordersCount: activeOrders.length,
                         unreadCount: unreadCount,
                         loadingCount: loadingCount,
                         deliveringCount: deliveringCount,
@@ -381,6 +454,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     ],
                   ),
                 ),
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: _buildFloatingTabBar(unreadCount),
+                ),
               ],
             ),
           );
@@ -389,8 +468,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(int unreadCount) {
+  PreferredSizeWidget _buildAppBar() {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isNarrow = screenWidth < 420;
     return AppBar(
+      toolbarHeight: isNarrow ? 58 : 66,
       leading: IconButton(
         tooltip: context.tr(loc.AppStrings.logoutTooltip),
         onPressed: _confirmLogout,
@@ -399,7 +481,13 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       elevation: 0,
       backgroundColor: Colors.transparent,
       centerTitle: true,
-      title: Text(context.tr(loc.AppStrings.driverDashboardTitle)),
+      title: Text(
+        context.tr(loc.AppStrings.driverDashboardTitle),
+        style: TextStyle(
+          fontSize: isNarrow ? 18 : 20,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
       flexibleSpace: DecoratedBox(
         decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
         child: Align(
@@ -412,6 +500,18 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       ),
       actions: [
         IconButton(
+          tooltip: context.tr(loc.AppStrings.driverHistoryTooltip),
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DriverHistoryScreen()),
+            );
+            if (!mounted) return;
+            await _refreshAll(silent: true);
+          },
+          icon: const Icon(Icons.history_rounded),
+        ),
+        IconButton(
           tooltip: context.tr(loc.AppStrings.languageTooltip),
           onPressed: _showLanguageSelector,
           icon: const Icon(Icons.language_rounded),
@@ -422,70 +522,95 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
           icon: const Icon(Icons.refresh_rounded),
         ),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(72),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-          child: Container(
-            padding: const EdgeInsets.all(6),
+    );
+  }
+
+  Widget _buildFloatingTabBar(int unreadCount) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isNarrow = screenWidth < 420;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 12 : 16),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: isNarrow ? 380 : 560),
+          child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            ),
-            child: TabBar(
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0x66FFFFFF), Color(0x33FFFFFF)],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-              ),
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white.withValues(alpha: 0.70),
-              labelStyle: const TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-              tabs: [
-                Tab(text: context.tr(loc.AppStrings.driverTabOrders)),
-                Tab(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(context.tr(loc.AppStrings.driverTabNotifications)),
-                      if (unreadCount > 0) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '$unreadCount',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+              color: Colors.white.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(isNarrow ? 20 : 24),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.16),
+                  blurRadius: 26,
+                  offset: const Offset(0, 12),
                 ),
               ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(isNarrow ? 4 : 6),
+              child: TabBar(
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
+                  ),
+                  borderRadius: BorderRadius.circular(isNarrow ? 15 : 18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.24),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: const Color(0xFF64748B),
+                labelStyle: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: isNarrow ? 12 : 14,
+                ),
+                unselectedLabelStyle: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: isNarrow ? 12 : 14,
+                ),
+                splashBorderRadius: BorderRadius.circular(isNarrow ? 15 : 18),
+                tabs: [
+                  Tab(text: context.tr(loc.AppStrings.driverTabOrders)),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(context.tr(loc.AppStrings.driverTabNotifications)),
+                        if (unreadCount > 0) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.88),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '$unreadCount',
+                              style: TextStyle(
+                                fontSize: isNarrow ? 10 : 11,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.primaryBlue,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -505,6 +630,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     return RefreshIndicator(
       onRefresh: _refreshAll,
       child: _buildScrollableContent(
+        topInset: _floatingTabBarReservedSpace,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -551,6 +677,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     return RefreshIndicator(
       onRefresh: _refreshAll,
       child: _buildScrollableContent(
+        topInset: _floatingTabBarReservedSpace,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -606,12 +733,15 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
-  Widget _buildScrollableContent({required Widget child}) {
+  Widget _buildScrollableContent({
+    required Widget child,
+    double topInset = 0,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth >= 1200;
         final isTablet = constraints.maxWidth >= 760;
-        final horizontalPadding = isDesktop ? 28.0 : (isTablet ? 20.0 : 16.0);
+        final horizontalPadding = isDesktop ? 28.0 : (isTablet ? 20.0 : 12.0);
 
         return ListView(
           physics: const AlwaysScrollableScrollPhysics(
@@ -619,7 +749,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
           ),
           padding: EdgeInsets.fromLTRB(
             horizontalPadding,
-            isDesktop ? 22 : 18,
+            (isDesktop ? 22 : 18) + topInset,
             horizontalPadding,
             96,
           ),
@@ -646,8 +776,10 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     required int completedCount,
     required bool isOrdersTab,
   }) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isNarrow = screenWidth < 420;
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isNarrow ? 16 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -655,8 +787,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 960;
               final chips = Wrap(
-                spacing: 10,
-                runSpacing: 10,
+                spacing: isNarrow ? 8 : 10,
+                runSpacing: isNarrow ? 8 : 10,
                 children: [
                   TrackingStatusBadge(
                     label: isOrdersTab
@@ -692,26 +824,35 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [content, const SizedBox(height: 16), chips],
+                children: [
+                  content,
+                  SizedBox(height: isNarrow ? 12 : 16),
+                  chips,
+                ],
               );
             },
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: isNarrow ? 14 : 18),
           LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
-              final columns = width >= 1240 ? 4 : (width >= 760 ? 2 : 1);
+              final compactStats = width < 520;
+              final columns = compactStats
+                  ? 4
+                  : (width >= 1240 ? 4 : (width >= 760 ? 2 : 1));
+              final spacing = compactStats ? 8.0 : 12.0;
               final cardWidth = columns == 1
                   ? width
-                  : (width - ((columns - 1) * 12)) / columns;
+                  : (width - ((columns - 1) * spacing)) / columns;
 
               return Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: spacing,
+                runSpacing: spacing,
                 children: [
                   SizedBox(
                     width: cardWidth,
                     child: _DriverStatCard(
+                      compact: compactStats,
                       label: context.tr(loc.AppStrings.driverCurrentOrdersLabel),
                       value: '$ordersCount',
                       icon: Icons.assignment_outlined,
@@ -724,6 +865,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   SizedBox(
                     width: cardWidth,
                     child: _DriverStatCard(
+                      compact: compactStats,
                       label: context.tr(loc.AppStrings.driverWaitingLoadLabel),
                       value: '$loadingCount',
                       icon: Icons.local_gas_station_outlined,
@@ -736,6 +878,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   SizedBox(
                     width: cardWidth,
                     child: _DriverStatCard(
+                      compact: compactStats,
                       label: context.tr(loc.AppStrings.driverDeliveringLabel),
                       value: '$deliveringCount',
                       icon: Icons.local_shipping_outlined,
@@ -748,6 +891,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   SizedBox(
                     width: cardWidth,
                     child: _DriverStatCard(
+                      compact: compactStats,
                       label: context.tr(loc.AppStrings.driverCompletedLabel),
                       value: '$completedCount',
                       icon: Icons.task_alt_rounded,
@@ -767,12 +911,14 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   Widget _buildWelcomeContent(String userName, bool isOrdersTab) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isNarrow = screenWidth < 420;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 60,
-          height: 60,
+          width: isNarrow ? 48 : 60,
+          height: isNarrow ? 48 : 60,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: const LinearGradient(
@@ -792,9 +938,13 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               ),
             ],
           ),
-          child: const Icon(Icons.drive_eta_rounded, color: Colors.white),
+          child: Icon(
+            Icons.drive_eta_rounded,
+            color: Colors.white,
+            size: isNarrow ? 22 : 28,
+          ),
         ),
-        const SizedBox(width: 16),
+        SizedBox(width: isNarrow ? 12 : 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -804,23 +954,24 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   loc.AppStrings.driverWelcomeTemplate,
                   {'name': userName},
                 ),
-                style: const TextStyle(
-                  fontSize: 28,
+                style: TextStyle(
+                  fontSize: isNarrow ? 22 : 28,
                   fontWeight: FontWeight.w900,
                   color: Color(0xFF0F172A),
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: isNarrow ? 4 : 6),
               Text(
                 isOrdersTab
                     ? context.tr(loc.AppStrings.driverWelcomeOrdersSubtitle)
                     : context.tr(
                         loc.AppStrings.driverWelcomeNotificationsSubtitle,
                       ),
-                style: const TextStyle(
+                style: TextStyle(
                   color: Color(0xFF64748B),
                   fontWeight: FontWeight.w600,
                   height: 1.5,
+                  fontSize: isNarrow ? 13 : 14,
                 ),
               ),
             ],
@@ -897,9 +1048,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
   Widget _buildOrderCard(Order order) {
     final color = _statusColor(order.status);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isNarrow = screenWidth < 420;
 
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(isNarrow ? 14 : 18),
       color: Colors.white.withValues(alpha: 0.82),
       border: Border.all(color: color.withValues(alpha: 0.16)),
       boxShadow: [
@@ -916,15 +1069,19 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: isNarrow ? 44 : 52,
+                height: isNarrow ? 44 : 52,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: color.withValues(alpha: 0.12),
                 ),
-                child: Icon(Icons.route_rounded, color: color, size: 26),
+                child: Icon(
+                  Icons.route_rounded,
+                  color: color,
+                  size: isNarrow ? 21 : 26,
+                ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: isNarrow ? 10 : 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -936,24 +1093,25 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 19,
+                      style: TextStyle(
+                        fontSize: isNarrow ? 16 : 19,
                         fontWeight: FontWeight.w900,
                         color: Color(0xFF0F172A),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: isNarrow ? 2 : 4),
                     Text(
                       _stageLabel(order),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Color(0xFF64748B),
                         fontWeight: FontWeight.w700,
+                        fontSize: isNarrow ? 12 : 14,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: isNarrow ? 8 : 10),
               TrackingStatusBadge(
                 label: _localizedStatus(order.status),
                 color: color,
@@ -961,7 +1119,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: isNarrow ? 12 : 14),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -978,7 +1136,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: isNarrow ? 12 : 14),
           _DriverOrderInfoRow(
             label: context.tr(loc.AppStrings.driverCurrentDestinationLabel),
             value: _destinationText(order),
@@ -992,10 +1150,10 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             value: '${_formatDate(order.loadingDate)} • ${order.loadingTime}',
           ),
           if (order.actualLoadedLiters != null) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: isNarrow ? 8 : 10),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(isNarrow ? 10 : 12),
               decoration: BoxDecoration(
                 color: AppColors.successGreen.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
@@ -1027,22 +1185,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          SizedBox(height: isNarrow ? 14 : 16),
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => _openOrder(order),
-              icon: const Icon(Icons.navigation_outlined),
-              label: Text(context.tr(loc.AppStrings.driverOpenExecutionPage)),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                textStyle: const TextStyle(fontWeight: FontWeight.w800),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+            child: SlideActionButton(
+              label: context.tr(loc.AppStrings.driverSlideToStart),
+              onSubmit: () => _startOrder(order),
             ),
           ),
         ],
@@ -1127,37 +1275,37 @@ class _DriverSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNarrow = MediaQuery.sizeOf(context).width < 420;
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isNarrow ? 16 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 980;
-              final header = Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
-                      ),
+              final header = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: isNarrow ? 18 : 22,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w600,
-                        height: 1.5,
-                      ),
+                  ),
+                  SizedBox(height: isNarrow ? 4 : 6),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                      height: 1.5,
+                      fontSize: isNarrow ? 12.5 : 14,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
 
               final trailing = Wrap(
@@ -1172,17 +1320,21 @@ class _DriverSectionCard extends StatelessWidget {
               if (isWide) {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [header, const SizedBox(width: 12), trailing],
+                  children: [
+                    Expanded(child: header),
+                    const SizedBox(width: 12),
+                    trailing,
+                  ],
                 );
               }
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [header, const SizedBox(height: 14), trailing],
+                children: [header, SizedBox(height: isNarrow ? 12 : 14), trailing],
               );
             },
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: isNarrow ? 14 : 18),
           child,
         ],
       ),
@@ -1196,6 +1348,7 @@ class _DriverStatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String helper;
+  final bool compact;
 
   const _DriverStatCard({
     required this.label,
@@ -1203,12 +1356,66 @@ class _DriverStatCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.helper,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isNarrow = MediaQuery.sizeOf(context).width < 420;
+    if (compact) {
+      return AppSurfaceCard(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        color: Colors.white.withValues(alpha: 0.72),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.12),
+              ),
+              child: Icon(icon, color: color, size: 17),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF475569),
+                fontWeight: FontWeight.w800,
+                fontSize: 10,
+                height: 1.25,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isNarrow ? 14 : 16),
       color: Colors.white.withValues(alpha: 0.72),
       border: Border.all(color: color.withValues(alpha: 0.12)),
       boxShadow: [
@@ -1221,23 +1428,23 @@ class _DriverStatCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: isNarrow ? 40 : 46,
+            height: isNarrow ? 40 : 46,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: color.withValues(alpha: 0.12),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: color, size: isNarrow ? 20 : 24),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: isNarrow ? 10 : 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   value,
-                  style: const TextStyle(
-                    fontSize: 22,
+                  style: TextStyle(
+                    fontSize: isNarrow ? 18 : 22,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF0F172A),
                   ),
@@ -1245,18 +1452,19 @@ class _DriverStatCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Color(0xFF475569),
                     fontWeight: FontWeight.w800,
+                    fontSize: isNarrow ? 13 : 14,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   helper,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Color(0xFF94A3B8),
                     fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                    fontSize: isNarrow ? 11 : 12,
                   ),
                 ),
               ],
@@ -1276,28 +1484,31 @@ class _DriverOrderInfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNarrow = MediaQuery.sizeOf(context).width < 420;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(bottom: isNarrow ? 6 : 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 122,
+            width: isNarrow ? 96 : 122,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.mediumGray,
                 fontWeight: FontWeight.w800,
+                fontSize: isNarrow ? 12 : 14,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF0F172A),
                 height: 1.4,
+                fontSize: isNarrow ? 12 : 14,
               ),
             ),
           ),
@@ -1320,8 +1531,12 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNarrow = MediaQuery.sizeOf(context).width < 420;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: isNarrow ? 10 : 12,
+        vertical: isNarrow ? 7 : 8,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
@@ -1330,14 +1545,14 @@ class _InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
+          Icon(icon, size: isNarrow ? 13 : 15, color: color),
+          SizedBox(width: isNarrow ? 4 : 6),
           Text(
             label,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w800,
-              fontSize: 12,
+              fontSize: isNarrow ? 11 : 12,
             ),
           ),
         ],

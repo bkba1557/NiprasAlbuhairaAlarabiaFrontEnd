@@ -181,7 +181,7 @@ class AppThemes {
     ),
     scaffoldBackgroundColor: AppColors.backgroundGray,
     appBarTheme: const AppBarTheme(
-      backgroundColor: AppColors.appBarWaterDeep,
+      backgroundColor: AppColors.primaryBlue,
       foregroundColor: AppColors.white,
       elevation: 0,
       shadowColor: Colors.transparent,
@@ -190,7 +190,7 @@ class AppThemes {
       titleTextStyle: TextStyle(
         fontFamily: 'Cairo',
         fontSize: 20,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w500,
         color: AppColors.white,
       ),
       iconTheme: IconThemeData(color: AppColors.white),
@@ -199,17 +199,17 @@ class AppThemes {
       displayLarge: TextStyle(
         fontFamily: 'Cairo',
         fontSize: 32,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w500,
       ),
       displayMedium: TextStyle(
         fontFamily: 'Cairo',
         fontSize: 28,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w500,
       ),
       displaySmall: TextStyle(
         fontFamily: 'Cairo',
         fontSize: 24,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w500,
       ),
       headlineMedium: TextStyle(
         fontFamily: 'Cairo',
@@ -656,6 +656,13 @@ class ApiEndpoints {
   static const String systemPauseActivate = '/system-pause/activate';
   static const String systemPauseDeactivate = '/system-pause/deactivate';
 
+  static const String notes = '/notes';
+  static String noteById(String id) => '/notes/$id';
+
+  static const String statements = '/statements';
+  static const String statementRenew = '/statements/renew';
+  static String statementRenewalById(String id) => '/statements/renewals/$id';
+
   static const String orders = '/orders';
   static const String orderAutofillDocument = '/orders/autofill/document';
   static const String orderImportDocuments = '/orders/import/documents';
@@ -684,6 +691,7 @@ class ApiEndpoints {
 
   static String orderById(String id) => '/orders/$id';
   static String orderMovementDispatch(String id) => '/orders/$id/movement/dispatch';
+  static String orderMovementRequestById(String id) => '/orders/$id/movement/request';
   static String orderSupplierReview(String id) => '/orders/$id/supplier-review';
   static String orderWhatsAppDriver(String id) => '/orders/$id/whatsapp/driver';
   static String trackingDriverById(String id) => '/tracking/drivers/$id';
@@ -1047,3 +1055,4 @@ class AppImages {
   static const String noPenalties = 'assets/images/no_penalties.png';
   static const String noLocations = 'assets/images/no_locations.png';
 }
+

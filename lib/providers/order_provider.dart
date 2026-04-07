@@ -330,6 +330,8 @@ class OrderProvider with ChangeNotifier {
       _isLoading = true;
       _error = null;
       notifyListeners();
+    } else {
+      _error = null;
     }
 
     try {
@@ -369,20 +371,15 @@ class OrderProvider with ChangeNotifier {
 
         // Apply filters locally if needed
         _applyLocalFilters();
-
-        if (!silent) {
-          _isLoading = false;
-          notifyListeners();
-        }
+        _isLoading = false;
+        notifyListeners();
       } else {
         throw Exception('فشل في جلب البيانات');
       }
     } catch (e) {
       _error = e.toString();
-      if (!silent) {
-        _isLoading = false;
-        notifyListeners();
-      }
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -881,6 +878,7 @@ class OrderProvider with ChangeNotifier {
         'status',
         'mergeStatus',
         'requestType',
+        'requestAmount',
         'portalCustomer',
         'destinationStationId',
         'destinationStationName',
@@ -1096,7 +1094,9 @@ class OrderProvider with ChangeNotifier {
     required DateTime customerRequestDate,
     required DateTime expectedArrivalDate,
     String? driverId,
+    String? customerOrderId,
     String? requestType,
+    double? requestAmount,
   }) async {
     _isLoading = true;
     _error = null;
@@ -1113,8 +1113,11 @@ class OrderProvider with ChangeNotifier {
           'customerRequestDate': customerRequestDate.toIso8601String(),
           'expectedArrivalDate': expectedArrivalDate.toIso8601String(),
           if (driverId != null && driverId.isNotEmpty) 'driverId': driverId,
+          if (customerOrderId != null && customerOrderId.isNotEmpty)
+            'customerOrderId': customerOrderId,
           if (requestType != null && requestType.isNotEmpty)
             'requestType': requestType,
+          if (requestAmount != null) 'requestAmount': requestAmount,
         }),
       );
 
@@ -1132,6 +1135,110 @@ class OrderProvider with ChangeNotifier {
           data['error']?.toString() ??
           data['message']?.toString() ??
           'فشل في توجيه طلب الحركة';
+    } catch (e) {
+      _error = 'خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> createMovementCustomerRequest({
+    required String customerId,
+    required String fuelType,
+    required DateTime requestDate,
+    String requestType = 'شراء',
+    double? requestAmount,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.orders}'),
+        headers: ApiService.headers,
+        body: json.encode({
+          'entryChannel': 'movement',
+          'orderSource': 'عميل',
+          'mergeStatus': 'منفصل',
+          'status': 'في انتظار التخصيص',
+          'supplierName': 'طلب عميل',
+          'customer': customerId,
+          'movementCustomerId': customerId,
+          'movementCustomer': customerId,
+          'fuelType': fuelType,
+          'requestType': requestType,
+          'requestAmount': requestAmount,
+          'quantity': 0,
+          'unit': 'لتر',
+          'city': 'غير محدد',
+          'area': 'غير محدد',
+          'address': 'غير محدد',
+          'orderDate': requestDate.toIso8601String(),
+          'loadingDate': requestDate.toIso8601String(),
+          'loadingTime': '08:00',
+          'arrivalDate': requestDate
+              .add(const Duration(days: 1))
+              .toIso8601String(),
+          'arrivalTime': '10:00',
+        }),
+      );
+
+      final data = ApiService.decodeJson(response);
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          (data['success'] == true || data['order'] != null)) {
+        _syncOrdersFromResponse(data);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'فشل في إضافة طلب العميل';
+    } catch (e) {
+      _error = 'خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> deleteMovementCustomerRequest(String id) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.delete(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderMovementRequestById(id)}',
+        ),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        _orders.removeWhere((order) => order.id == id);
+        _filteredOrders.removeWhere((order) => order.id == id);
+        _ordersCache.remove(id);
+        if (_selectedOrder?.id == id) {
+          _selectedOrder = null;
+        }
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      final data = ApiService.decodeJson(response);
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'فشل في حذف طلب العميل';
     } catch (e) {
       _error = 'خطأ في الاتصال بالسيرفر: $e';
     }
@@ -1177,6 +1284,7 @@ class OrderProvider with ChangeNotifier {
     String id,
     String status, {
     String? reason,
+    List<Map<String, dynamic>>? attachments,
   }) async {
     _isLoading = true;
     _error = null;
@@ -1188,7 +1296,12 @@ class OrderProvider with ChangeNotifier {
           '${ApiEndpoints.baseUrl}${ApiEndpoints.orderById(id)}/status',
         ),
         headers: ApiService.headers,
-        body: json.encode({'status': status, 'reason': reason}),
+        body: json.encode({
+          'status': status,
+          if (reason != null) 'reason': reason,
+          if (attachments != null && attachments.isNotEmpty)
+            'attachments': attachments,
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -1251,6 +1364,7 @@ class OrderProvider with ChangeNotifier {
     required String actualFuelType,
     required double actualLoadedLiters,
     String? notes,
+    List<Map<String, dynamic>>? attachments,
   }) async {
     _isLoading = true;
     _error = null;
@@ -1266,6 +1380,8 @@ class OrderProvider with ChangeNotifier {
           'actualFuelType': actualFuelType,
           'actualLoadedLiters': actualLoadedLiters,
           'notes': notes,
+          if (attachments != null && attachments.isNotEmpty)
+            'attachments': attachments,
         }),
       );
 

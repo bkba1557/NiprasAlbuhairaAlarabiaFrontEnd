@@ -225,6 +225,38 @@ const Map<String, Map<String, String>> translationValues = {
     'hi': 'ड्राइवर डैशबोर्ड',
     'fil': 'Dashboard ng Driver',
   },
+  'driverHistoryTooltip': {
+    'ar': 'السجل',
+    'en': 'History',
+  },
+  'driverHistoryTitle': {
+    'ar': 'سجل الطلبات',
+    'en': 'Order history',
+  },
+  'driverHistorySubtitle': {
+    'ar': 'تجد هنا جميع الطلبات المكتملة أو الملغاة.',
+    'en': 'All completed or canceled orders appear here.',
+  },
+  'driverHistoryEmptyTitle': {
+    'ar': 'لا توجد سجلات بعد',
+    'en': 'No history yet',
+  },
+  'driverHistoryEmptyMessage': {
+    'ar': 'ستظهر هنا الطلبات المكتملة أو الملغاة بمجرد توفرها.',
+    'en': 'Completed or canceled orders will appear here.',
+  },
+  'driverSlideToStart': {
+    'ar': 'Start',
+    'en': 'Start',
+  },
+  'driverWaitingForDispatch': {
+    'ar': 'بانتظار توجيه الحركة',
+    'en': 'Waiting for dispatch',
+  },
+  'driverWaitingForDispatchDestination': {
+    'ar': 'سيظهر موقع العميل بعد التوجيه',
+    'en': 'Customer location will appear after dispatch',
+  },
   'driverTabOrders': {
     'ar': 'طلباتي',
     'bn': 'আমার অর্ডার',

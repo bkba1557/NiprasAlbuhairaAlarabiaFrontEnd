@@ -1481,7 +1481,7 @@ class _SupplierPortalScreenState extends State<SupplierPortalScreen> {
               automaticallyImplyLeading: !_isSupplierRole,
               toolbarHeight: 42,
               title: Text(
-                _isSupplierRole ? 'شركة البحيرة العربية ' : 'طلبات الموردين',
+                _isSupplierRole ? 'شركة البحيرة العربية - نظام نبراس' : 'طلبات الموردين',
               ),
               flexibleSpace: const DecoratedBox(
                 decoration: BoxDecoration(gradient: AppColors.appBarGradient),

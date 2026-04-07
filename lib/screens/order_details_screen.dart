@@ -25,8 +25,13 @@ import 'package:intl/intl.dart';
 
 class OrderDetailsScreen extends StatefulWidget {
   final String orderId;
+  final String screenTitle;
 
-  const OrderDetailsScreen({super.key, required this.orderId});
+  const OrderDetailsScreen({
+    super.key,
+    required this.orderId,
+    this.screenTitle = 'تفاصيل الطلب',
+  });
 
   @override
   State<OrderDetailsScreen> createState() => _OrderDetailsScreenState();
@@ -6216,7 +6221,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     if (order == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('تفاصيل الطلب'),
+          title: Text(widget.screenTitle),
           foregroundColor: Colors.white,
         ),
         body: const Center(child: Text('الطلب غير موجود')),
@@ -6264,7 +6269,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           ? Row(
               children: [
                 Text(
-                  'تفاصيل الطلب - ${order.orderNumber}',
+                  '${widget.screenTitle} - ${order.orderNumber}',
                   style: const TextStyle(color: Colors.white),
                 ),
                 const SizedBox(width: 12),
@@ -6292,7 +6297,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'الطلب ${order.orderNumber}',
+                    '${widget.screenTitle} ${order.orderNumber}',
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),

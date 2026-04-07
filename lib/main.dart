@@ -24,11 +24,13 @@ import 'package:order_tracker/providers/station_inspection_provider.dart';
 import 'package:order_tracker/providers/chat_provider.dart';
 import 'package:order_tracker/providers/circular_provider.dart';
 import 'package:order_tracker/providers/notification_provider.dart';
+import 'package:order_tracker/providers/note_provider.dart';
 import 'package:order_tracker/providers/order_provider.dart';
 import 'package:order_tracker/providers/qualification_provider.dart';
 import 'package:order_tracker/providers/station_provider.dart';
 import 'package:order_tracker/providers/supplier_provider.dart';
 import 'package:order_tracker/providers/station_maintenance_provider.dart';
+import 'package:order_tracker/providers/statement_provider.dart';
 import 'package:order_tracker/providers/system_pause_provider.dart';
 import 'package:order_tracker/providers/tax_provider.dart';
 import 'package:order_tracker/providers/theme_provider.dart';
@@ -91,6 +93,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => TaxProvider()..initialize()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => NoteProvider()),
         ChangeNotifierProvider(create: (_) => CircularProvider()),
         ChangeNotifierProvider(create: (_) => DriverProvider()),
         ChangeNotifierProvider(create: (_) => DriverTrackingProvider()),
@@ -109,6 +112,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => TaskProvider()),
         ChangeNotifierProvider(create: (_) => InventoryProvider()),
         ChangeNotifierProvider(create: (_) => StationMaintenanceProvider()),
+        ChangeNotifierProvider(create: (_) => StatementProvider()),
       ],
       child: const MyApp(),
     ),

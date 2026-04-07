@@ -54,6 +54,15 @@ class AppStrings {
 
   // Driver dashboard
   static const driverDashboardTitle = 'driverDashboardTitle';
+  static const driverHistoryTooltip = 'driverHistoryTooltip';
+  static const driverHistoryTitle = 'driverHistoryTitle';
+  static const driverHistorySubtitle = 'driverHistorySubtitle';
+  static const driverHistoryEmptyTitle = 'driverHistoryEmptyTitle';
+  static const driverHistoryEmptyMessage = 'driverHistoryEmptyMessage';
+  static const driverSlideToStart = 'driverSlideToStart';
+  static const driverWaitingForDispatch = 'driverWaitingForDispatch';
+  static const driverWaitingForDispatchDestination =
+      'driverWaitingForDispatchDestination';
   static const driverTabOrders = 'driverTabOrders';
   static const driverTabNotifications = 'driverTabNotifications';
   static const driverAssignedOrdersTitle = 'driverAssignedOrdersTitle';

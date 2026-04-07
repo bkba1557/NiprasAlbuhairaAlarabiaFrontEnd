@@ -51,6 +51,7 @@ class Order {
 
   /// ⭐ نوع العملية (شراء | نقل) - للطلبات العميل فقط
   final String? requestType;
+  final double? requestAmount;
 
   final String orderNumber;
   final String? supplierOrderNumber;
@@ -167,6 +168,7 @@ class Order {
     this.carrierName,
     required this.supplierName,
     this.requestType,
+    this.requestAmount,
     required this.orderNumber,
     this.supplierOrderNumber,
     required this.loadingDate,
@@ -278,6 +280,18 @@ class Order {
   // fromJson
   // =========================
   factory Order.fromJson(Map<String, dynamic> json) {
+    final parsedOrderSource = json['orderSource']?.toString() ?? 'مورد';
+    final parsedEntryChannel = json['entryChannel']?.toString() ?? 'manual';
+    final bool treatCustomerFieldAsMovementCustomer =
+        parsedEntryChannel == 'movement' && parsedOrderSource == 'عميل';
+
+    final String? fallbackCustomerId = json['customer'] is Map
+        ? (json['customer']['_id'] ?? json['customer']['id'])?.toString()
+        : json['customer']?.toString();
+    final String? fallbackCustomerName = json['customer'] is Map
+        ? json['customer']['name']?.toString()
+        : null;
+
     // ⭐ تحليل العميل
     Customer? customer;
     if (json['customer'] is Map<String, dynamic>) {
@@ -456,21 +470,25 @@ class Order {
           DateTime.now(),
 
       // ⭐ الحقول الجديدة
-      orderSource: json['orderSource']?.toString() ?? 'مورد',
+      orderSource: parsedOrderSource,
       mergeStatus: json['mergeStatus']?.toString() ?? 'منفصل',
 
-      entryChannel: json['entryChannel']?.toString() ?? 'manual',
+      entryChannel: parsedEntryChannel,
       movementState: json['movementState']?.toString(),
       movementCustomerId:
           json['movementCustomerId']?.toString() ??
           (json['movementCustomer'] is Map
-              ? json['movementCustomer']['_id']?.toString()
-              : json['movementCustomer']?.toString()),
+              ? (json['movementCustomer']['_id'] ??
+                        json['movementCustomer']['id'])
+                    ?.toString()
+              : json['movementCustomer']?.toString()) ??
+          (treatCustomerFieldAsMovementCustomer ? fallbackCustomerId : null),
       movementCustomerName:
           json['movementCustomerName']?.toString() ??
           (json['movementCustomer'] is Map
               ? json['movementCustomer']['name']?.toString()
-              : null),
+              : null) ??
+          (treatCustomerFieldAsMovementCustomer ? fallbackCustomerName : null),
       movementCustomerRequestDate: DateTime.tryParse(
         json['movementCustomerRequestDate']?.toString() ?? '',
       ),
@@ -514,6 +532,9 @@ class Order {
           (supplier != null ? supplier.name : ''),
 
       requestType: json['requestType']?.toString(),
+      requestAmount: json['requestAmount'] != null
+          ? double.tryParse(json['requestAmount'].toString())
+          : null,
 
       orderNumber: json['orderNumber']?.toString() ?? '',
       supplierOrderNumber: json['supplierOrderNumber']?.toString(),
@@ -682,6 +703,7 @@ class Order {
       'carrierName': carrierName,
       'supplierName': supplierName,
       'requestType': requestType,
+      'requestAmount': requestAmount,
       'orderNumber': orderNumber,
       'supplierOrderNumber': supplierOrderNumber,
       'loadingDate': loadingDate.toIso8601String(),
@@ -1175,6 +1197,7 @@ class Order {
     String? carrierName,
     String? supplierName,
     String? requestType,
+    double? requestAmount,
     String? orderNumber,
     String? supplierOrderNumber,
     DateTime? loadingDate,
@@ -1276,6 +1299,7 @@ class Order {
       carrierName: carrierName ?? this.carrierName,
       supplierName: supplierName ?? this.supplierName,
       requestType: requestType ?? this.requestType,
+      requestAmount: requestAmount ?? this.requestAmount,
       orderNumber: orderNumber ?? this.orderNumber,
       supplierOrderNumber: supplierOrderNumber ?? this.supplierOrderNumber,
       loadingDate: loadingDate ?? this.loadingDate,

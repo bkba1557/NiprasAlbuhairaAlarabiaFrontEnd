@@ -196,6 +196,45 @@ class FirebaseStorageService {
     }
   }
 
+  static Future<Map<String, dynamic>> uploadOrderDriverMedia({
+    required String orderKey,
+    required String section,
+    required XFile file,
+    String? filenameOverride,
+  }) async {
+    final rawName =
+        (filenameOverride?.trim().isNotEmpty == true
+                ? filenameOverride!.trim()
+                : (file.name.isEmpty ? 'image.jpg' : file.name))
+            .trim();
+    final safeName = _sanitizeFileName(rawName);
+    final contentType = _inferContentType(safeName) ?? 'image/jpeg';
+    final ref = _storage.ref(
+      'orders/$orderKey/driver/$section/${DateTime.now().millisecondsSinceEpoch}_$safeName',
+    );
+
+    try {
+      if (kIsWeb) {
+        final bytes = await file.readAsBytes();
+        await ref.putData(bytes, SettableMetadata(contentType: contentType));
+      } else {
+        await ref.putFile(
+          File(file.path),
+          SettableMetadata(contentType: contentType),
+        );
+      }
+
+      return {
+        'filename': safeName,
+        'path': await ref.getDownloadURL(),
+        'fileType': contentType,
+      };
+    } catch (e) {
+      debugPrint('Order driver media Firebase upload error: $e');
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> uploadCustomerDocument({
     required String customerKey,
     required String docType,

@@ -986,8 +986,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               actions: [
                 if (authProvider.isAdminLike)
                   IconButton(
-                    onPressed:
-                        _backupBusy ? null : () => _showBackupDialog(context),
+                    onPressed: _backupBusy
+                        ? null
+                        : () => _showBackupDialog(context),
                     tooltip: 'النسخ الاحتياطي',
                     icon: const Icon(Icons.backup_outlined),
                   ),
@@ -1017,9 +1018,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             )
           : Stack(
               children: [
-                const Positioned.fill(
-                  child: ColoredBox(color: Colors.white),
-                ),
+                const Positioned.fill(child: ColoredBox(color: Colors.white)),
                 RefreshIndicator(
                   color: AppColors.primaryBlue,
                   displacement: 26,
@@ -1046,6 +1045,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 Scaffold.of(bodyContext).openDrawer(),
                           ),
                         ),
+
                         // Builder(
                         //   builder: (bodyContext) => _buildMobileSidebarPrompt(
                         //     bodyContext,
@@ -1053,7 +1053,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         //         notificationProvider.unreadCount,
                         //   ),
                         // ),
-
                         if (!_loadingTimers && _approachingTimers.isNotEmpty)
                           CountdownSection(
                             timers: _approachingTimers,
@@ -1227,8 +1226,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.alt_route_rounded,
           title: 'الحركة',
           color: AppColors.appBarBlue,
-          onTap: () =>
-              _navigateFromMobileDrawer(context, AppRoutes.movement),
+          onTap: () => _navigateFromMobileDrawer(context, AppRoutes.movement),
         ),
     ];
 
@@ -1277,8 +1275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.announcement_outlined,
           title: 'تعميم',
           color: AppColors.primaryBlue,
-          onTap: () =>
-              _navigateFromMobileDrawer(context, AppRoutes.circulars),
+          onTap: () => _navigateFromMobileDrawer(context, AppRoutes.circulars),
         ),
       if (canSendDailyReport)
         _DashboardDrawerItemData(
@@ -1453,127 +1450,127 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               children: [
                 Container(
-                width: double.infinity,
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  18 + MediaQuery.of(context).padding.top,
-                  20,
-                  20,
-                ),
-                decoration: const BoxDecoration(
-                  gradient: AppColors.appBarGradient,
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(26),
-                    bottomRight: Radius.circular(26),
+                  width: double.infinity,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    18 + MediaQuery.of(context).padding.top,
+                    20,
+                    20,
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.18),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.22),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _userInitials(user?.name),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 18,
+                  decoration: const BoxDecoration(
+                    gradient: AppColors.appBarGradient,
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(26),
+                      bottomRight: Radius.circular(26),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.18),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.22),
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user?.name ?? 'المستخدم',
+                            child: Center(
+                              child: Text(
+                                _userInitials(user?.name),
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 18,
                                   fontWeight: FontWeight.w800,
+                                  fontSize: 18,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                user != null && user.company.isNotEmpty
-                                    ? user.company
-                                    : user?.email ?? '',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.78),
-                                  fontSize: 12,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    // Text(
-                    //   'كل أقسام التنقل على الجوال أصبحت داخل القائمة الجانبية.',
-                    //   style: TextStyle(
-                    //     color: Colors.white.withValues(alpha: 0.86),
-                    //     fontSize: 12,
-                    //     height: 1.45,
-                    //   ),
-                    // ),
-                  ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user?.name ?? 'المستخدم',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  user != null && user.company.isNotEmpty
+                                      ? user.company
+                                      : user?.email ?? '',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.78),
+                                    fontSize: 12,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      // Text(
+                      //   'كل أقسام التنقل على الجوال أصبحت داخل القائمة الجانبية.',
+                      //   style: TextStyle(
+                      //     color: Colors.white.withValues(alpha: 0.86),
+                      //     fontSize: 12,
+                      //     height: 1.45,
+                      //   ),
+                      // ),
+                    ],
+                  ),
                 ),
-              ),
                 Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
-                  children: [
-                    _buildMobileDrawerSection(
-                      title: 'لوحة التحكم',
-                      items: [
-                        _DashboardDrawerItemData(
-                          icon: Icons.dashboard_customize_rounded,
-                          title: 'الرئيسية',
-                          color: AppColors.primaryBlue,
-                          onTap: () => Navigator.pop(context),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+                    children: [
+                      _buildMobileDrawerSection(
+                        title: 'لوحة التحكم',
+                        items: [
+                          _DashboardDrawerItemData(
+                            icon: Icons.dashboard_customize_rounded,
+                            title: 'الرئيسية',
+                            color: AppColors.primaryBlue,
+                            onTap: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      if (orderItems.isNotEmpty)
+                        _buildMobileDrawerSection(
+                          title: 'الطلبات',
+                          items: orderItems,
                         ),
-                      ],
-                    ),
-                    if (orderItems.isNotEmpty)
+                      if (partyItems.isNotEmpty)
+                        _buildMobileDrawerSection(
+                          title: 'الأطراف والمتابعة',
+                          items: partyItems,
+                        ),
+                      if (operationsItems.isNotEmpty)
+                        _buildMobileDrawerSection(
+                          title: 'التشغيل',
+                          items: operationsItems,
+                        ),
                       _buildMobileDrawerSection(
-                        title: 'الطلبات',
-                        items: orderItems,
+                        title: 'الحساب',
+                        items: accountItems,
                       ),
-                    if (partyItems.isNotEmpty)
-                      _buildMobileDrawerSection(
-                        title: 'الأطراف والمتابعة',
-                        items: partyItems,
-                      ),
-                    if (operationsItems.isNotEmpty)
-                      _buildMobileDrawerSection(
-                        title: 'التشغيل',
-                        items: operationsItems,
-                      ),
-                    _buildMobileDrawerSection(
-                      title: 'الحساب',
-                      items: accountItems,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
               ],
             ),
           ),
@@ -2016,11 +2013,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       Row(
                         children: [
-	                          IconButton(
-	                            onPressed: () {
-	                              Navigator.pushNamed(
-	                                context,
-	                                AppRoutes.notifications,
+                          IconButton(
+                            onPressed: () {
+                              Navigator.pushNamed(
+                                context,
+                                AppRoutes.notifications,
                               );
                             },
                             icon: Badge(
@@ -2031,9 +2028,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                               backgroundColor: AppColors.errorRed,
                               textColor: Colors.white,
-	                              child: const Icon(Icons.notifications_outlined),
-	                            ),
-	                          ),
+                              child: const Icon(Icons.notifications_outlined),
+                            ),
+                          ),
                           if (authProvider.isAdminLike)
                             IconButton(
                               onPressed: _backupBusy
@@ -2042,10 +2039,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               tooltip: 'النسخ الاحتياطي',
                               icon: const Icon(Icons.backup_outlined),
                             ),
-	                          IconButton(
-	                            onPressed: () =>
-	                                _confirmLogout(context, authProvider),
-	                            icon: const Icon(Icons.logout),
+                          IconButton(
+                            onPressed: () =>
+                                _confirmLogout(context, authProvider),
+                            icon: const Icon(Icons.logout),
                             tooltip: 'تسجيل الخروج',
                             color: AppColors.errorRed,
                           ),
@@ -3215,25 +3212,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   //   final stats = [
   //     {
-  //       'label': '?? ????????',
+  //       'label': 'في المستودع',
   //       'value': warehouseCount,
   //       'icon': Icons.inventory_2,
   //       'color': Colors.blue,
   //     },
   //     {
-  //       'label': '?? ?????? ???????',
+  //       'label': 'في انتظار التخصيص للعميل',
   //       'value': waitingCount,
   //       'icon': Icons.access_time,
   //       'color': Colors.grey.shade700,
   //     },
   //     {
-  //       'label': '?? ?????',
+  //       'label': 'تم الدمج / مدمجة',
   //       'value': mergedCount,
   //       'icon': Icons.merge_type,
   //       'color': Colors.amber.shade700,
   //     },
   //     {
-  //       'label': '?? ???????',
+  //       'label': 'مكتملة',
   //       'value': completedCount,
   //       'icon': Icons.check_circle,
   //       'color': Colors.green,
@@ -3763,7 +3760,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) {
     final resolvedDateSelector = dateSelector ?? ((order) => order.arrivalDate);
     return orders
-        .where((order) => _matchesExportPeriodForDate(resolvedDateSelector(order)))
+        .where(
+          (order) => _matchesExportPeriodForDate(resolvedDateSelector(order)),
+        )
         .toList();
   }
 
@@ -3774,20 +3773,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Order> _filterOrdersForPdf(List<Order> orders) {
     switch (_exportPdfScope) {
       case 'customers':
-        return _filterOrdersByExportPeriod(orders)
-            .where((order) => _isCustomerSource(order.orderSource))
-            .toList();
+        return _filterOrdersByExportPeriod(
+          orders,
+        ).where((order) => _isCustomerSource(order.orderSource)).toList();
       case 'suppliers':
-        return _filterOrdersByExportPeriod(orders)
-            .where((order) => _isSupplierSource(order.orderSource))
-            .toList();
+        return _filterOrdersByExportPeriod(
+          orders,
+        ).where((order) => _isSupplierSource(order.orderSource)).toList();
       case 'completed':
       default:
-        return _filterOrdersByExportPeriod(orders)
-            .where(
-              (order) => _isPdfCompletedOrder(order),
-            )
-            .toList();
+        return _filterOrdersByExportPeriod(
+          orders,
+        ).where((order) => _isPdfCompletedOrder(order)).toList();
     }
   }
 
@@ -4874,7 +4871,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .toList();
     final completedCount = _exportPdfScope == 'completed'
         ? activeOrders.length
-        : activeOrders.where((order) => _isCompletedStatus(order.status)).length;
+        : activeOrders
+              .where((order) => _isCompletedStatus(order.status))
+              .length;
     final purchaseCount = activeOrders
         .where(
           (order) =>
@@ -5011,12 +5010,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         pw.SizedBox(height: 3),
         pw.Table.fromTextArray(
-          headers: const [
-            'العميل',
-            'عدد الطلبات',
-            'المورد',
-            'عدد الطلبات',
-          ],
+          headers: const ['العميل', 'عدد الطلبات', 'المورد', 'عدد الطلبات'],
           data: data,
           headerStyle: pw.TextStyle(
             fontWeight: pw.FontWeight.bold,
@@ -5025,7 +5019,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           cellStyle: const pw.TextStyle(fontSize: 6.1),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
           cellAlignment: pw.Alignment.center,
-          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+          cellPadding: const pw.EdgeInsets.symmetric(
+            horizontal: 2,
+            vertical: 1,
+          ),
           columnWidths: {
             0: const pw.FlexColumnWidth(2.3),
             1: const pw.FlexColumnWidth(0.7),
@@ -5124,9 +5121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? const [
             ['-', '0'],
           ]
-        : rows
-              .map((entry) => [entry.key, entry.value.toString()])
-              .toList();
+        : rows.map((entry) => [entry.key, entry.value.toString()]).toList();
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -5147,7 +5142,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           cellStyle: const pw.TextStyle(fontSize: 6.1),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
           cellAlignment: pw.Alignment.center,
-          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+          cellPadding: const pw.EdgeInsets.symmetric(
+            horizontal: 2,
+            vertical: 1,
+          ),
           columnWidths: {
             0: const pw.FlexColumnWidth(2.4),
             1: const pw.FlexColumnWidth(0.8),
@@ -5980,9 +5978,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ].contains(authProvider.user?.role);
 
     final canViewCirculars =
-        authProvider.user?.role == 'owner' || authProvider.user?.role == 'manager';
+        authProvider.user?.role == 'owner' ||
+        authProvider.user?.role == 'manager';
     final canViewMovementPage =
-        authProvider.user?.role == 'owner' || authProvider.user?.role == 'admin';
+        authProvider.user?.role == 'owner' ||
+        authProvider.user?.role == 'admin';
     final canViewSupplierPortal = [
       'owner',
       'admin',
@@ -6031,8 +6031,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildDesktopFolderItem(
           icon: Icons.percent_outlined,
           title: 'إعدادات الضريبة',
-          onTap: () =>
-              Navigator.pushNamed(context, AppRoutes.orderManagementTaxSettings),
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.orderManagementTaxSettings,
+          ),
         ),
       if (canViewOrders)
         _buildDesktopFolderItem(
@@ -6088,10 +6090,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildDesktopFolderItem(
           icon: Icons.add_business_rounded,
           title: 'بوابة الموردين',
-          onTap: () => Navigator.pushNamed(
-            context,
-            AppRoutes.supplierPortal,
-          ),
+          onTap: () => Navigator.pushNamed(context, AppRoutes.supplierPortal),
         ),
       if (canViewCustomers)
         _buildDesktopFolderItem(
@@ -7068,6 +7067,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
                 const SizedBox(height: 12),
+
                 // Text(
                 //   'واجهة الجوال أصبحت أخف، والتنقل الآن من القائمة الجانبية بدل شبكة الأيقونات.',
                 //   style: TextStyle(
@@ -7076,7 +7076,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 //     fontSize: 12.5,
                 //   ),
                 // ),
-               
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -7091,12 +7090,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           : AppColors.successGreen,
                       onTap: unreadNotifications > 0
                           ? () => Navigator.pushNamed(
-                                context,
-                                AppRoutes.notifications,
-                              )
+                              context,
+                              AppRoutes.notifications,
+                            )
                           : null,
                     ),
-                 
                   ],
                 ),
               ],
@@ -7741,20 +7739,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         continue;
       }
       if (_isCompletedStatus(status)) {
-        completed++;
+        if (order.isCustomerOrder || order.isMergedOrder) {
+          final requestTypeCategory = _dashboardRequestTypeCategory(order);
+          if (requestTypeCategory == 'transport') {
+            transport++;
+            continue;
+          }
+          if (requestTypeCategory == 'purchase') {
+            purchase++;
+            continue;
+          }
+        }
         continue;
-      }
-
-      if (order.isCustomerOrder || order.isMergedOrder) {
-        final requestTypeCategory = _dashboardRequestTypeCategory(order);
-        if (requestTypeCategory == 'transport') {
-          transport++;
-          continue;
-        }
-        if (requestTypeCategory == 'purchase') {
-          purchase++;
-          continue;
-        }
       }
 
       if (_isWarehouseStatus(status)) {
@@ -7763,6 +7759,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
+    completed = transport + purchase;
     final total = completed + transport + purchase + warehouse + canceled;
     if (total == 0) return [];
 
@@ -8697,8 +8694,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: Icons.alt_route_outlined,
                 title: 'الحركة',
                 color: AppColors.appBarBlue,
-                onTap: () =>
-                    Navigator.pushNamed(context, AppRoutes.movement),
+                onTap: () => Navigator.pushNamed(context, AppRoutes.movement),
               ),
             if (canViewCustomers)
               _navItem(
@@ -8918,14 +8914,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Navigator.of(context, rootNavigator: true).pop();
       }
       rethrow;
-	    } finally {
-	      if (mounted) {
-	        setState(() {
-	          _backupBusy = false;
-	        });
-	      }
-	    }
-	  }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _backupBusy = false;
+        });
+      }
+    }
+  }
 
   String _friendlyError(Object error) {
     final text = error.toString().trim();
@@ -8989,7 +8985,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            kIsWeb ? 'تم تحميل النسخة الاحتياطية.' : 'تم حفظ النسخة: $savedPath',
+            kIsWeb
+                ? 'تم تحميل النسخة الاحتياطية.'
+                : 'تم حفظ النسخة: $savedPath',
           ),
         ),
       );
@@ -9021,7 +9019,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.errorRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.errorRed,
+            ),
             child: const Text('متابعة'),
           ),
         ],
@@ -9044,10 +9044,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final response = await _runBackupOperation<Map<String, dynamic>>(
         context,
         message: 'جاري استيراد النسخة الاحتياطية...',
-        action: () => BackupService.restoreFromBackup(
-          file: file,
-          dropExisting: true,
-        ),
+        action: () =>
+            BackupService.restoreFromBackup(file: file, dropExisting: true),
       );
 
       if (!mounted || response == null) return;
@@ -9056,12 +9054,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? response['data'] as Map<String, dynamic>
           : <String, dynamic>{};
       final totalInserted = data['totalInserted'];
-      final insertedText =
-          totalInserted == null ? '' : ' (تم إدخال $totalInserted سجل)';
+      final insertedText = totalInserted == null
+          ? ''
+          : ' (تم إدخال $totalInserted سجل)';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('تم الاستيراد بنجاح$insertedText. يفضل إعادة تشغيل التطبيق.'),
+          content: Text(
+            'تم الاستيراد بنجاح$insertedText. يفضل إعادة تشغيل التطبيق.',
+          ),
         ),
       );
     } catch (error) {
@@ -9333,7 +9334,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Expanded(
                   child: _buildPerformanceItem(
-                    icon: Icons.timer_outlined, 
+                    icon: Icons.timer_outlined,
                     title: 'متوسط وقت الاستجابة',
                     value: '2.5 ساعة',
                     color: AppColors.successGreen,

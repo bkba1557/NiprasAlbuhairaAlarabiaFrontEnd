@@ -1154,12 +1154,19 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       ),
     );
 
+    final Customer? resultCustomer =
+        createdCustomer ??
+        provider.customers.cast<Customer?>().firstWhere(
+          (customer) => customer?.id == widget.customerToEdit?.id,
+          orElse: () => widget.customerToEdit,
+        );
+
     if (createdCustomer != null && mounted) {
       await _promptWelcomeMessage(createdCustomer);
     }
 
     if (mounted) {
-      Navigator.pop(context);
+      Navigator.pop(context, resultCustomer);
     }
   }
 

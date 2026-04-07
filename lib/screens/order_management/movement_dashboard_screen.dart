@@ -7,11 +7,15 @@ import 'package:order_tracker/models/models.dart';
 import 'package:order_tracker/models/order_model.dart';
 import 'package:order_tracker/models/supplier_model.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
+import 'package:order_tracker/providers/chat_provider.dart';
 import 'package:order_tracker/providers/customer_provider.dart';
 import 'package:order_tracker/providers/driver_provider.dart';
+import 'package:order_tracker/providers/notification_provider.dart';
 import 'package:order_tracker/providers/order_provider.dart';
 import 'package:order_tracker/providers/supplier_provider.dart';
 import 'package:order_tracker/services/movement_orders_report_pdf_service.dart';
+import 'package:order_tracker/screens/order_details_screen.dart';
+import 'package:order_tracker/screens/order_management/statement_tab.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/file_saver.dart';
@@ -77,6 +81,10 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   final TextEditingController _arrivalTime = TextEditingController(
     text: '10:00',
   );
+  final TextEditingController _historySearchController =
+      TextEditingController();
+  final TextEditingController _customerRequestsSearchController =
+      TextEditingController();
 
   DateTime _orderDate = DateTime.now();
   DateTime _loadingDate = DateTime.now();
@@ -88,6 +96,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   List<Customer> _customers = const <Customer>[];
   List<Driver> _drivers = const <Driver>[];
   List<Order> _orders = const <Order>[];
+  List<Order> _customerRequests = const <Order>[];
   bool _booting = true;
   bool _submitting = false;
   bool _autofilling = false;
@@ -96,6 +105,13 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   String? _busyOrderId;
   dynamic _dropzoneController;
   bool _dropActive = false;
+
+  String? _newCustomerRequestCustomerId;
+  String _newCustomerRequestFuelType =
+      _fuelTypes.contains('ديزل') ? 'ديزل' : _fuelTypes.first;
+  DateTime _newCustomerRequestDate = DateTime.now();
+  bool _creatingCustomerRequest = false;
+  TextEditingController? _newCustomerRequestCustomerFieldController;
 
   bool get _movementUser =>
       context.read<AuthProvider>().user?.role == 'movement';
@@ -122,6 +138,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     _area.dispose();
     _loadingTime.dispose();
     _arrivalTime.dispose();
+    _historySearchController.dispose();
+    _customerRequestsSearchController.dispose();
     super.dispose();
   }
 
@@ -152,18 +170,297 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     if (showLoader && mounted) {
       setState(() => _refreshing = true);
     }
-    final orders = await context.read<OrderProvider>().fetchOrdersSnapshot(
-      filters: <String, dynamic>{
-        'entryChannel': 'movement',
-        'orderSource': 'مورد',
-      },
-    );
-    orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final provider = context.read<OrderProvider>();
+    final responses = await Future.wait<List<Order>>(<Future<List<Order>>>[
+      provider.fetchOrdersSnapshot(
+        filters: <String, dynamic>{
+          'entryChannel': 'movement',
+          'orderSource': 'مورد',
+        },
+      ),
+      provider.fetchOrdersSnapshot(
+        filters: <String, dynamic>{
+          'entryChannel': 'movement',
+          'orderSource': 'عميل',
+        },
+      ),
+    ]);
+    final orders = responses.first.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final customerRequests = responses.last.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     if (!mounted) return;
     setState(() {
       _orders = orders;
+      _customerRequests = customerRequests;
       _refreshing = false;
     });
+  }
+
+  String _normalizeSearchText(String value) {
+    var normalized = value.trim().toLowerCase();
+    _arabicDigitMap.forEach((arabicDigit, latinDigit) {
+      normalized = normalized.replaceAll(arabicDigit, latinDigit);
+    });
+    return normalized;
+  }
+
+  String? _normalizeFuelType(String? value) {
+    if (value == null) return null;
+    var normalized = value;
+    normalized = normalized.replaceAll(
+      RegExp(r'[\u200E\u200F\u202A-\u202E]'),
+      '',
+    );
+    normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  String? _fuelKey(String? value) {
+    final normalized = _normalizeFuelType(value);
+    if (normalized == null) return null;
+    final lower = normalized.toLowerCase();
+
+    if (lower.contains('ديزل') || lower.contains('diesel')) return 'diesel';
+    if (lower.contains('كيروسين') || lower.contains('kerosene')) {
+      return 'kerosene';
+    }
+
+    if (lower.contains('بنزين') ||
+        lower.contains('gasoline') ||
+        lower.contains('petrol')) {
+      if (lower.contains('95')) return 'gas95';
+      if (lower.contains('91')) return 'gas91';
+      return 'gasoline';
+    }
+
+    return lower;
+  }
+
+  bool _matchesOrderSearch(Order order, String query) {
+    final normalizedQuery = _normalizeSearchText(query);
+    if (normalizedQuery.isEmpty) return true;
+
+    final tokens = <String>[
+      order.orderNumber,
+      order.supplierOrderNumber ?? '',
+      order.movementMergedOrderNumber ?? '',
+      order.movementCustomerName ?? '',
+      order.customer?.name ?? '',
+      order.customer?.code ?? '',
+      order.driverName ?? '',
+      order.vehicleNumber ?? '',
+      order.supplierName,
+      order.fuelType ?? '',
+    ].map(_normalizeSearchText);
+
+    return tokens.any((token) => token.contains(normalizedQuery));
+  }
+
+  bool _isPendingCustomerRequest(Order order) {
+    if (!order.isMovementOrder || !order.isCustomerOrder) return false;
+    if (_isOrderCompleted(order)) return false;
+    if (order.status == 'ملغى') return false;
+    const pendingStatuses = <String>{
+      'في انتظار التخصيص',
+      'في انتظار الدمج',
+      'في انتظار إنشاء طلب العميل',
+    };
+    return (order.mergedWithOrderId ?? '').trim().isEmpty &&
+        order.mergeStatus != 'مدمج' &&
+        pendingStatuses.contains(order.status);
+  }
+
+  String? _customerIdFromRequest(Order order) {
+    final fromCustomer = order.customer?.id;
+    if (fromCustomer != null && fromCustomer.trim().isNotEmpty) {
+      return fromCustomer;
+    }
+    final fromMovement = order.movementCustomerId;
+    if (fromMovement != null && fromMovement.trim().isNotEmpty) {
+      return fromMovement;
+    }
+    final fromPortal = order.portalCustomerId;
+    if (fromPortal != null && fromPortal.trim().isNotEmpty) {
+      return fromPortal;
+    }
+    return null;
+  }
+
+  String? _customerCodeFromRequest(Order order) {
+    return _normalizeCustomerCode(order.customer?.code);
+  }
+
+  String? _normalizeCustomerCode(String? value) {
+    if (value == null) return null;
+    var normalized = value;
+    normalized = normalized.replaceAll(
+      RegExp(r'[\u200E\u200F\u202A-\u202E]'),
+      '',
+    );
+    normalized = normalized.replaceAll(RegExp(r'\s+'), '').trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  Order? _pendingRequestForCustomer(String? customerId, {String? fuelType}) {
+    if (customerId == null || customerId.trim().isEmpty) {
+      return null;
+    }
+
+    final requestedFuelKey = _fuelKey(fuelType);
+    var matchingRequests =
+        _customerRequests
+            .where((order) => _isPendingCustomerRequest(order))
+            .where((order) => _customerIdFromRequest(order) == customerId)
+            .where(
+              (order) => requestedFuelKey == null
+                  ? true
+                  : _fuelKey(order.fuelType) == requestedFuelKey,
+            )
+            .toList()
+          ..sort((a, b) {
+            final byOrderDate = a.orderDate.compareTo(b.orderDate);
+            if (byOrderDate != 0) return byOrderDate;
+            return a.createdAt.compareTo(b.createdAt);
+          });
+
+    if (matchingRequests.isEmpty) {
+      final customer = _findCustomerById(customerId);
+      final customerCode = customer?.code.trim();
+      final normalizedCustomerCode = _normalizeCustomerCode(customerCode);
+      if (normalizedCustomerCode != null && normalizedCustomerCode.isNotEmpty) {
+        matchingRequests =
+            _customerRequests
+                .where((order) => _isPendingCustomerRequest(order))
+                .where(
+                  (order) =>
+                      _customerCodeFromRequest(order) == normalizedCustomerCode,
+                )
+                .where(
+                  (order) => requestedFuelKey == null
+                      ? true
+                      : _fuelKey(order.fuelType) == requestedFuelKey,
+                )
+                .toList()
+              ..sort((a, b) {
+                final byOrderDate = a.orderDate.compareTo(b.orderDate);
+                if (byOrderDate != 0) return byOrderDate;
+                return a.createdAt.compareTo(b.createdAt);
+              });
+      }
+    }
+
+    if (matchingRequests.isNotEmpty) {
+      return matchingRequests.first;
+    }
+
+    return null;
+  }
+
+  List<Customer> _dispatchCustomers({
+    required bool onlyCustomersWithRequests,
+    String? fuelType,
+  }) {
+    if (!onlyCustomersWithRequests) {
+      return _customers;
+    }
+
+    final requestedFuelKey = _fuelKey(fuelType);
+    final customerIds = <String>{};
+    final customerCodes = <String>{};
+
+    for (final order in _customerRequests) {
+      if (!_isPendingCustomerRequest(order)) continue;
+      if (requestedFuelKey != null &&
+          _fuelKey(order.fuelType) != requestedFuelKey) {
+        continue;
+      }
+      final id = _customerIdFromRequest(order);
+      if (id != null && id.trim().isNotEmpty) {
+        customerIds.add(id.trim());
+      }
+      final code = _customerCodeFromRequest(order);
+      if (code != null && code.isNotEmpty) {
+        customerCodes.add(code);
+      }
+    }
+
+    if (customerIds.isEmpty && customerCodes.isEmpty) {
+      return const <Customer>[];
+    }
+
+    return _customers
+        .where((customer) {
+          if (customerIds.contains(customer.id)) return true;
+          return customerCodes.contains(
+            _normalizeCustomerCode(customer.code) ?? customer.code.trim(),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  bool _hasMovementArrived(Order order) {
+    final arrivalDateTime = _combineDateAndTime(
+      order.movementExpectedArrivalDate ?? order.arrivalDate,
+      order.arrivalTime,
+    );
+    if (arrivalDateTime == null) return false;
+    return !arrivalDateTime.isAfter(DateTime.now());
+  }
+
+  List<Order> get _historyOrders {
+    final query = _historySearchController.text;
+    final items =
+        _orders
+            .where(
+              (order) =>
+                  (!order.isMovementDirected || !_hasMovementArrived(order)) &&
+                  _matchesOrderSearch(order, query),
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return items;
+  }
+
+  List<Order> get _dispatchOrders {
+    final query = _historySearchController.text;
+    final items =
+        _orders
+            .where((order) => order.isMovementDirected)
+            .where((order) => _matchesOrderSearch(order, query))
+            .toList()
+          ..sort((a, b) {
+            final aArrival = a.movementExpectedArrivalDate ?? a.arrivalDate;
+            final bArrival = b.movementExpectedArrivalDate ?? b.arrivalDate;
+            return aArrival.compareTo(bArrival);
+          });
+    return items;
+  }
+
+  bool _canCancelMovementOrder(Order order) {
+    if (!order.isMovementOrder || _isOrderCompleted(order)) {
+      return false;
+    }
+    return (order.mergedWithOrderId ?? '').trim().isEmpty &&
+        order.mergeStatus != 'مدمج';
+  }
+
+  bool _isCustomerRequestOpen(Order order) {
+    if (!order.isMovementOrder || !order.isCustomerOrder) {
+      return false;
+    }
+    if (_isPendingCustomerRequest(order)) {
+      return true;
+    }
+    if (_isOrderCompleted(order) || order.status == 'ملغى') {
+      return false;
+    }
+    final arrivalDateTime = _combineDateAndTime(
+      order.arrivalDate,
+      order.arrivalTime,
+    );
+    if (arrivalDateTime == null) return true;
+    return arrivalDateTime.isAfter(DateTime.now());
   }
 
   DateTime _dateOnly(DateTime value) =>
@@ -1169,6 +1466,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     required DateTime expectedArrivalDate,
     required String driverId,
     required String requestType,
+    String? customerOrderId,
+    double? requestAmount,
   }) async {
     setState(() => _busyOrderId = order.id);
     final success = await context.read<OrderProvider>().dispatchMovementOrder(
@@ -1177,7 +1476,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       customerRequestDate: customerRequestDate,
       expectedArrivalDate: expectedArrivalDate,
       driverId: driverId,
+      customerOrderId: customerOrderId,
       requestType: requestType,
+      requestAmount: requestAmount,
     );
     if (!mounted) return;
     setState(() => _busyOrderId = null);
@@ -1195,6 +1496,635 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     await _loadOrders(showLoader: false);
   }
 
+  double? _parseOptionalAmount(String rawValue) {
+    final normalized = _normalizeSearchText(
+      rawValue.replaceAll(',', '').replaceAll('،', ''),
+    );
+    if (normalized.isEmpty) return null;
+    return double.tryParse(normalized);
+  }
+
+  String _requestAmountLabel(String requestType) {
+    return requestType == 'نقل' ? 'قيمة النقل' : 'مبلغ الشراء';
+  }
+
+  String _formatCurrency(double? value) {
+    if (value == null) return 'غير محدد';
+    final isWholeNumber = value.truncateToDouble() == value;
+    return '${value.toStringAsFixed(isWholeNumber ? 0 : 2)} ريال';
+  }
+
+  Future<String?> _promptForCancellationReason({
+    required String title,
+    required String actionLabel,
+  }) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'سبب الإلغاء',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final reason = controller.text.trim();
+              if (reason.isEmpty) return;
+              Navigator.pop(dialogContext, reason);
+            },
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<bool> _cancelMovementOrder(
+    Order order, {
+    required String reason,
+  }) async {
+    setState(() => _busyOrderId = order.id);
+    final success = await context.read<OrderProvider>().updateOrderStatus(
+      order.id,
+      'ملغى',
+      reason: reason,
+    );
+    if (!mounted) return false;
+    setState(() => _busyOrderId = null);
+    if (!success) {
+      _snack(
+        context.read<OrderProvider>().error ?? 'تعذر إلغاء الطلب.',
+        AppColors.errorRed,
+      );
+      return false;
+    }
+    _snack('تم إلغاء الطلب.', AppColors.successGreen);
+    await _loadOrders(showLoader: false);
+    return true;
+  }
+
+  Future<bool> _deleteCustomerRequest(Order order) async {
+    setState(() => _busyOrderId = order.id);
+    final success = await context
+        .read<OrderProvider>()
+        .deleteMovementCustomerRequest(order.id);
+    if (!mounted) return false;
+    setState(() => _busyOrderId = null);
+    if (!success) {
+      _snack(
+        context.read<OrderProvider>().error ?? 'تعذر حذف طلب العميل.',
+        AppColors.errorRed,
+      );
+      return false;
+    }
+    _snack('تم حذف طلب العميل.', AppColors.successGreen);
+    await _loadOrders(showLoader: false);
+    return true;
+  }
+
+  Future<void> _openCustomerRequestsDialog() async {
+    String? customerId;
+    String fuelType = _fuelTypes.contains('ديزل') ? 'ديزل' : _fuelTypes.first;
+    DateTime requestDate = DateTime.now();
+    bool creating = false;
+    TextEditingController? customerSearchController;
+    final searchController = TextEditingController();
+
+    Future<void> submitRequest(StateSetter setDialogState) async {
+      if (customerId == null) return;
+
+      final existing = _pendingRequestForCustomer(
+        customerId,
+        fuelType: fuelType,
+      );
+      if (existing != null) {
+        _snack(
+          'يوجد طلب مؤقت لهذا العميل ونوع الوقود بالفعل (${existing.orderNumber}).',
+          AppColors.warningOrange,
+        );
+        return;
+      }
+
+      setDialogState(() => creating = true);
+      final success = await context
+          .read<OrderProvider>()
+          .createMovementCustomerRequest(
+            customerId: customerId!,
+            fuelType: fuelType,
+            requestDate: requestDate,
+          );
+      if (!mounted) return;
+      setDialogState(() => creating = false);
+      if (!success) {
+        _snack(
+          context.read<OrderProvider>().error ?? 'تعذر إضافة طلب العميل.',
+          AppColors.errorRed,
+        );
+        return;
+      }
+
+      customerId = null;
+      requestDate = DateTime.now();
+      fuelType = _fuelTypes.contains('ديزل') ? 'ديزل' : _fuelTypes.first;
+      customerSearchController?.clear();
+
+      await _loadOrders(showLoader: false);
+      if (!mounted) return;
+      _snack('تمت إضافة طلب العميل.', AppColors.successGreen);
+      setDialogState(() {});
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final searchQuery = searchController.text.trim();
+          final visibleRequests =
+              _customerRequests
+                  .where((order) => _isPendingCustomerRequest(order))
+                  .where((order) => _matchesOrderSearch(order, searchQuery))
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+          return Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 24,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 980, maxHeight: 700),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        const Expanded(
+                          child: Text(
+                            'طلبات العملاء',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          const Text(
+                            'إضافة طلب جديد',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: <Widget>[
+                              SizedBox(
+                                width: 320,
+                                child: Autocomplete<Customer>(
+                                  displayStringForOption: (customer) =>
+                                      customer.displayName,
+                                  optionsBuilder: (value) =>
+                                      _customerSearchOptions(value.text),
+                                  onSelected: (customer) {
+                                    setDialogState(
+                                      () => customerId = customer.id,
+                                    );
+                                  },
+                                  fieldViewBuilder:
+                                      (
+                                        BuildContext context,
+                                        TextEditingController textController,
+                                        FocusNode focusNode,
+                                        VoidCallback onFieldSubmitted,
+                                      ) {
+                                        customerSearchController =
+                                            textController;
+                                        return TextFormField(
+                                          controller: textController,
+                                          focusNode: focusNode,
+                                          decoration: InputDecoration(
+                                            labelText: 'العميل',
+                                            border: const OutlineInputBorder(),
+                                            prefixIcon: const Icon(
+                                              Icons.search,
+                                            ),
+                                            suffixIcon: customerId == null
+                                                ? null
+                                                : IconButton(
+                                                    onPressed: () {
+                                                      textController.clear();
+                                                      setDialogState(
+                                                        () => customerId = null,
+                                                      );
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons.clear,
+                                                    ),
+                                                  ),
+                                          ),
+                                          onChanged: (value) {
+                                            final selected = _findCustomerById(
+                                              customerId,
+                                            );
+                                            if (selected != null &&
+                                                value.trim() !=
+                                                    selected.displayName) {
+                                              setDialogState(
+                                                () => customerId = null,
+                                              );
+                                            }
+                                          },
+                                          onFieldSubmitted: (_) =>
+                                              onFieldSubmitted(),
+                                        );
+                                      },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 180,
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: fuelType,
+                                  decoration: const InputDecoration(
+                                    labelText: 'نوع الوقود',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: _fuelTypes
+                                      .map(
+                                        (item) => DropdownMenuItem<String>(
+                                          value: item,
+                                          child: Text(item),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) => setDialogState(
+                                    () => fuelType = value ?? fuelType,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 180,
+                                child: InkWell(
+                                  onTap: () async {
+                                    final picked = await showDatePicker(
+                                      context: dialogContext,
+                                      initialDate: requestDate,
+                                      firstDate: DateTime.now().subtract(
+                                        const Duration(days: 365),
+                                      ),
+                                      lastDate: DateTime.now().add(
+                                        const Duration(days: 365 * 3),
+                                      ),
+                                    );
+                                    if (picked != null) {
+                                      setDialogState(
+                                        () => requestDate = picked,
+                                      );
+                                    }
+                                  },
+                                  child: InputDecorator(
+                                    decoration: const InputDecoration(
+                                      labelText: 'تاريخ الطلب',
+                                      border: OutlineInputBorder(),
+                                      prefixIcon: Icon(
+                                        Icons.calendar_month_outlined,
+                                      ),
+                                    ),
+                                    child: Text(_fmt(requestDate)),
+                                  ),
+                                ),
+                              ),
+                              FilledButton.icon(
+                                onPressed: creating || customerId == null
+                                    ? null
+                                    : () => submitRequest(setDialogState),
+                                icon: creating
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.add_rounded),
+                                label: Text(
+                                  creating ? 'جاري الإضافة...' : 'إضافة',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: searchController,
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'ابحث بالعميل أو رقم الطلب أو السائق',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: searchController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                onPressed: () {
+                                  searchController.clear();
+                                  setDialogState(() {});
+                                },
+                                icon: const Icon(Icons.clear),
+                              ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: visibleRequests.isEmpty
+                          ? const Center(
+                              child: Text('لا توجد طلبات عملاء مطابقة حاليًا.'),
+                            )
+                          : ListView.separated(
+                              itemCount: visibleRequests.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final request = visibleRequests[index];
+                                final busy = _busyOrderId == request.id;
+                                final isPending = _isPendingCustomerRequest(
+                                  request,
+                                );
+                                return Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: AppColors.silverDark.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Row(
+                                        children: <Widget>[
+                                          Expanded(
+                                            child: Text(
+                                              request.orderNumber,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 6,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  (isPending
+                                                          ? AppColors
+                                                                .successGreen
+                                                          : AppColors.infoBlue)
+                                                      .withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                            child: Text(
+                                              isPending
+                                                  ? 'بانتظار الدمج'
+                                                  : request.status,
+                                              style: TextStyle(
+                                                color: isPending
+                                                    ? AppColors.successGreen
+                                                    : AppColors.infoBlue,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'العميل: ${request.customer?.displayName ?? request.customer?.name ?? '-'}',
+                                      ),
+                                      Text(
+                                        'نوع الوقود: ${request.fuelType ?? '-'}',
+                                      ),
+                                      Text(
+                                        'تاريخ الطلب: ${_fmt(request.orderDate)}',
+                                      ),
+                                      if ((request.driverName ?? '')
+                                          .trim()
+                                          .isNotEmpty)
+                                        Text('السائق: ${request.driverName}'),
+                                      const SizedBox(height: 10),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: <Widget>[
+                                          if (_canCancelMovementOrder(request))
+                                            OutlinedButton.icon(
+                                              onPressed: busy
+                                                  ? null
+                                                  : () async {
+                                                      final reason =
+                                                          await _promptForCancellationReason(
+                                                            title:
+                                                                'إلغاء الطلب',
+                                                            actionLabel:
+                                                                'تأكيد الإلغاء',
+                                                          );
+                                                      if (reason == null ||
+                                                          reason
+                                                              .trim()
+                                                              .isEmpty) {
+                                                        return;
+                                                      }
+                                                      final success =
+                                                          await _cancelMovementOrder(
+                                                            request,
+                                                            reason: reason,
+                                                          );
+                                                      if (success && mounted) {
+                                                        setDialogState(() {});
+                                                      }
+                                                    },
+                                              icon: const Icon(
+                                                Icons.cancel_outlined,
+                                              ),
+                                              label: const Text('إلغاء'),
+                                            ),
+                                          if ((request.mergedWithOrderId ?? '')
+                                              .trim()
+                                              .isEmpty)
+                                            OutlinedButton.icon(
+                                              onPressed: busy
+                                                  ? null
+                                                  : () async {
+                                                      final confirmed = await showDialog<bool>(
+                                                        context: dialogContext,
+                                                        builder: (confirmContext) => AlertDialog(
+                                                          title: const Text(
+                                                            'حذف طلب العميل',
+                                                          ),
+                                                          content: const Text(
+                                                            'سيتم حذف الطلب نهائيًا. هل تريد المتابعة؟',
+                                                          ),
+                                                          actions: <Widget>[
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                    confirmContext,
+                                                                    false,
+                                                                  ),
+                                                              child: const Text(
+                                                                'إلغاء',
+                                                              ),
+                                                            ),
+                                                            FilledButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                    confirmContext,
+                                                                    true,
+                                                                  ),
+                                                              child: const Text(
+                                                                'حذف',
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                      if (confirmed != true) {
+                                                        return;
+                                                      }
+                                                      final success =
+                                                          await _deleteCustomerRequest(
+                                                            request,
+                                                          );
+                                                      if (success && mounted) {
+                                                        setDialogState(() {});
+                                                      }
+                                                    },
+                                              icon: const Icon(
+                                                Icons.delete_outline,
+                                              ),
+                                              label: const Text('حذف'),
+                                            ),
+                                          if (busy)
+                                            const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    searchController.dispose();
+  }
+
+  Customer? _findCustomerById(String? customerId) {
+    if (customerId == null || customerId.trim().isEmpty) {
+      return null;
+    }
+    for (final customer in _customers) {
+      if (customer.id == customerId) {
+        return customer;
+      }
+    }
+    return null;
+  }
+
+  Iterable<Customer> _customerSearchOptions(
+    String query, {
+    bool onlyCustomersWithRequests = false,
+    String? fuelType,
+  }) {
+    final source = _dispatchCustomers(
+      onlyCustomersWithRequests: onlyCustomersWithRequests,
+      fuelType: fuelType,
+    );
+    final trimmedQuery = query.trim().toLowerCase();
+    if (trimmedQuery.isEmpty) {
+      return source.take(20);
+    }
+    return source
+        .where((customer) {
+          final phone = customer.phone?.toLowerCase() ?? '';
+          return customer.name.toLowerCase().contains(trimmedQuery) ||
+              customer.code.toLowerCase().contains(trimmedQuery) ||
+              phone.contains(trimmedQuery);
+        })
+        .take(25);
+  }
+
+  void _upsertLocalCustomer(Customer customer) {
+    final nextCustomers = List<Customer>.from(_customers);
+    final customerIndex = nextCustomers.indexWhere(
+      (item) => item.id == customer.id,
+    );
+    if (customerIndex == -1) {
+      nextCustomers.insert(0, customer);
+    } else {
+      nextCustomers[customerIndex] = customer;
+    }
+    setState(() => _customers = nextCustomers);
+  }
+
   void _snack(String message, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -1204,7 +2134,38 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
 
   String _fmt(DateTime value) => DateFormat('yyyy/MM/dd').format(value);
 
+  Widget _appBarActionButton({
+    required VoidCallback? onPressed,
+    required Widget icon,
+    required bool isMobile,
+    required bool isWideWebScreen,
+    String? tooltip,
+    EdgeInsetsGeometry padding = const EdgeInsetsDirectional.only(end: 8),
+  }) {
+    return Padding(
+      padding: padding,
+      child: Container(
+        width: isWideWebScreen ? 38 : 34,
+        height: isWideWebScreen ? 38 : 34,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        ),
+        child: IconButton(
+          onPressed: onPressed,
+          splashRadius: 20,
+          tooltip: tooltip,
+          color: Colors.white,
+          iconSize: isMobile ? 14 : (isWideWebScreen ? 18 : 16),
+          icon: icon,
+        ),
+      ),
+    );
+  }
+
   Widget _buildTabBar({
+    required bool isMobile,
     required bool isWideWebScreen,
     required double screenWidth,
   }) {
@@ -1220,17 +2181,18 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: isWideWebScreen ? 920 : screenWidth,
+              maxWidth: isMobile ? 320 : (isWideWebScreen ? 920 : screenWidth),
             ),
             child: Container(
-              height: isWideWebScreen ? 64 : 56,
-              padding: EdgeInsets.all(isWideWebScreen ? 8 : 6),
+              height: isMobile ? 56 : (isWideWebScreen ? 64 : 56),
+              padding: EdgeInsets.all(isMobile ? 6 : (isWideWebScreen ? 8 : 6)),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
               ),
               child: TabBar(
+                isScrollable: !isWideWebScreen,
                 dividerColor: Colors.transparent,
                 indicatorSize: TabBarIndicatorSize.tab,
                 indicator: BoxDecoration(
@@ -1249,40 +2211,59 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 ),
                 tabs: <Tab>[
                   Tab(
-                    height: isWideWebScreen ? 54 : 48,
+                    height: isMobile ? 48 : (isWideWebScreen ? 54 : 48),
                     iconMargin: const EdgeInsets.only(bottom: 4),
                     icon: Icon(
                       Icons.add_box_rounded,
-                      size: isWideWebScreen ? 18 : 16,
+                      size: isMobile ? 14 : (isWideWebScreen ? 18 : 16),
                     ),
                     text: 'إدخال',
                   ),
                   Tab(
-                    height: isWideWebScreen ? 54 : 48,
+                    height: isMobile ? 48 : (isWideWebScreen ? 54 : 48),
                     iconMargin: const EdgeInsets.only(bottom: 4),
                     icon: Icon(
                       Icons.history_rounded,
-                      size: isWideWebScreen ? 18 : 16,
+                      size: isMobile ? 14 : (isWideWebScreen ? 18 : 16),
                     ),
                     text: 'السجل',
                   ),
+
                   Tab(
-                    height: isWideWebScreen ? 54 : 48,
+                    height: isMobile ? 48 : (isWideWebScreen ? 54 : 48),
+                    iconMargin: const EdgeInsets.only(bottom: 4),
+                    icon: Icon(
+                      Icons.assignment_turned_in_outlined,
+                      size: isMobile ? 14 : (isWideWebScreen ? 18 : 16),
+                    ),
+                    text: 'طلبات العملاء',
+                  ),
+                  Tab(
+                    height: isMobile ? 48 : (isWideWebScreen ? 54 : 48),
                     iconMargin: const EdgeInsets.only(bottom: 4),
                     icon: Icon(
                       Icons.route_rounded,
-                      size: isWideWebScreen ? 18 : 16,
+                      size: isMobile ? 14 : (isWideWebScreen ? 18 : 16),
                     ),
                     text: 'التوجيهات',
                   ),
                   Tab(
-                    height: isWideWebScreen ? 54 : 48,
+                    height: isMobile ? 48 : (isWideWebScreen ? 54 : 48),
                     iconMargin: const EdgeInsets.only(bottom: 4),
                     icon: Icon(
                       Icons.local_shipping_rounded,
-                      size: isWideWebScreen ? 18 : 16,
+                      size: isMobile ? 14 : (isWideWebScreen ? 18 : 16),
                     ),
                     text: 'متابعة السائقين',
+                  ),
+                  Tab(
+                    height: isMobile ? 48 : (isWideWebScreen ? 54 : 48),
+                    iconMargin: const EdgeInsets.only(bottom: 4),
+                    icon: Icon(
+                      Icons.description_outlined,
+                      size: isMobile ? 14 : (isWideWebScreen ? 18 : 16),
+                    ),
+                    text: 'بيان النقل',
                   ),
                 ],
               ),
@@ -1336,7 +2317,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
           (order) =>
               order.driverId == driverId &&
               order.id != excludeOrderId &&
-              !_isOrderCompleted(order),
+              order.isMovementDirected &&
+              !_isOrderCompleted(order) &&
+              !_hasMovementArrived(order),
         )
         .toList();
   }
@@ -1534,7 +2517,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                             success
                                 ? 'تم إرسال الواتساب للسائق.'
                                 : (context.read<OrderProvider>().error ??
-                                    'تعذر إرسال الواتساب للسائق.'),
+                                      'تعذر إرسال الواتساب للسائق.'),
                             success
                                 ? AppColors.successGreen
                                 : AppColors.errorRed,
@@ -1570,11 +2553,17 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     String? customerId = order.movementCustomerId;
     String? driverId = order.driverId;
     String requestType = order.requestType ?? 'شراء';
+    String? customerOrderId = order.movementCustomerOrderId;
     DateTime customerRequestDate =
         order.movementCustomerRequestDate ?? DateTime.now();
     DateTime expectedArrivalDate =
         order.movementExpectedArrivalDate ??
         customerRequestDate.add(const Duration(days: 1));
+    bool onlyCustomersWithRequests = true;
+    TextEditingController? customerSearchController;
+    final amountController = TextEditingController(
+      text: order.requestAmount?.toString() ?? '',
+    );
 
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1596,10 +2585,73 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             }
           }
 
+          Order? selectedCustomerRequest() {
+            if (customerOrderId == null || customerOrderId!.trim().isEmpty) {
+              return null;
+            }
+            for (final request in _customerRequests) {
+              if (request.id == customerOrderId) {
+                return request;
+              }
+            }
+            return null;
+          }
+
+          void applySelectedCustomerRequest(Order request) {
+            customerOrderId = request.id;
+            customerId = _customerIdFromRequest(request);
+
+            requestType = request.requestType ?? 'شراء';
+            customerRequestDate = request.orderDate;
+            expectedArrivalDate = request.arrivalDate;
+            amountController.text = request.requestAmount?.toString() ?? '';
+            setDialogState(() {});
+          }
+
+          void applySelectedCustomer(Customer customer) {
+            customerId = customer.id;
+            final pendingRequest =
+                _pendingRequestForCustomer(
+                  customer.id,
+                  fuelType: order.fuelType,
+                ) ??
+                _pendingRequestForCustomer(customer.id);
+            final isCurrentLinkedCustomer =
+                customer.id == order.movementCustomerId &&
+                (order.movementCustomerOrderId ?? '').trim().isNotEmpty;
+            if (pendingRequest != null) {
+              customerOrderId = pendingRequest.id;
+              requestType = pendingRequest.requestType ?? 'شراء';
+              customerRequestDate = pendingRequest.orderDate;
+              expectedArrivalDate = pendingRequest.arrivalDate;
+              amountController.text =
+                  pendingRequest.requestAmount?.toString() ?? '';
+            } else {
+              customerOrderId = isCurrentLinkedCustomer
+                  ? order.movementCustomerOrderId
+                  : null;
+              if (!edit || !isCurrentLinkedCustomer) {
+                requestType = 'شراء';
+                customerRequestDate = DateTime.now();
+                expectedArrivalDate = customerRequestDate.add(
+                  const Duration(days: 1),
+                );
+                amountController.clear();
+              }
+            }
+            setDialogState(() {});
+          }
+
+          final selectedRequest = selectedCustomerRequest();
+          final pendingRequests =
+              _customerRequests.where(_isPendingCustomerRequest).toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final pendingRequestsTotal = pendingRequests.length;
+
           return AlertDialog(
             title: Text(edit ? 'تعديل التوجيه' : 'توجيه الطلب'),
             content: SizedBox(
-              width: 420,
+              width: 470,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1627,28 +2679,325 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                           setDialogState(() => driverId = value),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: customerId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'العميل',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _customers
-                          .map(
-                            (customer) => DropdownMenuItem<String>(
-                              value: customer.id,
-                              child: Text(
-                                '${customer.name} (${customer.code})',
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        ChoiceChip(
+                          label: Text(
+                            'عملاء لهم طلبات ($pendingRequestsTotal)',
+                          ),
+                          selected: onlyCustomersWithRequests,
+                          selectedColor: AppColors.successGreen.withValues(
+                            alpha: 0.16,
+                          ),
+                          labelStyle: TextStyle(
+                            color: onlyCustomersWithRequests
+                                ? AppColors.successGreen
+                                : AppColors.primaryDarkBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          onSelected: (_) => setDialogState(() {
+                            onlyCustomersWithRequests = true;
+                          }),
+                        ),
+                        ChoiceChip(
+                          label: const Text('عملاء فقط'),
+                          selected: !onlyCustomersWithRequests,
+                          onSelected: (_) => setDialogState(() {
+                            onlyCustomersWithRequests = false;
+                          }),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (onlyCustomersWithRequests) ...<Widget>[
+                      if (pendingRequests.isEmpty)
+                        const Align(
+                          alignment: Alignment.centerRight,
+                          child: Text('لا توجد طلبات عملاء مؤقتة حالياً.'),
+                        ),
+                      if (pendingRequests.isNotEmpty)
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.70),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: AppColors.primaryBlue.withValues(
+                                alpha: 0.12,
                               ),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (value) =>
-                          setDialogState(() => customerId = value),
-                    ),
+                          ),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: pendingRequests.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final request = pendingRequests[index];
+                              final customer =
+                                  request.customer ??
+                                  _findCustomerById(
+                                    _customerIdFromRequest(request),
+                                  );
+                              final customerLabel =
+                                  customer?.displayName ??
+                                  customer?.name ??
+                                  request.movementCustomerName ??
+                                  request.portalCustomerName ??
+                                  '';
+                              final resolvedCustomerLabel =
+                                  customerLabel.trim().isNotEmpty
+                                      ? customerLabel.trim()
+                                      : 'عميل غير محدد';
+
+                              return ListTile(
+                                dense: true,
+                                title: Text(
+                                  request.orderNumber,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '$resolvedCustomerLabel • ${request.fuelType ?? '-'} • ${_fmt(request.orderDate)}',
+                                ),
+                                trailing: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: 14,
+                                ),
+                                onTap: () =>
+                                    applySelectedCustomerRequest(request),
+                              );
+                            },
+                          ),
+                        ),
+                    ] else ...<Widget>[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: Autocomplete<Customer>(
+                              initialValue: TextEditingValue(
+                                text:
+                                    _findCustomerById(
+                                      customerId,
+                                    )?.displayName ??
+                                    '',
+                              ),
+                              displayStringForOption: (Customer customer) =>
+                                  customer.displayName,
+                              optionsBuilder: (TextEditingValue value) {
+                                return _customerSearchOptions(
+                                  value.text,
+                                  onlyCustomersWithRequests: false,
+                                  fuelType: order.fuelType,
+                                );
+                              },
+                              onSelected: applySelectedCustomer,
+                              fieldViewBuilder:
+                                  (
+                                    BuildContext context,
+                                    TextEditingController textController,
+                                    FocusNode focusNode,
+                                    VoidCallback onFieldSubmitted,
+                                  ) {
+                                    customerSearchController = textController;
+                                    return TextFormField(
+                                      controller: textController,
+                                      focusNode: focusNode,
+                                      decoration: InputDecoration(
+                                        labelText: 'العميل',
+                                        hintText:
+                                            'ابحث بالاسم أو الكود أو الجوال',
+                                        prefixIcon: const Icon(Icons.search),
+                                        suffixIcon: customerId == null
+                                            ? null
+                                            : IconButton(
+                                                onPressed: () {
+                                                  textController.clear();
+                                                  setDialogState(() {
+                                                    customerId = null;
+                                                    customerOrderId = null;
+                                                  });
+                                                },
+                                                icon: const Icon(Icons.clear),
+                                              ),
+                                        border: const OutlineInputBorder(),
+                                      ),
+                                      onChanged: (value) {
+                                        final selectedCustomer =
+                                            _findCustomerById(customerId);
+                                        if (selectedCustomer != null &&
+                                            value.trim() !=
+                                                selectedCustomer.displayName) {
+                                          setDialogState(() {
+                                            customerId = null;
+                                            customerOrderId = null;
+                                          });
+                                        }
+                                      },
+                                      onFieldSubmitted: (_) =>
+                                          onFieldSubmitted(),
+                                    );
+                                  },
+                              optionsViewBuilder:
+                                  (
+                                    BuildContext context,
+                                    AutocompleteOnSelected<Customer> onSelected,
+                                    Iterable<Customer> options,
+                                  ) {
+                                    final matches = options.toList(
+                                      growable: false,
+                                    );
+                                    return Align(
+                                      alignment: Alignment.topRight,
+                                      child: Material(
+                                        elevation: 8,
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxHeight: 280,
+                                            maxWidth: 360,
+                                          ),
+                                          child: ListView.separated(
+                                            padding: EdgeInsets.zero,
+                                            shrinkWrap: true,
+                                            itemCount: matches.length,
+                                            separatorBuilder:
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) => const Divider(height: 1),
+                                            itemBuilder:
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) {
+                                                  final customer =
+                                                      matches[index];
+                                                  final phone = customer.phone
+                                                      ?.trim();
+                                                  return ListTile(
+                                                    dense: true,
+                                                    title: Text(customer.name),
+                                                    subtitle: Text(
+                                                      phone?.isNotEmpty == true
+                                                          ? '${customer.code} - $phone'
+                                                          : customer.code,
+                                                    ),
+                                                    onTap: () =>
+                                                        onSelected(customer),
+                                                  );
+                                                },
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: Tooltip(
+                              message: 'إضافة عميل جديد',
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  final result = await Navigator.of(
+                                    dialogContext,
+                                  ).pushNamed(AppRoutes.customerForm);
+                                  if (!mounted || result is! Customer) {
+                                    return;
+                                  }
+                                  _upsertLocalCustomer(result);
+                                  customerSearchController?.value =
+                                      TextEditingValue(
+                                        text: result.displayName,
+                                        selection: TextSelection.collapsed(
+                                          offset: result.displayName.length,
+                                        ),
+                                      );
+                                  applySelectedCustomer(result);
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Icon(Icons.person_add_alt_1),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_customers.isEmpty)
+                        DropdownButtonFormField<String>(
+                          initialValue: customerId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'العميل',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _customers
+                              .map(
+                                (customer) => DropdownMenuItem<String>(
+                                  value: customer.id,
+                                  child: Text(
+                                    '${customer.name} (${customer.code})',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            final customer = _findCustomerById(value);
+                            if (customer == null) {
+                              setDialogState(() => customerId = value);
+                              return;
+                            }
+                            applySelectedCustomer(customer);
+                          },
+                        ),
+                    ],
                     if (customerId != null) ...<Widget>[
                       const SizedBox(height: 12),
+                      if (selectedRequest != null)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.successGreen.withValues(
+                              alpha: 0.08,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.successGreen.withValues(
+                                alpha: 0.20,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              const Text(
+                                'تم ربط طلب عميل',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.successGreen,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text('رقم الطلب: ${selectedRequest.orderNumber}'),
+                              Text(
+                                'تاريخ الطلب: ${_fmt(selectedRequest.orderDate)}',
+                              ),
+                            ],
+                          ),
+                        ),
                       DropdownButtonFormField<String>(
                         initialValue: requestType,
                         isExpanded: true,
@@ -1669,30 +3018,39 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         onChanged: (value) =>
                             setDialogState(() => requestType = value ?? 'شراء'),
                       ),
-                    ],
-                    if (!edit) ...<Widget>[
                       const SizedBox(height: 12),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('تاريخ طلب العميل'),
-                        subtitle: Text(_fmt(customerRequestDate)),
-                        trailing: const Icon(Icons.calendar_month_outlined),
-                        onTap: () => pickLocalDate(
-                          customerRequestDate,
-                          (value) => customerRequestDate = value,
+                      TextFormField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
                         ),
-                      ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('تاريخ الوصول'),
-                        subtitle: Text(_fmt(expectedArrivalDate)),
-                        trailing: const Icon(Icons.calendar_month_outlined),
-                        onTap: () => pickLocalDate(
-                          expectedArrivalDate,
-                          (value) => expectedArrivalDate = value,
+                        decoration: InputDecoration(
+                          labelText: _requestAmountLabel(requestType),
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                     ],
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('تاريخ طلب العميل'),
+                      subtitle: Text(_fmt(customerRequestDate)),
+                      trailing: const Icon(Icons.calendar_month_outlined),
+                      onTap: () => pickLocalDate(
+                        customerRequestDate,
+                        (value) => customerRequestDate = value,
+                      ),
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('تاريخ الوصول'),
+                      subtitle: Text(_fmt(expectedArrivalDate)),
+                      trailing: const Icon(Icons.calendar_month_outlined),
+                      onTap: () => pickLocalDate(
+                        expectedArrivalDate,
+                        (value) => expectedArrivalDate = value,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1709,6 +3067,10 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         'customerId': customerId,
                         'driverId': driverId,
                         'requestType': requestType,
+                        'customerOrderId': customerOrderId,
+                        'requestAmount': _parseOptionalAmount(
+                          amountController.text,
+                        ),
                         'customerRequestDate': customerRequestDate,
                         'expectedArrivalDate': expectedArrivalDate,
                       }),
@@ -1720,12 +3082,15 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       ),
     );
 
+    amountController.dispose();
     if (!mounted || payload == null) return;
     await _dispatch(
       order,
       customerId: payload['customerId'] as String,
       driverId: payload['driverId'] as String,
       requestType: payload['requestType'] as String? ?? 'شراء',
+      customerOrderId: payload['customerOrderId'] as String?,
+      requestAmount: payload['requestAmount'] as double?,
       customerRequestDate: payload['customerRequestDate'] as DateTime,
       expectedArrivalDate: payload['expectedArrivalDate'] as DateTime,
     );
@@ -1859,7 +3224,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                       title,
                       style: TextStyle(
                         fontSize: isWideWeb ? 16 : 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w500,
                         color: AppColors.primaryDarkBlue,
                       ),
                     ),
@@ -1938,7 +3303,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                   '$value',
                   style: TextStyle(
                     fontSize: isWideWeb ? 22 : 26,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w500,
                     color: color,
                   ),
                 ),
@@ -2161,7 +3526,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
           style: TextStyle(
             color: Colors.white,
             fontSize: isWideWeb ? 22 : 26,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w500,
           ),
         ),
         SizedBox(height: isWideWeb ? 6 : 8),
@@ -2209,7 +3574,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             style: TextStyle(
               color: Colors.white,
               fontSize: isWideWeb ? 15 : 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -2267,7 +3632,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                     'البحيرة العربية',
                     style: TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w500,
                       color: AppColors.primaryDarkBlue,
                     ),
                   ),
@@ -2303,7 +3668,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.sizeOf(context).width;
+    // Mobile screens are those with width < 600 px
+    final bool isMobile = screenWidth < 600;
     final bool isWideWebScreen = screenWidth >= 1100;
+    final int unreadChat = context.watch<ChatProvider>().totalUnread;
+    final int unreadNotifications =
+        context.watch<NotificationProvider>().unreadCount;
     final double pageMaxWidth = screenWidth >= 1700
         ? 1480
         : screenWidth >= 1450
@@ -2312,32 +3682,45 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
         ? 1260
         : screenWidth;
     final pendingDriver = _orders
-        .where((o) => o.isMovementPendingDriver)
+        .where((o) => o.isMovementPendingDriver && !_isOrderCompleted(o))
         .length;
     final pendingDispatch = _orders
-        .where((o) => o.isMovementPendingDispatch)
+        .where((o) => o.isMovementPendingDispatch && !_isOrderCompleted(o))
         .length;
-    final directed = _orders.where((o) => o.isMovementDirected).length;
-    final double tabBarContainerHeight = isWideWebScreen ? 64 : 56;
+    final directed = _orders
+        .where(
+          (o) =>
+              o.isMovementDirected &&
+              !_isOrderCompleted(o) &&
+              !_hasMovementArrived(o),
+        )
+        .length;
+    final pendingCustomerRequests = _customerRequests
+        .where((o) => _isPendingCustomerRequest(o))
+        .length;
+    final double tabBarContainerHeight = isMobile
+        ? 56
+        : (isWideWebScreen ? 64 : 56);
     final double tabBarHeaderHeight =
-        tabBarContainerHeight + (isWideWebScreen ? 8 + 12 : 6 + 10);
+        tabBarContainerHeight +
+        (isMobile ? 6 + 8 : (isWideWebScreen ? 8 + 12 : 6 + 10));
 
     return DefaultTabController(
-      length: 4,
+      length: 6,
       child: PopScope(
         canPop: !_movementUser,
         child: Scaffold(
           appBar: null,
           /*
-            toolbarHeight: isWideWebScreen ? 64 : 56,
+            toolbarheight: isMobile ? 56 : (isWideWebScreen ? 64 : 56),
             automaticallyImplyLeading: !_movementUser,
             centerTitle: true,
             title: Text(
               'حركة الطلبات',
               style: TextStyle(
                 color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: isWideWebScreen ? 22 : 18,
+                fontWeight: FontWeight.w500,
+                fontSize: isMobile ? 18 : (isWideWebScreen ? 22 : 18),
                 letterSpacing: -0.3,
               ),
             ),
@@ -2350,8 +3733,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
               Padding(
                 padding: const EdgeInsetsDirectional.only(end: 10),
                 child: Container(
-                  width: isWideWebScreen ? 42 : 38,
-                  height: isWideWebScreen ? 42 : 38,
+                  width: isMobile ? 34 : (isWideWebScreen ? 42 : 38),
+                  height: isMobile ? 34 : (isWideWebScreen ? 42 : 38),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
@@ -2363,7 +3746,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                     onPressed: _refreshing ? null : () => _loadOrders(),
                     splashRadius: 22,
                     color: Colors.white,
-                    iconSize: isWideWebScreen ? 20 : 18,
+                    iconSize: isMobile ? 16 : (isWideWebScreen ? 20 : 18),
                     icon: _refreshing
                         ? const SizedBox(
                             width: 18,
@@ -2381,8 +3764,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 Padding(
                   padding: const EdgeInsetsDirectional.only(end: 14),
                   child: Container(
-                    width: isWideWebScreen ? 42 : 38,
-                    height: isWideWebScreen ? 42 : 38,
+                    width: isMobile ? 34 : (isWideWebScreen ? 42 : 38),
+                    height: isMobile ? 34 : (isWideWebScreen ? 42 : 38),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(14),
@@ -2394,7 +3777,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                       onPressed: _logout,
                       splashRadius: 22,
                       color: Colors.white,
-                      iconSize: isWideWebScreen ? 20 : 18,
+                      iconSize: isMobile ? 16 : (isWideWebScreen ? 20 : 18),
                       icon: const Icon(Icons.logout_rounded),
                     ),
                   ),
@@ -2412,11 +3795,11 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth: isWideWebScreen ? 920 : screenWidth,
+                      maxWidth: isMobile ? 320 : (isWideWebScreen ? 920 : screenWidth),
                     ),
                     child: Container(
-                      height: isWideWebScreen ? 64 : 56,
-                      padding: EdgeInsets.all(isWideWebScreen ? 7 : 5),
+                      height: isMobile ? 56 : (isWideWebScreen ? 64 : 56),
+                      padding: EdgeInsets.all(isMobile ? 5 : (isWideWebScreen ? 7 : 5)),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(20),
@@ -2443,38 +3826,38 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         ),
                         tabs: <Tab>[
                           Tab(
-                            height: isWideWebScreen ? 50 : 44,
+                            height: isMobile ? 44 : (isWideWebScreen ? 50 : 44),
                             iconMargin: const EdgeInsets.only(bottom: 4),
                             icon: Icon(
                               Icons.add_box_rounded,
-                              size: isWideWebScreen ? 19 : 18,
+                              size: isMobile ? 16 : (isWideWebScreen ? 19 : 18),
                             ),
                             text: 'إدخال',
                           ),
                           Tab(
-                            height: isWideWebScreen ? 50 : 44,
+                            height: isMobile ? 44 : (isWideWebScreen ? 50 : 44),
                             iconMargin: const EdgeInsets.only(bottom: 4),
                             icon: Icon(
                               Icons.history_rounded,
-                              size: isWideWebScreen ? 19 : 18,
+                              size: isMobile ? 16 : (isWideWebScreen ? 19 : 18),
                             ),
                             text: 'السجل',
                           ),
                           Tab(
-                            height: isWideWebScreen ? 50 : 44,
+                            height: isMobile ? 44 : (isWideWebScreen ? 50 : 44),
                             iconMargin: const EdgeInsets.only(bottom: 4),
                             icon: Icon(
                               Icons.route_rounded,
-                              size: isWideWebScreen ? 19 : 18,
+                              size: isMobile ? 16 : (isWideWebScreen ? 19 : 18),
                             ),
                             text: 'التوجيهات',
                           ),
                           Tab(
-                            height: isWideWebScreen ? 50 : 44,
+                            height: isMobile ? 44 : (isWideWebScreen ? 50 : 44),
                             iconMargin: const EdgeInsets.only(bottom: 4),
                             icon: Icon(
                               Icons.local_shipping_rounded,
-                              size: isWideWebScreen ? 19 : 18,
+                              size: isMobile ? 16 : (isWideWebScreen ? 19 : 18),
                             ),
                             text: 'متابعة السائقين',
                           ),
@@ -2497,26 +3880,70 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                   headerSliverBuilder: (context, innerBoxIsScrolled) {
                     return <Widget>[
                       SliverAppBar(
-                        toolbarHeight: isWideWebScreen ? 54 : 48,
+                        toolbarHeight: isMobile
+                            ? 48
+                            : (isWideWebScreen ? 54 : 48),
                         automaticallyImplyLeading: !_movementUser,
                         centerTitle: true,
                         title: Text(
                           'شركة البحيرة العربية - ALBUHAIRA ALARABIA CO',
                           style: TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: isWideWebScreen ? 20 : 16,
+                            fontWeight: FontWeight.w500,
+                            fontSize: isMobile
+                                ? 16
+                                : (isWideWebScreen ? 20 : 16),
                             letterSpacing: -0.2,
                           ),
                         ),
-                        flexibleSpace: const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: AppColors.appBarGradient,
-                          ),
-                        ),
+                        backgroundColor: AppColors.primaryBlue,
                         elevation: 0,
                         scrolledUnderElevation: 0,
                         actions: <Widget>[
+                          _appBarActionButton(
+                            onPressed: () => Navigator.of(
+                              context,
+                              rootNavigator: true,
+                            ).pushNamed(AppRoutes.chat),
+                            icon: Badge(
+                              isLabelVisible: unreadChat > 0,
+                              label: Text(unreadChat > 99 ? '99+' : '$unreadChat'),
+                              child: const Icon(Icons.chat_bubble_outline),
+                            ),
+                            isMobile: isMobile,
+                            isWideWebScreen: isWideWebScreen,
+                            tooltip: 'الدردشة',
+                          ),
+                          _appBarActionButton(
+                            onPressed: () => Navigator.of(
+                              context,
+                              rootNavigator: true,
+                            ).pushNamed(AppRoutes.tasks),
+                            icon: const Icon(Icons.task_alt_outlined),
+                            isMobile: isMobile,
+                            isWideWebScreen: isWideWebScreen,
+                            tooltip: 'المهام',
+                          ),
+                          _appBarActionButton(
+                            onPressed: () => Navigator.of(
+                              context,
+                              rootNavigator: true,
+                            ).pushNamed(AppRoutes.notifications),
+                            icon: Badge(
+                              isLabelVisible: unreadNotifications > 0,
+                              label: Text(
+                                unreadNotifications > 99
+                                    ? '99+'
+                                    : '$unreadNotifications',
+                              ),
+                              child: const Icon(
+                                Icons.notifications_none_rounded,
+                              ),
+                            ),
+                            isMobile: isMobile,
+                            isWideWebScreen: isWideWebScreen,
+                            tooltip: 'الإشعارات',
+                          ),
                           Padding(
                             padding: const EdgeInsetsDirectional.only(end: 8),
                             child: Container(
@@ -2535,7 +3962,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                                     : () => _loadOrders(),
                                 splashRadius: 20,
                                 color: Colors.white,
-                                iconSize: isWideWebScreen ? 18 : 16,
+                                iconSize: isMobile
+                                    ? 14
+                                    : (isWideWebScreen ? 18 : 16),
                                 icon: _refreshing
                                     ? const SizedBox(
                                         width: 16,
@@ -2568,7 +3997,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                                   onPressed: _logout,
                                   splashRadius: 20,
                                   color: Colors.white,
-                                  iconSize: isWideWebScreen ? 18 : 16,
+                                  iconSize: isMobile
+                                      ? 14
+                                      : (isWideWebScreen ? 18 : 16),
                                   icon: const Icon(Icons.logout_rounded),
                                 ),
                               ),
@@ -2580,6 +4011,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         delegate: _MovementTabBarHeader(
                           height: tabBarHeaderHeight,
                           child: _buildTabBar(
+                            isMobile: isMobile,
                             isWideWebScreen: isWideWebScreen,
                             screenWidth: screenWidth,
                           ),
@@ -2588,92 +4020,109 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                     ];
                   },
                   body: LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
-                          final bool compact = constraints.maxWidth < 900;
-                          final bool isWideWeb = constraints.maxWidth >= 1100;
-                          return Center(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: pageMaxWidth,
-                              ),
-                              child: Column(
-                                children: <Widget>[
-                                  Padding(
-                                    padding: EdgeInsets.fromLTRB(
-                                      compact ? 14 : (isWideWeb ? 16 : 18),
-                                      compact ? 14 : (isWideWeb ? 16 : 18),
-                                      compact ? 14 : (isWideWeb ? 16 : 18),
-                                      10,
+                    builder: (BuildContext context, BoxConstraints constraints) {
+                      final bool compact = constraints.maxWidth < 900;
+                      final bool isWideWeb = constraints.maxWidth >= 1100;
+                      return Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: pageMaxWidth),
+                          child: Column(
+                            children: <Widget>[
+                              Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  compact ? 14 : (isWideWeb ? 16 : 18),
+                                  compact ? 14 : (isWideWeb ? 16 : 18),
+                                  compact ? 14 : (isWideWeb ? 16 : 18),
+                                  10,
+                                ),
+                                child: Column(
+                                  children: <Widget>[
+                                    _heroSection(
+                                      total: _orders.length,
+                                      pendingDriver: pendingDriver,
+                                      pendingDispatch: pendingDispatch,
+                                      directed: directed,
+                                      compact: compact,
                                     ),
-                                    child: Column(
-                                      children: <Widget>[
-                                        _heroSection(
-                                          total: _orders.length,
-                                          pendingDriver: pendingDriver,
-                                          pendingDispatch: pendingDispatch,
-                                          directed: directed,
-                                          compact: compact,
-                                        ),
-                                        SizedBox(height: isWideWeb ? 14 : 16),
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: _exportReportButton(
+                                    SizedBox(height: isWideWeb ? 14 : 16),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Wrap(
+                                        spacing: 10,
+                                        runSpacing: 10,
+                                        children: <Widget>[
+                                          _customerRequestsButton(
                                             isWideWeb: isWideWeb,
                                           ),
-                                        ),
-                                        SizedBox(height: isWideWeb ? 12 : 14),
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Wrap(
-                                            spacing: isWideWeb ? 10 : 12,
-                                            runSpacing: isWideWeb ? 10 : 12,
-                                            children: <Widget>[
-                                              _summary(
-                                                'إجمالي',
-                                                _orders.length,
-                                                AppColors.primaryBlue,
-                                                Icons.inventory_2_rounded,
-                                              ),
-                                              _summary(
-                                                'بانتظار سائق',
-                                                pendingDriver,
-                                                AppColors.warningOrange,
-                                                Icons.drive_eta_rounded,
-                                              ),
-                                              _summary(
-                                                'بانتظار التوجيه',
-                                                pendingDispatch,
-                                                AppColors.infoBlue,
-                                                Icons.near_me_rounded,
-                                              ),
-                                              _summary(
-                                                'موجه',
-                                                directed,
-                                                AppColors.successGreen,
-                                                Icons.task_alt_rounded,
-                                              ),
-                                            ],
+                                          _exportReportButton(
+                                            isWideWeb: isWideWeb,
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                    SizedBox(height: isWideWeb ? 12 : 14),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Wrap(
+                                        spacing: isWideWeb ? 10 : 12,
+                                        runSpacing: isWideWeb ? 10 : 12,
+                                        children: <Widget>[
+                                          _summaryAction(
+                                            'طلبات العملاء',
+                                            pendingCustomerRequests,
+                                            AppColors.secondaryTeal,
+                                            Icons.assignment_turned_in_outlined,
+                                            _openCustomerRequestsDialog,
+                                          ),
+                                          _summary(
+                                            'إجمالي',
+                                            _orders.length,
+                                            AppColors.primaryBlue,
+                                            Icons.inventory_2_rounded,
+                                          ),
+                                          _summary(
+                                            'بانتظار سائق',
+                                            pendingDriver,
+                                            AppColors.warningOrange,
+                                            Icons.drive_eta_rounded,
+                                          ),
+                                          _summary(
+                                            'بانتظار التوجيه',
+                                            pendingDispatch,
+                                            AppColors.infoBlue,
+                                            Icons.near_me_rounded,
+                                          ),
+                                          _summary(
+                                            'موجه',
+                                            directed,
+                                            AppColors.successGreen,
+                                            Icons.task_alt_rounded,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(height: isWideWeb ? 12 : 14),
+                                    _historySearchField(isWideWeb: isWideWeb),
+                                  ],
+                                ),
+                              ),
                                   Expanded(
                                     child: TabBarView(
                                       children: <Widget>[
                                         _entryTab(),
                                         _historyTab(),
+                                        _customerRequestsTab(),
                                         _dispatchesTab(),
                                         _driversTrackingTab(),
+                                        const StatementTab(),
                                       ],
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          );
-                        },
+                        ),
+                      );
+                    },
                   ),
                 ),
               if (_autofilling) _autofillLoadingOverlay(),
@@ -2694,6 +4143,28 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return SizedBox(
       width: cardWidth,
       child: _metricCard(label, value, color, icon),
+    );
+  }
+
+  Widget _summaryAction(
+    String label,
+    int value,
+    Color color,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    final double width = MediaQuery.sizeOf(context).width;
+    final double cardWidth = width >= 1400
+        ? 198
+        : width >= 1100
+        ? 206
+        : 220;
+    return SizedBox(
+      width: cardWidth,
+      child: GestureDetector(
+        onTap: onTap,
+        child: _metricCard(label, value, color, icon),
+      ),
     );
   }
 
@@ -2726,6 +4197,75 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
         style: TextStyle(
           fontWeight: FontWeight.w800,
           fontSize: isWideWeb ? 14 : 13,
+        ),
+      ),
+    );
+  }
+
+  Widget _customerRequestsButton({required bool isWideWeb}) {
+    final pendingCount = _customerRequests
+        .where((order) => _isPendingCustomerRequest(order))
+        .length;
+
+    return OutlinedButton.icon(
+      onPressed: _openCustomerRequestsDialog,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.successGreen,
+        side: BorderSide(color: AppColors.successGreen.withValues(alpha: 0.35)),
+        padding: EdgeInsets.symmetric(
+          horizontal: isWideWeb ? 18 : 16,
+          vertical: isWideWeb ? 14 : 12,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      icon: Icon(
+        Icons.assignment_turned_in_outlined,
+        size: isWideWeb ? 20 : 18,
+      ),
+      label: Text(
+        pendingCount > 0 ? 'طلبات العملاء ($pendingCount)' : 'طلبات العملاء',
+        style: TextStyle(
+          fontWeight: FontWeight.w800,
+          fontSize: isWideWeb ? 14 : 13,
+        ),
+      ),
+    );
+  }
+
+  Widget _historySearchField({required bool isWideWeb}) {
+    return TextField(
+      controller: _historySearchController,
+      onChanged: (_) => setState(() {}),
+      decoration: InputDecoration(
+        labelText: 'فلترة السجل والتوجيهات',
+        hintText: 'ابحث برقم الطلب أو العميل أو السائق',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: _historySearchController.text.isEmpty
+            ? null
+            : IconButton(
+                onPressed: () {
+                  _historySearchController.clear();
+                  setState(() {});
+                },
+                icon: const Icon(Icons.clear),
+              ),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.82),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(isWideWeb ? 18 : 20),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(isWideWeb ? 18 : 20),
+          borderSide: BorderSide(
+            color: AppColors.primaryBlue.withValues(alpha: 0.12),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(isWideWeb ? 18 : 20),
+          borderSide: const BorderSide(
+            color: AppColors.primaryBlue,
+            width: 1.2,
+          ),
         ),
       ),
     );
@@ -3044,7 +4584,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                             ?.copyWith(
                               fontSize: isDesktop ? 16 : null,
                               color: AppColors.primaryDarkBlue,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w500,
                             ),
                       ),
                     ),
@@ -3143,8 +4683,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
 
   Widget _historyTab() {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
-    if (_orders.isEmpty) {
-      return const Center(child: Text('لا توجد طلبات حركة حتى الآن.'));
+    final orders = _historyOrders;
+    if (orders.isEmpty) {
+      return const Center(child: Text('لا توجد طلبات مطابقة حاليًا.'));
     }
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(
@@ -3153,10 +4694,10 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
         isWideWeb ? 14 : 16,
         isWideWeb ? 20 : 24,
       ),
-      itemCount: _orders.length,
+      itemCount: orders.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final order = _orders[index];
+        final order = orders[index];
         final busy = _busyOrderId == order.id;
         return Card(
           child: Padding(
@@ -3198,6 +4739,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 Text('المورد: ${order.supplierName}'),
                 Text('رقم طلب المورد: ${order.supplierOrderNumber ?? '-'}'),
                 Text('الكمية: ${order.quantity ?? 0} ${order.unit ?? ''}'),
+                Text('النوع: ${order.fuelType ?? 'لم يحدد'}'),
                 Text('السائق: ${order.driverName ?? 'لم يحدد'}'),
                 if (order.movementCustomerName != null)
                   Text('العميل: ${order.movementCustomerName}'),
@@ -3233,6 +4775,42 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         icon: const Icon(Icons.edit_outlined),
                         label: const Text('تعديل التوجيه'),
                       ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OrderDetailsScreen(
+                              orderId: order.id,
+                              screenTitle: 'متابعة الحركة',
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.timeline_rounded),
+                      label: const Text('متابعة الحركة'),
+                    ),
+                    if (_canCancelMovementOrder(order))
+                      OutlinedButton.icon(
+                        onPressed: busy
+                            ? null
+                            : () async {
+                                final reason =
+                                    await _promptForCancellationReason(
+                                      title: 'إلغاء الطلب',
+                                      actionLabel: 'تأكيد الإلغاء',
+                                    );
+                                if (reason == null || reason.trim().isEmpty) {
+                                  return;
+                                }
+                                await _cancelMovementOrder(
+                                  order,
+                                  reason: reason,
+                                );
+                              },
+                        icon: const Icon(Icons.cancel_outlined),
+                        label: const Text('إلغاء الطلب'),
+                      ),
                     if (busy)
                       const SizedBox(
                         width: 18,
@@ -3251,11 +4829,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
 
   Widget _dispatchesTab() {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
-    final directed = _orders
-        .where((order) => order.isMovementDirected)
-        .toList();
+    final directed = _dispatchOrders;
     if (directed.isEmpty) {
-      return const Center(child: Text('لا توجد توجيهات مسجلة.'));
+      return const Center(child: Text('لا توجد توجيهات مطابقة حاليًا.'));
     }
 
     final grouped = <String, List<Order>>{};
@@ -3316,13 +4892,408 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
+  Widget _customerRequestsTab() {
+    final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
+    final pendingRequests =
+        _customerRequests
+            .where(_isPendingCustomerRequest)
+            .where(
+              (order) => _matchesOrderSearch(
+                order,
+                _customerRequestsSearchController.text.trim(),
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    Future<void> submitRequest() async {
+      final customerId = _newCustomerRequestCustomerId;
+      if (customerId == null || customerId.trim().isEmpty) return;
+
+      final existing =
+          _pendingRequestForCustomer(
+            customerId,
+            fuelType: _newCustomerRequestFuelType,
+          ) ??
+          _pendingRequestForCustomer(customerId);
+      if (existing != null) {
+        _snack(
+          'يوجد طلب مؤقت لهذا العميل بالفعل (${existing.orderNumber}).',
+          AppColors.warningOrange,
+        );
+        return;
+      }
+
+      setState(() => _creatingCustomerRequest = true);
+      final provider = context.read<OrderProvider>();
+      final success = await provider.createMovementCustomerRequest(
+        customerId: customerId,
+        fuelType: _newCustomerRequestFuelType,
+        requestDate: _newCustomerRequestDate,
+      );
+      if (!mounted) return;
+      setState(() => _creatingCustomerRequest = false);
+
+      if (!success) {
+        _snack(provider.error ?? 'تعذر إضافة طلب العميل.', AppColors.errorRed);
+        return;
+      }
+
+      _newCustomerRequestCustomerId = null;
+      _newCustomerRequestDate = DateTime.now();
+      _newCustomerRequestFuelType =
+          _fuelTypes.contains('ديزل') ? 'ديزل' : _fuelTypes.first;
+      _newCustomerRequestCustomerFieldController?.clear();
+
+      await _loadOrders(showLoader: false);
+      if (!mounted) return;
+      _snack('تمت إضافة طلب العميل.', AppColors.successGreen);
+      setState(() {});
+    }
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        isWideWeb ? 14 : 16,
+        12,
+        isWideWeb ? 14 : 16,
+        isWideWeb ? 18 : 20,
+      ),
+      child: Column(
+        children: <Widget>[
+          AppSurfaceCard(
+            padding: EdgeInsets.all(isWideWeb ? 16 : 14),
+            borderRadius: BorderRadius.circular(isWideWeb ? 20 : 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  'إضافة طلب عميل مؤقت',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: isWideWeb ? 16 : 15,
+                    color: AppColors.primaryDarkBlue,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[
+                    SizedBox(
+                      width: 320,
+                      child: Autocomplete<Customer>(
+                        displayStringForOption: (customer) =>
+                            customer.displayName,
+                        optionsBuilder: (value) =>
+                            _customerSearchOptions(value.text),
+                        onSelected: (customer) {
+                          setState(() => _newCustomerRequestCustomerId = customer.id);
+                        },
+                        fieldViewBuilder:
+                            (
+                              BuildContext context,
+                              TextEditingController textController,
+                              FocusNode focusNode,
+                              VoidCallback onFieldSubmitted,
+                            ) {
+                              _newCustomerRequestCustomerFieldController =
+                                  textController;
+                              return TextFormField(
+                                controller: textController,
+                                focusNode: focusNode,
+                                decoration: InputDecoration(
+                                  labelText: 'العميل',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.search),
+                                  suffixIcon:
+                                      _newCustomerRequestCustomerId == null
+                                          ? null
+                                          : IconButton(
+                                              onPressed: () {
+                                                textController.clear();
+                                                setState(() => _newCustomerRequestCustomerId = null);
+                                              },
+                                              icon: const Icon(Icons.clear),
+                                            ),
+                                ),
+                                onFieldSubmitted: (_) => onFieldSubmitted(),
+                              );
+                            },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 180,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _newCustomerRequestFuelType,
+                        decoration: const InputDecoration(
+                          labelText: 'نوع الوقود',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _fuelTypes
+                            .map(
+                              (item) => DropdownMenuItem<String>(
+                                value: item,
+                                child: Text(item),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) => setState(
+                          () => _newCustomerRequestFuelType =
+                              value ?? _newCustomerRequestFuelType,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 180,
+                      child: InkWell(
+                        onTap: _creatingCustomerRequest
+                            ? null
+                            : () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _newCustomerRequestDate,
+                                  firstDate: DateTime.now().subtract(
+                                    const Duration(days: 365),
+                                  ),
+                                  lastDate: DateTime.now().add(
+                                    const Duration(days: 365 * 3),
+                                  ),
+                                );
+                                if (picked != null) {
+                                  setState(() => _newCustomerRequestDate = picked);
+                                }
+                              },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'تاريخ الطلب',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.calendar_month_outlined),
+                          ),
+                          child: Text(_fmt(_newCustomerRequestDate)),
+                        ),
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed:
+                          _creatingCustomerRequest ||
+                                  _newCustomerRequestCustomerId == null
+                              ? null
+                              : submitRequest,
+                      icon: _creatingCustomerRequest
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.add_rounded),
+                      label: Text(
+                        _creatingCustomerRequest ? 'جاري الإضافة...' : 'إضافة',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _customerRequestsSearchController,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'بحث في طلبات العملاء',
+              hintText: 'ابحث بالعميل أو رقم الطلب أو السائق',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _customerRequestsSearchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        _customerRequestsSearchController.clear();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.clear),
+                    ),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.82),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(isWideWeb ? 18 : 20),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(isWideWeb ? 18 : 20),
+                borderSide: BorderSide(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(isWideWeb ? 18 : 20),
+                borderSide: const BorderSide(
+                  color: AppColors.primaryBlue,
+                  width: 1.2,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: pendingRequests.isEmpty
+                ? const Center(
+                    child: Text('لا توجد طلبات عملاء مؤقتة مطابقة حالياً.'),
+                  )
+                : ListView.separated(
+                    itemCount: pendingRequests.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final request = pendingRequests[index];
+                      final busy = _busyOrderId == request.id;
+                      final customerLabel =
+                          request.customer?.displayName ??
+                          request.customer?.name ??
+                          request.movementCustomerName ??
+                          request.portalCustomerName ??
+                          'عميل غير محدد';
+
+                      return AppSurfaceCard(
+                        padding: EdgeInsets.all(isWideWeb ? 14 : 14),
+                        borderRadius: BorderRadius.circular(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    request.orderNumber,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.successGreen.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    'بانتظار الدمج',
+                                    style: TextStyle(
+                                      color: AppColors.successGreen,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text('العميل: $customerLabel'),
+                            Text('نوع الوقود: ${request.fuelType ?? '-'}'),
+                            Text('تاريخ الطلب: ${_fmt(request.orderDate)}'),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: <Widget>[
+                                if (_canCancelMovementOrder(request))
+                                  OutlinedButton.icon(
+                                    onPressed: busy
+                                        ? null
+                                        : () async {
+                                            final reason =
+                                                await _promptForCancellationReason(
+                                              title: 'إلغاء الطلب',
+                                              actionLabel: 'تأكيد الإلغاء',
+                                            );
+                                            if (reason == null ||
+                                                reason.trim().isEmpty) {
+                                              return;
+                                            }
+                                            await _cancelMovementOrder(
+                                              request,
+                                              reason: reason,
+                                            );
+                                          },
+                                    icon: const Icon(Icons.cancel_outlined),
+                                    label: const Text('إلغاء'),
+                                  ),
+                                OutlinedButton.icon(
+                                  onPressed: busy
+                                      ? null
+                                      : () async {
+                                          final confirmed =
+                                              await showDialog<bool>(
+                                            context: context,
+                                            builder: (confirmContext) =>
+                                                AlertDialog(
+                                              title: const Text(
+                                                'حذف طلب العميل',
+                                              ),
+                                              content: const Text(
+                                                'سيتم حذف الطلب نهائيًا. هل تريد المتابعة؟',
+                                              ),
+                                              actions: <Widget>[
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                    confirmContext,
+                                                    false,
+                                                  ),
+                                                  child: const Text('إلغاء'),
+                                                ),
+                                                FilledButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                    confirmContext,
+                                                    true,
+                                                  ),
+                                                  child: const Text('حذف'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirmed != true) return;
+                                          await _deleteCustomerRequest(request);
+                                        },
+                                  icon: const Icon(Icons.delete_outline),
+                                  label: const Text('حذف'),
+                                ),
+                                if (busy)
+                                  const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _driversTrackingTab() {
     final activeOrders = _orders
         .where(
           (order) =>
               order.isMovementDirected &&
               (order.driverId != null || order.driverName != null) &&
-              !_isOrderCompleted(order),
+              !_isOrderCompleted(order) &&
+              !_hasMovementArrived(order),
         )
         .toList();
 
@@ -3403,24 +5374,24 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         showDialog<void>(
                           context: context,
                           builder: (dialogContext) => AlertDialog(
-                            title: const Text('ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø·Ù„Ø¨'),
+                            title: const Text('تفاصيل الطلب'),
                             content: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                Text('Ø§Ù„Ù…ÙˆØ±Ø¯: ${order.supplierName}'),
+                                Text('المورد: ${order.supplierName}'),
                                 Text(
-                                  'Ø±Ù‚Ù… Ø·Ù„Ø¨ Ø§Ù„Ù…ÙˆØ±Ø¯: ${order.supplierOrderNumber ?? '-'}',
+                                  'رقم طلب المورد: ${order.supplierOrderNumber ?? '-'}',
                                 ),
                                 Text(
-                                  'Ø§Ù„Ø¹Ù…ÙŠÙ„: ${order.movementCustomerName ?? '-'}',
+                                  'العميل: ${order.movementCustomerName ?? '-'}',
                                 ),
                               ],
                             ),
                             actions: <Widget>[
                               TextButton(
                                 onPressed: () => Navigator.pop(dialogContext),
-                                child: const Text('Ø¥Ù„ØºØ§Ø¡'),
+                                child: const Text('إلغاء'),
                               ),
                             ],
                           ),
