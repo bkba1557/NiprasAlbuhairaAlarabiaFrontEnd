@@ -202,27 +202,31 @@ class FirebaseStorageService {
     required XFile file,
     String? filenameOverride,
   }) async {
-    final rawName =
-        (filenameOverride?.trim().isNotEmpty == true
-                ? filenameOverride!.trim()
-                : (file.name.isEmpty ? 'image.jpg' : file.name))
-            .trim();
+    // Determine a safe filename, falling back to a generic name when needed.
+    final rawName = (filenameOverride?.trim().isNotEmpty == true
+            ? filenameOverride!.trim()
+            : (file.name.isEmpty ? 'image.jpg' : file.name))
+        .trim();
     final safeName = _sanitizeFileName(rawName);
+    final safeSection = section
+        .trim()
+        .replaceAll(RegExp(r'[\\/\s]+'), '_')
+        .replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '')
+        .trim();
     final contentType = _inferContentType(safeName) ?? 'image/jpeg';
     final ref = _storage.ref(
-      'orders/$orderKey/driver/$section/${DateTime.now().millisecondsSinceEpoch}_$safeName',
+      'orders/$orderKey/attachments/'
+      '${DateTime.now().millisecondsSinceEpoch}_'
+      '${safeSection.isEmpty ? 'driver' : safeSection}_'
+      '$safeName',
     );
 
     try {
-      if (kIsWeb) {
-        final bytes = await file.readAsBytes();
-        await ref.putData(bytes, SettableMetadata(contentType: contentType));
-      } else {
-        await ref.putFile(
-          File(file.path),
-          SettableMetadata(contentType: contentType),
-        );
-      }
+      // Use raw bytes for all platforms. This avoids the filesystem existence
+      // assertion that can fail on Android when the image picker provides a
+      // temporary path.
+      final bytes = await file.readAsBytes();
+      await ref.putData(bytes, SettableMetadata(contentType: contentType));
 
       return {
         'filename': safeName,

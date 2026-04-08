@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -32,9 +33,28 @@ class MovementOrdersReportPdfRequest {
 }
 
 class MovementOrdersReportPdfService {
-  static const PdfColor _blueDark = PdfColor.fromInt(0xFF1A2980);
-  static const PdfColor _blueMedium = PdfColor.fromInt(0xFF2646A2);
-  static const PdfColor _blueLight = PdfColor.fromInt(0xFF7FB3E6);
+  static const List<String> _completedStatusKeywords = <String>[
+    'تم التنفيذ',
+    'تم التسليم',
+    'مكتمل',
+  ];
+  static const List<String> _canceledStatusKeywords = <String>[
+    'ملغي',
+    'ملغى',
+    'ملغاة',
+    'تم الإلغاء',
+    'إلغاء',
+  ];
+  static const List<String> _purchaseRequestTypeKeywords = <String>[
+    'purchase',
+    'buy',
+    'شراء',
+  ];
+  static const List<String> _transportRequestTypeKeywords = <String>[
+    'transport',
+    'delivery',
+    'نقل',
+  ];
 
   static pw.MemoryImage? _cachedLogo;
   static pw.Font? _cachedCairoRegular;
@@ -58,31 +78,38 @@ class MovementOrdersReportPdfService {
       theme: pw.ThemeData.withFont(
         base: cairoRegular,
         bold: cairoBold,
-        fontFallback: [cairoRegular],
+        fontFallback: <pw.Font>[cairoRegular],
       ),
     );
 
+    final estimatedPages = (orders.length / 22).ceil() + 8;
+    final maxPages = math.max(60, math.min(6000, estimatedPages));
+
     pdf.addPage(
       pw.MultiPage(
-        pageTheme: pw.PageTheme(
-          pageFormat: PdfPageFormat.a4.landscape,
-          margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 20),
-          textDirection: pw.TextDirection.rtl,
-          theme: pw.ThemeData.withFont(
-            base: cairoRegular,
-            bold: cairoBold,
-            fontFallback: [cairoRegular],
-          ),
-          buildBackground: (_) => _buildBackground(),
+        pageFormat: PdfPageFormat.a4.landscape,
+        maxPages: maxPages,
+        textDirection: pw.TextDirection.rtl,
+        margin: const pw.EdgeInsets.fromLTRB(8, 6, 8, 6),
+        theme: pw.ThemeData.withFont(
+          base: cairoRegular,
+          bold: cairoBold,
+          fontFallback: <pw.Font>[cairoRegular],
         ),
-        maxPages: 250,
-        header: (_) => _buildHeader(logoImage: logo, request: request),
-        footer: (context) =>
-            _buildFooter(context: context, generatedAt: request.generatedAt),
+        header: (context) => context.pageNumber == 1
+            ? _buildHeader(logoImage: logo, request: request)
+            : pw.SizedBox(),
+        footer: (context) => context.pageNumber == context.pagesCount
+            ? _buildFooter(context)
+            : pw.SizedBox(),
         build: (_) => <pw.Widget>[
-          _buildReportSummary(request: request, orders: orders),
-          pw.SizedBox(height: 12),
-          if (orders.isEmpty) _buildEmptyState() else _buildOrdersTable(orders),
+          if (orders.isEmpty)
+            _buildEmptyState()
+          else ...<pw.Widget>[
+            _buildOrdersTable(orders),
+            pw.NewPage(),
+            ..._buildStatsWidgets(request, orders),
+          ],
         ],
       ),
     );
@@ -123,259 +150,103 @@ class MovementOrdersReportPdfService {
     required pw.MemoryImage logoImage,
     required MovementOrdersReportPdfRequest request,
   }) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.only(bottom: 10),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.8),
+    final companyName = _sanitizePdfText(request.companyArabicName);
+    final exportDate = DateFormat('yyyy/MM/dd HH:mm').format(request.generatedAt);
+    final periodLabel = _sanitizePdfText(request.periodLabel);
+    final scopeLabel = _sanitizePdfText(request.scopeLabel);
+
+    return pw.SizedBox(
+      height: 60,
+      child: pw.Container(
+        padding: const pw.EdgeInsets.fromLTRB(6, 4, 6, 4),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.white,
+          borderRadius: pw.BorderRadius.circular(4),
+          border: pw.Border.all(color: PdfColors.blueGrey200, width: 0.7),
         ),
-      ),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
-        children: <pw.Widget>[
-          pw.Container(
-            width: 58,
-            height: 58,
-            decoration: pw.BoxDecoration(
-              color: PdfColors.white,
-              borderRadius: pw.BorderRadius.circular(12),
-              border: pw.Border.all(color: PdfColors.blue100, width: 0.8),
-            ),
-            padding: const pw.EdgeInsets.all(6),
-            child: pw.Image(logoImage, fit: pw.BoxFit.contain),
-          ),
-          pw.SizedBox(width: 12),
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-              children: <pw.Widget>[
-                pw.Text(
-                  request.companyArabicName,
-                  style: pw.TextStyle(
-                    fontSize: 18,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.blue900,
-                  ),
-                ),
-                pw.Text(
-                  request.companyEnglishName,
-                  style: pw.TextStyle(
-                    fontSize: 9.5,
-                    color: PdfColors.blue900,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 6),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: <pw.Widget>[
-                    pw.Text(
-                      'الرقم الموحد: ${request.unifiedNumber}',
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey800,
-                      ),
-                    ),
-                    pw.Text(
-                      request.title,
-                      style: pw.TextStyle(
-                        fontSize: 16,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _blueDark,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static pw.Widget _buildFooter({
-    required pw.Context context,
-    required DateTime generatedAt,
-  }) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.only(top: 6),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(color: _blueDark, width: 1.3)),
-      ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: <pw.Widget>[
-          pw.Text(
-            'صفحة ${context.pageNumber} / ${context.pagesCount}',
-            style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
-          ),
-          pw.Text(
-            'ALBUHAIRA ALARABIA',
-            style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
-          ),
-          pw.Text(
-            DateFormat('yyyy/MM/dd HH:mm').format(generatedAt),
-            style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static pw.Widget _buildReportSummary({
-    required MovementOrdersReportPdfRequest request,
-    required List<Order> orders,
-  }) {
-    final totalOrders = orders.length;
-    final supplierOrders = orders
-        .where((order) => order.orderSource == 'مورد')
-        .length;
-    final customerOrders = orders.where(_isCustomerRelatedOrder).length;
-    final directedOrders = orders
-        .where((order) => order.isMovementDirected)
-        .length;
-    final pendingOrders = orders
-        .where(
-          (order) =>
-              order.isMovementPendingDriver || order.isMovementPendingDispatch,
-        )
-        .length;
-
-    final totalQuantity = orders.fold<double>(
-      0,
-      (sum, order) => sum + (order.quantity ?? 0),
-    );
-    final generatedBy = (request.generatedByName ?? '').trim();
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: <pw.Widget>[
-        pw.Container(
-          padding: const pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-            color: PdfColors.white,
-            borderRadius: pw.BorderRadius.circular(12),
-            border: pw.Border.all(color: PdfColors.blue100, width: 0.8),
-          ),
+        child: pw.Directionality(
+          textDirection: pw.TextDirection.rtl,
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: <pw.Widget>[
-              pw.Text(
-                request.title,
-                style: pw.TextStyle(
-                  fontSize: 14,
-                  fontWeight: pw.FontWeight.bold,
-                  color: _blueDark,
+              pw.Container(
+                height: 3,
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.blue700,
+                  borderRadius: pw.BorderRadius.circular(2),
                 ),
               ),
               pw.SizedBox(height: 4),
-              pw.Wrap(
-                spacing: 12,
-                runSpacing: 6,
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: <pw.Widget>[
-                  _metaChip('الفترة', request.periodLabel),
-                  _metaChip('نوع البيانات', request.scopeLabel),
-                  _metaChip(
-                    'تاريخ التصدير',
-                    DateFormat('yyyy/MM/dd HH:mm').format(request.generatedAt),
+                  pw.SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: pw.Image(logoImage, fit: pw.BoxFit.contain),
                   ),
-                  _metaChip(
-                    'المصدر',
-                    generatedBy.isEmpty ? 'غير محدد' : generatedBy,
+                  pw.SizedBox(width: 6),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      mainAxisAlignment: pw.MainAxisAlignment.center,
+                      children: <pw.Widget>[
+                        pw.Text(
+                          companyName,
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.blue900,
+                          ),
+                          maxLines: 1,
+                        ),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          'الرقم الوطني: ${request.unifiedNumber}  |  نوع التقرير: $scopeLabel',
+                          style: const pw.TextStyle(fontSize: 6.2),
+                          maxLines: 1,
+                        ),
+                        pw.Text(
+                          'الفترة: $periodLabel  |  تاريخ التصدير: $exportDate',
+                          style: const pw.TextStyle(fontSize: 6.2),
+                          maxLines: 1,
+                        ),
+                      ],
+                    ),
                   ),
-                  _metaChip('اعتماد التقرير', 'حسب تاريخ الطلب'),
                 ],
               ),
             ],
           ),
         ),
-        pw.SizedBox(height: 10),
-        pw.Row(
-          children: <pw.Widget>[
-            _summaryCard('إجمالي الطلبات', totalOrders.toString(), _blueDark),
-            pw.SizedBox(width: 8),
-            _summaryCard(
-              'طلبات المورد',
-              supplierOrders.toString(),
-              _blueMedium,
-            ),
-            pw.SizedBox(width: 8),
-            _summaryCard('طلبات العميل', customerOrders.toString(), _blueLight),
-            pw.SizedBox(width: 8),
-            _summaryCard(
-              'الطلبات الموجهة',
-              directedOrders.toString(),
-              PdfColors.green700,
-            ),
-            pw.SizedBox(width: 8),
-            _summaryCard(
-              'بانتظار الإجراء',
-              pendingOrders.toString(),
-              PdfColors.orange700,
-            ),
-            pw.SizedBox(width: 8),
-            _summaryCard(
-              'إجمالي الكمية',
-              totalQuantity == 0 ? '0' : _formatNumber(totalQuantity),
-              PdfColors.teal700,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  static pw.Widget _metaChip(String label, String value) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.blue50,
-        borderRadius: pw.BorderRadius.circular(999),
-        border: pw.Border.all(color: PdfColors.blue100, width: 0.7),
-      ),
-      child: pw.RichText(
-        text: pw.TextSpan(
-          style: const pw.TextStyle(fontSize: 8.8, color: PdfColors.grey800),
-          children: <pw.TextSpan>[
-            pw.TextSpan(
-              text: '$label: ',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            ),
-            pw.TextSpan(text: value),
-          ],
-        ),
       ),
     );
   }
 
-  static pw.Widget _summaryCard(String label, String value, PdfColor color) {
-    return pw.Expanded(
+  static pw.Widget _buildFooter(pw.Context context) {
+    return pw.SizedBox(
+      height: 20,
       child: pw.Container(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: pw.BoxDecoration(
-          color: PdfColors.white,
-          borderRadius: pw.BorderRadius.circular(10),
-          border: pw.Border.all(color: color, width: 0.8),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(
+            top: pw.BorderSide(color: PdfColors.grey600, width: 0.6),
+          ),
         ),
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: <pw.Widget>[
             pw.Text(
-              label,
-              style: const pw.TextStyle(
-                fontSize: 8.5,
-                color: PdfColors.grey700,
-              ),
+              'توقيع المدير العام: __________',
+              style: const pw.TextStyle(fontSize: 5.8),
             ),
-            pw.SizedBox(height: 4),
             pw.Text(
-              value,
-              style: pw.TextStyle(
-                fontSize: 14,
-                fontWeight: pw.FontWeight.bold,
-                color: color,
-              ),
+              'صفحة ${context.pageNumber}/${context.pagesCount}',
+              style: const pw.TextStyle(fontSize: 5.8),
+            ),
+            pw.Text(
+              'توقيع رئيس مجلس الإدارة: __________',
+              style: const pw.TextStyle(fontSize: 5.8),
             ),
           ],
         ),
@@ -384,87 +255,325 @@ class MovementOrdersReportPdfService {
   }
 
   static pw.Widget _buildOrdersTable(List<Order> orders) {
-    final headers = <String>[
-      '#',
-      'رقم الطلب',
-      'المصدر',
-      'المورد',
-      'العميل',
-      'الحالة',
-      'تاريخ الطلب',
-      'التحميل',
-      'الوصول',
+    const headers = <String>[
+      'رقم طلب المورد',
+      'اسم المورد',
+      'اسم العميل',
+      'اسم السائق',
+      'نوع الوقود',
       'الكمية',
-      'السائق / المركبة',
-      'الموقع',
-      'ملاحظات',
+      'التاريخ',
+      'الملاحظات',
+      'المستخدم المنشئ',
+      'رقم الطلب',
     ];
 
-    final rows = List<List<String>>.generate(orders.length, (index) {
-      final order = orders[index];
-      return <String>[
-        (index + 1).toString(),
-        _textOrDash(order.orderNumber),
-        _sourceLabel(order),
-        _compactText(order.supplierName, 30),
-        _compactText(_customerLabel(order), 28),
-        _compactText(order.status, 24),
-        DateFormat('yyyy/MM/dd').format(order.orderDate),
-        _formatDateWithTime(order.loadingDate, order.loadingTime),
-        _formatDateWithTime(order.arrivalDate, order.arrivalTime),
-        _formatQuantity(order),
-        _compactText(_driverVehicleLabel(order), 24),
-        _compactText(_locationLabel(order), 28),
-        _compactText(order.notes, 70),
-      ];
-    });
+    final data = orders.map((order) {
+      final supplierOrderNumber = _sanitizePdfText(order.supplierOrderNumber);
+      final supplierName = _sanitizePdfText(order.supplierName);
+      final customerName = _pdfCustomerDisplayName(order);
+      final driverName = _sanitizePdfText(
+        order.driver?.name ?? order.driverName,
+      );
+      final fuelType = _sanitizePdfText(order.fuelType).isEmpty
+          ? '-'
+          : _sanitizePdfText(order.fuelType);
+      final quantity = _formatPdfQuantity(order.quantity, order.unit);
+      final dateText = DateFormat('yyyy/MM/dd').format(order.orderDate);
+      final notes = _truncatePdfText(
+        _sanitizePdfText(order.notes),
+        maxChars: 80,
+      );
+      final createdBy = _sanitizePdfText(order.createdByName);
+      final orderNumber = _sanitizePdfText(order.orderNumber);
 
-    return pw.TableHelper.fromTextArray(
+      return <String>[
+        supplierOrderNumber,
+        supplierName,
+        customerName,
+        driverName,
+        fuelType,
+        quantity,
+        dateText,
+        notes,
+        createdBy,
+        orderNumber,
+      ];
+    }).toList();
+
+    return pw.Table.fromTextArray(
       headers: headers,
-      data: rows,
-      border: pw.TableBorder.all(color: PdfColors.blueGrey100, width: 0.5),
-      headerDecoration: const pw.BoxDecoration(color: _blueDark),
-      headerStyle: pw.TextStyle(
-        fontSize: 7,
-        fontWeight: pw.FontWeight.bold,
-        color: PdfColors.white,
+      data: data,
+      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 6.2),
+      cellStyle: const pw.TextStyle(fontSize: 5.6),
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+      cellAlignment: pw.Alignment.center,
+      cellPadding: const pw.EdgeInsets.symmetric(
+        horizontal: 1.2,
+        vertical: 0.6,
       ),
-      cellStyle: const pw.TextStyle(fontSize: 6.1, color: PdfColors.black),
-      oddRowDecoration: const pw.BoxDecoration(color: PdfColors.blue50),
-      cellAlignment: pw.Alignment.centerRight,
-      headerAlignment: pw.Alignment.center,
-      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
       columnWidths: <int, pw.TableColumnWidth>{
-        0: const pw.FlexColumnWidth(0.35),
-        1: const pw.FlexColumnWidth(0.85),
-        2: const pw.FlexColumnWidth(0.65),
-        3: const pw.FlexColumnWidth(1.1),
-        4: const pw.FlexColumnWidth(1.0),
-        5: const pw.FlexColumnWidth(0.85),
-        6: const pw.FlexColumnWidth(0.75),
-        7: const pw.FlexColumnWidth(0.95),
-        8: const pw.FlexColumnWidth(0.95),
-        9: const pw.FlexColumnWidth(0.75),
-        10: const pw.FlexColumnWidth(1.1),
-        11: const pw.FlexColumnWidth(1.0),
-        12: const pw.FlexColumnWidth(1.6),
+        0: const pw.FlexColumnWidth(1.0),
+        1: const pw.FlexColumnWidth(1.1),
+        2: const pw.FlexColumnWidth(1.3),
+        3: const pw.FlexColumnWidth(1.0),
+        4: const pw.FlexColumnWidth(0.85),
+        5: const pw.FlexColumnWidth(0.9),
+        6: const pw.FlexColumnWidth(0.9),
+        7: const pw.FlexColumnWidth(2.4),
+        8: const pw.FlexColumnWidth(1.0),
+        9: const pw.FlexColumnWidth(1.0),
       },
+    );
+  }
+
+  static List<pw.Widget> _buildStatsWidgets(
+    MovementOrdersReportPdfRequest request,
+    List<Order> orders,
+  ) {
+    final statsTitle = 'إحصائيات ${_sanitizePdfText(request.periodLabel)}';
+    final activeOrders = orders
+        .where((order) => !_isCanceledStatus(order.status))
+        .toList();
+    final completedCount = activeOrders
+        .where((order) => _isCompletedStatus(order.status))
+        .length;
+    final purchaseCount = activeOrders
+        .where((order) => _isPurchaseRequestType(order.effectiveRequestType))
+        .length;
+    final transportCount = activeOrders
+        .where((order) => _isTransportRequestType(order.effectiveRequestType))
+        .length;
+
+    final Map<String, int> supplierCounts = <String, int>{};
+    final Map<String, int> customerCounts = <String, int>{};
+
+    for (final order in activeOrders) {
+      final supplier = _pdfSupplierDisplayName(order);
+      if (supplier.isNotEmpty) {
+        supplierCounts[supplier] = (supplierCounts[supplier] ?? 0) + 1;
+      }
+
+      final customer = _pdfCustomerDisplayName(order);
+      if (customer.isNotEmpty && customer != '-') {
+        customerCounts[customer] = (customerCounts[customer] ?? 0) + 1;
+      }
+    }
+
+    final supplierRows = supplierCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final customerRows = customerCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return <pw.Widget>[
+      pw.Text(
+        statsTitle,
+        style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+      ),
+      pw.SizedBox(height: 6),
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: <pw.Widget>[
+          _buildStatCard(
+            label: 'عدد الطلبات المكتملة',
+            value: completedCount.toString(),
+            color: PdfColors.green700,
+          ),
+          _buildStatCard(
+            label: 'عدد طلبات النقل',
+            value: transportCount.toString(),
+            color: PdfColors.orange700,
+          ),
+          _buildStatCard(
+            label: 'عدد طلبات الشراء',
+            value: purchaseCount.toString(),
+            color: PdfColors.blue700,
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 8),
+      ..._buildSplitNamedCountSections(
+        customerRows: customerRows,
+        supplierRows: supplierRows,
+      ),
+    ];
+  }
+
+  static pw.Widget _buildStatCard({
+    required String label,
+    required String value,
+    required PdfColor color,
+  }) {
+    return pw.Expanded(
+      child: pw.Container(
+        margin: const pw.EdgeInsets.symmetric(horizontal: 2),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        decoration: pw.BoxDecoration(
+          color: color,
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Column(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          children: <pw.Widget>[
+            pw.Text(
+              value,
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 6.8,
+                color: PdfColors.white,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              textAlign: pw.TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static List<pw.Widget> _buildSplitNamedCountSections({
+    required List<MapEntry<String, int>> customerRows,
+    required List<MapEntry<String, int>> supplierRows,
+  }) {
+    const rowsPerSection = 18;
+    final sectionCount = math.max(
+      (customerRows.length / rowsPerSection).ceil(),
+      (supplierRows.length / rowsPerSection).ceil(),
+    );
+
+    if (sectionCount == 0) {
+      return <pw.Widget>[
+        _buildSplitNamedCountSection(
+          customerRows: const <MapEntry<String, int>>[],
+          supplierRows: const <MapEntry<String, int>>[],
+        ),
+      ];
+    }
+
+    return List<pw.Widget>.generate(sectionCount, (index) {
+      final customerStart = index * rowsPerSection;
+      final supplierStart = index * rowsPerSection;
+      final customerEnd = math.min(
+        customerStart + rowsPerSection,
+        customerRows.length,
+      );
+      final supplierEnd = math.min(
+        supplierStart + rowsPerSection,
+        supplierRows.length,
+      );
+
+      return pw.Padding(
+        padding: pw.EdgeInsets.only(top: index == 0 ? 0 : 8),
+        child: _buildSplitNamedCountSection(
+          customerRows: customerStart < customerRows.length
+              ? customerRows.sublist(customerStart, customerEnd)
+              : const <MapEntry<String, int>>[],
+          supplierRows: supplierStart < supplierRows.length
+              ? supplierRows.sublist(supplierStart, supplierEnd)
+              : const <MapEntry<String, int>>[],
+          sectionIndex: index,
+        ),
+      );
+    });
+  }
+
+  static pw.Widget _buildSplitNamedCountSection({
+    required List<MapEntry<String, int>> customerRows,
+    required List<MapEntry<String, int>> supplierRows,
+    int sectionIndex = 0,
+  }) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: <pw.Widget>[
+        pw.Expanded(
+          child: _buildNamedCountTable(
+            title: sectionIndex == 0
+                ? 'العملاء وعدد طلباتهم للفترة'
+                : 'العملاء وعدد طلباتهم للفترة (${sectionIndex + 1})',
+            nameHeader: 'العميل',
+            rows: customerRows,
+          ),
+        ),
+        pw.SizedBox(width: 8),
+        pw.Expanded(
+          child: _buildNamedCountTable(
+            title: sectionIndex == 0
+                ? 'الموردين وعدد طلباتهم للفترة'
+                : 'الموردين وعدد طلباتهم للفترة (${sectionIndex + 1})',
+            nameHeader: 'المورد',
+            rows: supplierRows,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildNamedCountTable({
+    required String title,
+    required String nameHeader,
+    required List<MapEntry<String, int>> rows,
+  }) {
+    final data = rows.isEmpty
+        ? const <List<String>>[
+            <String>['-', '0'],
+          ]
+        : rows
+              .map((entry) => <String>[entry.key, entry.value.toString()])
+              .toList();
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: <pw.Widget>[
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontSize: 8.2, fontWeight: pw.FontWeight.bold),
+          textAlign: pw.TextAlign.right,
+        ),
+        pw.SizedBox(height: 3),
+        pw.Table.fromTextArray(
+          headers: <String>[nameHeader, 'عدد الطلبات'],
+          data: data,
+          headerStyle: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 6.4,
+          ),
+          cellStyle: const pw.TextStyle(fontSize: 6.1),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          cellAlignment: pw.Alignment.center,
+          cellPadding: const pw.EdgeInsets.symmetric(
+            horizontal: 2,
+            vertical: 1,
+          ),
+          columnWidths: <int, pw.TableColumnWidth>{
+            0: const pw.FlexColumnWidth(2.4),
+            1: const pw.FlexColumnWidth(0.8),
+          },
+        ),
+      ],
     );
   }
 
   static pw.Widget _buildEmptyState() {
     return pw.Container(
-      padding: const pw.EdgeInsets.all(22),
+      padding: const pw.EdgeInsets.all(20),
       decoration: pw.BoxDecoration(
         color: PdfColors.white,
-        borderRadius: pw.BorderRadius.circular(12),
-        border: pw.Border.all(color: PdfColors.blue100, width: 0.8),
+        borderRadius: pw.BorderRadius.circular(8),
+        border: pw.Border.all(color: PdfColors.blueGrey200, width: 0.7),
       ),
       child: pw.Center(
         child: pw.Text(
-          'لا توجد طلبات مطابقة للفلاتر المحددة.',
+          'لا توجد طلبات حركة مطابقة للفلاتر المحددة.',
           style: pw.TextStyle(
-            fontSize: 13,
+            fontSize: 11,
             fontWeight: pw.FontWeight.bold,
             color: PdfColors.grey700,
           ),
@@ -473,138 +582,98 @@ class MovementOrdersReportPdfService {
     );
   }
 
-  static bool _isCustomerRelatedOrder(Order order) {
-    final movementCustomer = (order.movementCustomerName ?? '').trim();
-    final customerName = (order.customer?.name ?? '').trim();
-    return order.orderSource == 'عميل' ||
-        movementCustomer.isNotEmpty ||
-        customerName.isNotEmpty;
+  static String _pdfSupplierDisplayName(Order order) {
+    final directName = _sanitizePdfText(order.supplierName);
+    if (directName.isNotEmpty) return directName;
+
+    final nestedName = _sanitizePdfText(order.supplier?.name);
+    if (nestedName.isNotEmpty) return nestedName;
+
+    final mergedName = _sanitizePdfText(
+      order.mergedWithInfo?['supplierName']?.toString(),
+    );
+    if (mergedName.isNotEmpty) return mergedName;
+
+    return '';
   }
 
-  static String _sourceLabel(Order order) {
-    switch (order.orderSource) {
-      case 'مورد':
-        return 'مورد';
-      case 'عميل':
-        return 'عميل';
-      case 'مدمج':
-        return 'مدمج';
-      default:
-        return _textOrDash(order.orderSource);
-    }
-  }
+  static String _pdfCustomerDisplayName(Order order) {
+    final movementCustomerName = _sanitizePdfText(order.movementCustomerName);
+    if (movementCustomerName.isNotEmpty) return movementCustomerName;
 
-  static String _customerLabel(Order order) {
-    final movementCustomer = (order.movementCustomerName ?? '').trim();
-    if (movementCustomer.isNotEmpty) return movementCustomer;
-    final customerName = (order.customer?.name ?? '').trim();
+    final customerName = _sanitizePdfText(order.customer?.name);
     if (customerName.isNotEmpty) return customerName;
+
+    final mergedName = _sanitizePdfText(
+      order.mergedWithInfo?['customerName']?.toString(),
+    );
+    if (mergedName.isNotEmpty) return mergedName;
+
+    final customerAddress = _sanitizePdfText(order.customerAddress);
+    if (customerAddress.isNotEmpty) return customerAddress;
+
     return '-';
   }
 
-  static String _driverVehicleLabel(Order order) {
-    final driverName = (order.driverName ?? order.driver?.name ?? '').trim();
-    final vehicleNumber = (order.vehicleNumber ?? '').trim();
-    if (driverName.isEmpty && vehicleNumber.isEmpty) return '-';
-    if (driverName.isNotEmpty && vehicleNumber.isNotEmpty) {
-      return '$driverName - $vehicleNumber';
+  static bool _isCompletedStatus(String status) {
+    return _statusMatches(status, _completedStatusKeywords);
+  }
+
+  static bool _isCanceledStatus(String status) {
+    return _statusMatches(status, _canceledStatusKeywords);
+  }
+
+  static bool _statusMatches(String status, List<String> keywords) {
+    final normalized = status.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    for (final keyword in keywords) {
+      final needle = keyword.trim().toLowerCase();
+      if (needle.isEmpty) continue;
+      if (normalized == needle || normalized.contains(needle)) return true;
     }
-    return driverName.isNotEmpty ? driverName : vehicleNumber;
+    return false;
   }
 
-  static String _locationLabel(Order order) {
-    final city = (order.city ?? '').trim();
-    final area = (order.area ?? '').trim();
-    if (city.isEmpty && area.isEmpty) return '-';
-    if (city.isNotEmpty && area.isNotEmpty) return '$city - $area';
-    return city.isNotEmpty ? city : area;
+  static bool _isPurchaseRequestType(String? requestType) {
+    return _requestTypeMatches(requestType, _purchaseRequestTypeKeywords);
   }
 
-  static String _formatDateWithTime(DateTime date, String? time) {
-    final dateText = DateFormat('yyyy/MM/dd').format(date);
-    final safeTime = (time ?? '').trim();
-    return safeTime.isEmpty ? dateText : '$dateText $safeTime';
+  static bool _isTransportRequestType(String? requestType) {
+    return _requestTypeMatches(requestType, _transportRequestTypeKeywords);
   }
 
-  static String _formatQuantity(Order order) {
-    final quantity = order.quantity;
+  static bool _requestTypeMatches(String? requestType, List<String> keywords) {
+    final normalized = (requestType ?? '').trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    for (final keyword in keywords) {
+      final needle = keyword.trim().toLowerCase();
+      if (needle.isEmpty) continue;
+      if (normalized == needle || normalized.contains(needle)) return true;
+    }
+    return false;
+  }
+
+  static String _sanitizePdfText(String? value) {
+    if (value == null) return '';
+    return value
+        .replaceAll('\u200f', '')
+        .replaceAll('\u200e', '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  static String _truncatePdfText(String value, {int maxChars = 120}) {
+    if (value.length <= maxChars) return value;
+    return '${value.substring(0, maxChars)}...';
+  }
+
+  static String _formatPdfQuantity(double? quantity, String? unit) {
     if (quantity == null) return '-';
-    final unit = (order.unit ?? '').trim();
-    final value = _formatNumber(quantity);
-    return unit.isEmpty ? value : '$value $unit';
-  }
-
-  static String _formatNumber(double value) {
-    if (value == value.roundToDouble()) {
-      return value.toStringAsFixed(0);
-    }
-    return value.toStringAsFixed(2);
-  }
-
-  static String _compactText(String? value, int maxChars) {
-    final text = _textOrDash(value);
-    if (text == '-') return text;
-    if (text.length <= maxChars) return text;
-    return '${text.substring(0, maxChars)}...';
-  }
-
-  static String _textOrDash(String? value) {
-    final text = (value ?? '').trim();
-    return text.isEmpty ? '-' : text;
-  }
-
-  static pw.Widget _buildBackground() {
-    return pw.FullPage(
-      ignoreMargins: true,
-      child: pw.LayoutBuilder(
-        builder: (_, constraints) {
-          final width =
-              constraints?.maxWidth ?? PdfPageFormat.a4.landscape.width;
-          final height =
-              constraints?.maxHeight ?? PdfPageFormat.a4.landscape.height;
-
-          return pw.Stack(
-            children: <pw.Widget>[
-              pw.Polygon(
-                points: <PdfPoint>[
-                  PdfPoint(0, 30),
-                  PdfPoint(width * 0.78, 30),
-                  PdfPoint(width * 0.61, 68),
-                  PdfPoint(0, 68),
-                ],
-                fillColor: _blueLight,
-              ),
-              pw.Polygon(
-                points: <PdfPoint>[
-                  PdfPoint(0, 15),
-                  PdfPoint(width * 0.74, 15),
-                  PdfPoint(width * 0.58, 49),
-                  PdfPoint(0, 49),
-                ],
-                fillColor: _blueMedium,
-              ),
-              pw.Polygon(
-                points: <PdfPoint>[
-                  PdfPoint(0, 0),
-                  PdfPoint(width * 0.70, 0),
-                  PdfPoint(width * 0.55, 30),
-                  PdfPoint(0, 30),
-                ],
-                fillColor: _blueDark,
-              ),
-              pw.Polygon(
-                points: <PdfPoint>[
-                  PdfPoint(width, height - (height * 0.16)),
-                  PdfPoint(width, height),
-                  PdfPoint(width - (width * 0.22), height),
-                  PdfPoint(width - (width * 0.18), height - (height * 0.16)),
-                ],
-                fillColor: _blueDark,
-              ),
-            ],
-          );
-        },
-      ),
-    );
+    final isWhole = quantity % 1 == 0;
+    final value = isWhole
+        ? quantity.toStringAsFixed(0)
+        : quantity.toStringAsFixed(2);
+    final safeUnit = _sanitizePdfText(unit);
+    return safeUnit.isEmpty ? value : '$value $safeUnit';
   }
 }

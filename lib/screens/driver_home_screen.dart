@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:order_tracker/localization/app_localizations.dart' as loc;
 import 'package:order_tracker/models/notification_model.dart';
@@ -13,6 +12,7 @@ import 'package:order_tracker/screens/tracking/driver_delivery_tracking_screen.d
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/driver_background_location_permission.dart';
+import 'package:order_tracker/utils/driver_trip_lock.dart';
 import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
 import 'package:order_tracker/widgets/notification_item.dart';
@@ -22,12 +22,24 @@ import 'package:provider/provider.dart';
 
 class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key});
-
   @override
   State<DriverHomeScreen> createState() => _DriverHomeScreenState();
 }
 
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
+  /* -------------------------------------------------------------
+   * 1️⃣   الحالات النهائية للطلب
+   * ------------------------------------------------------------ */
+  static const Set<String> _finalStatuses = {
+    // الحالات التي تُعتبر إنتهاءً نهائيًا
+    'تم التحميل',
+    'في الطريق',
+    'تم التسليم',
+    'تم التنفيذ', // تم إضافتها حسب طلبك
+    'مكتمل',
+    'ملغى',
+  };
+
   static const List<loc.AppLanguage> _driverLanguageOptions = [
     loc.AppLanguage.english,
     loc.AppLanguage.arabic,
@@ -37,15 +49,17 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     loc.AppLanguage.urdu,
     loc.AppLanguage.pashto,
   ];
-  static const double _floatingTabBarReservedSpace = 92;
 
+  static const double _floatingTabBarReservedSpace = 92;
   Timer? _refreshTimer;
+  bool _isResumingLockedTrip = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _refreshAll();
+      await _resumeLockedTripIfAny();
       await _requestBackgroundLocationIfNeeded();
       _refreshTimer = Timer.periodic(
         const Duration(seconds: 15),
@@ -60,6 +74,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     super.dispose();
   }
 
+  /* -------------------------------------------------------------
+   * 2️⃣   جلب بيانات الطلبات والإشعارات
+   * ------------------------------------------------------------ */
   Future<void> _refreshAll({bool silent = false}) async {
     if (!mounted) return;
     final auth = context.read<AuthProvider>();
@@ -77,7 +94,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     if (!mounted) return;
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
-
     await DriverBackgroundLocationPermission.maybePromptOnFirstLaunch(
       context,
       userId: user.id,
@@ -85,6 +101,44 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
+  Future<void> _resumeLockedTripIfAny() async {
+    if (!mounted || _isResumingLockedTrip) return;
+    final auth = context.read<AuthProvider>();
+    final userId = auth.user?.id.trim();
+    if (userId == null || userId.isEmpty) return;
+    final snapshot = await DriverTripLock.load(userId);
+    if (snapshot == null || snapshot.orderId.isEmpty) return;
+    _isResumingLockedTrip = true;
+    try {
+      final orderProvider = context.read<OrderProvider>();
+      await orderProvider.fetchOrderById(snapshot.orderId, silent: true);
+      final order =
+          orderProvider.selectedOrder ??
+          orderProvider.getOrderById(snapshot.orderId);
+      if (!mounted) return;
+      if (order == null || _isDriverEndedOrder(order)) {
+        await DriverTripLock.clear(userId);
+        return;
+      }
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DriverDeliveryTrackingScreen(
+            initialOrder: order,
+            showMap: snapshot.showMap,
+          ),
+        ),
+      );
+      if (!mounted) return;
+      await _refreshAll(silent: true);
+    } finally {
+      _isResumingLockedTrip = false;
+    }
+  }
+
+  /* -------------------------------------------------------------
+   * 3️⃣   مساعدة تحديد المرحلة الحالية للطلب
+   * ------------------------------------------------------------ */
   bool _isLoadingStationStage(Order order) {
     if (_isWaitingMovementDispatch(order)) {
       return false;
@@ -165,7 +219,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     if (_isLoadingStationStage(order) || _isWaitingMovementDispatch(order)) {
       return _openOrder(order, showMap: true);
     }
-
     final option = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
@@ -195,12 +248,41 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         );
       },
     );
-
     if (!mounted || option == null) return;
     await _openOrder(order, showMap: option);
   }
 
   Future<void> _confirmLogout() async {
+    final auth = context.read<AuthProvider>();
+    final languageProvider = context.read<LanguageProvider>();
+    final userId = auth.user?.id.trim();
+    if (userId != null && userId.isNotEmpty) {
+      final snapshot = await DriverTripLock.load(userId);
+      if (snapshot != null && snapshot.orderId.isNotEmpty) {
+        final orderProvider = context.read<OrderProvider>();
+        await orderProvider.fetchOrderById(snapshot.orderId, silent: true);
+        final lockedOrder =
+            orderProvider.selectedOrder ??
+            orderProvider.getOrderById(snapshot.orderId);
+        if (lockedOrder == null || _isDriverEndedOrder(lockedOrder)) {
+          await DriverTripLock.clear(userId);
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                languageProvider.language == loc.AppLanguage.arabic
+                    ? 'لا يمكن تسجيل الخروج أثناء وجود طلب جارٍ التنفيذ.'
+                    : 'You cannot log out while an active trip is in progress.',
+              ),
+              backgroundColor: AppColors.errorRed,
+            ),
+          );
+          return;
+        }
+      }
+    }
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -222,10 +304,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         ],
       ),
     );
-
     if (confirmed != true || !mounted) return;
-
-    await context.read<AuthProvider>().logout();
+    await auth.logout();
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(
       context,
@@ -268,6 +348,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
+  /* -------------------------------------------------------------
+   * 4️⃣   ترجمة الحالة إلى نص إنجليزي/عربي للـ UI
+   * ------------------------------------------------------------ */
   String _localizedStatus(String status) {
     switch (status.trim()) {
       case 'تم التحميل':
@@ -292,7 +375,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     if (value == null || value.isEmpty) {
       return context.tr(loc.AppStrings.driverUnknownFuel);
     }
-
     switch (value) {
       case 'بنزين 91':
         return context.tr(loc.AppStrings.filterFuelType91);
@@ -393,37 +475,55 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   bool _hasCustomerArrivalPassed(Order order) {
-    if (_isLoadingStationStage(order) || _isWaitingMovementDispatch(order)) {
-      return false;
-    }
-    final arrivalDeadline = _combineDateAndTime(order.arrivalDate, order.arrivalTime);
+    final arrivalDeadline = _combineDateAndTime(
+      order.arrivalDate,
+      order.arrivalTime,
+    );
     return DateTime.now().isAfter(arrivalDeadline);
   }
 
+  /* -------------------------------------------------------------
+   * 5️⃣   **التغيير الرئيسي** – تعريف ما إذا كان الطلب منتهيًا
+   * ------------------------------------------------------------ */
   bool _isDriverEndedOrder(Order order) {
-    return order.isFinalStatus || _hasCustomerArrivalPassed(order);
+    final status = order.status.trim();
+
+    // إذا كان status من ضمن الحالات النهائية → منتهي
+    if (_finalStatuses.contains(status) || order.isFinalStatus) {
+      return true;
+    }
+
+    // **نُزيل** الاعتماد على مرور تاريخ الوصول
+    // (إلا إذا كان status نهائيًا، وهو ما عُولِج أعلاه)
+    return false;
   }
 
+  /* -------------------------------------------------------------
+   * 6️⃣   بناء واجهة المستخدم
+   * ------------------------------------------------------------ */
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final userName = auth.user?.name.trim().isNotEmpty == true
         ? auth.user!.name.trim()
         : context.tr(loc.AppStrings.driverUserFallback);
-
     return DefaultTabController(
       length: 2,
       child: Consumer2<OrderProvider, NotificationProvider>(
         builder: (context, orderProvider, notificationProvider, _) {
           final orders = orderProvider.orders;
-          final activeOrders = orders.where((o) => !_isDriverEndedOrder(o)).toList();
+
+          // **الطلبات النشطة** = كل طلب لا يُصنَّف كمنتهي الآن
+          final activeOrders = orders
+              .where((o) => !_isDriverEndedOrder(o))
+              .toList();
+
           final unreadCount = notificationProvider.unreadCount;
-          final loadingCount = activeOrders.where(_isLoadingStationStage).length;
-          final deliveringCount =
-              activeOrders.where(_isDeliveringStage).length;
-          final completedCount = orders
-              .where(_isDriverEndedOrder)
+          final loadingCount = activeOrders
+              .where(_isLoadingStationStage)
               .length;
+          final deliveringCount = activeOrders.where(_isDeliveringStage).length;
+          final completedCount = orders.where(_isDriverEndedOrder).length;
 
           return Scaffold(
             appBar: _buildAppBar(),
@@ -468,6 +568,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
+  /* -------------------------------------------------------------
+   * 7️⃣   باقي الـ UI (AppBar, Tabs, Cards …) – لا تغيير
+   * ------------------------------------------------------------ */
   PreferredSizeWidget _buildAppBar() {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isNarrow = screenWidth < 420;
@@ -646,14 +749,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             const SizedBox(height: 16),
             _DriverSectionCard(
               title: context.tr(loc.AppStrings.driverAssignedOrdersTitle),
-              subtitle: context.tr(
-                loc.AppStrings.driverAssignedOrdersSubtitle,
-              ),
+              subtitle: context.tr(loc.AppStrings.driverAssignedOrdersSubtitle),
               badge: TrackingStatusBadge(
-                label: context.tr(
-                  loc.AppStrings.driverOrdersCount,
-                  {'count': '${orders.length}'},
-                ),
+                label: context.tr(loc.AppStrings.driverOrdersCount, {
+                  'count': '${orders.length}',
+                }),
                 color: AppColors.primaryBlue,
                 icon: Icons.assignment_outlined,
               ),
@@ -693,14 +793,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             const SizedBox(height: 16),
             _DriverSectionCard(
               title: context.tr(loc.AppStrings.driverNotificationsTitle),
-              subtitle: context.tr(
-                loc.AppStrings.driverNotificationsSubtitle,
-              ),
+              subtitle: context.tr(loc.AppStrings.driverNotificationsSubtitle),
               badge: TrackingStatusBadge(
-                label: context.tr(
-                  loc.AppStrings.driverUnreadCount,
-                  {'count': '$unreadCount'},
-                ),
+                label: context.tr(loc.AppStrings.driverUnreadCount, {
+                  'count': '$unreadCount',
+                }),
                 color: AppColors.errorRed,
                 icon: Icons.notifications_active_outlined,
               ),
@@ -733,16 +830,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
-  Widget _buildScrollableContent({
-    required Widget child,
-    double topInset = 0,
-  }) {
+  Widget _buildScrollableContent({required Widget child, double topInset = 0}) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth >= 1200;
         final isTablet = constraints.maxWidth >= 760;
         final horizontalPadding = isDesktop ? 28.0 : (isTablet ? 20.0 : 12.0);
-
         return ListView(
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
@@ -800,16 +893,14 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                         : Icons.notifications_active_outlined,
                   ),
                   TrackingStatusBadge(
-                    label: context.tr(
-                      loc.AppStrings.driverUnreadCount,
-                      {'count': '$unreadCount'},
-                    ),
+                    label: context.tr(loc.AppStrings.driverUnreadCount, {
+                      'count': '$unreadCount',
+                    }),
                     color: AppColors.errorRed,
                     icon: Icons.mark_email_unread_outlined,
                   ),
                 ],
               );
-
               final content = _buildWelcomeContent(userName, isOrdersTab);
               if (isWide) {
                 return Row(
@@ -821,7 +912,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   ],
                 );
               }
-
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -844,7 +934,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               final cardWidth = columns == 1
                   ? width
                   : (width - ((columns - 1) * spacing)) / columns;
-
               return Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
@@ -853,7 +942,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     width: cardWidth,
                     child: _DriverStatCard(
                       compact: compactStats,
-                      label: context.tr(loc.AppStrings.driverCurrentOrdersLabel),
+                      label: context.tr(
+                        loc.AppStrings.driverCurrentOrdersLabel,
+                      ),
                       value: '$ordersCount',
                       icon: Icons.assignment_outlined,
                       color: AppColors.primaryBlue,
@@ -883,9 +974,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                       value: '$deliveringCount',
                       icon: Icons.local_shipping_outlined,
                       color: AppColors.secondaryTeal,
-                      helper: context.tr(
-                        loc.AppStrings.driverDeliveringHelper,
-                      ),
+                      helper: context.tr(loc.AppStrings.driverDeliveringHelper),
                     ),
                   ),
                   SizedBox(
@@ -896,9 +985,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                       value: '$completedCount',
                       icon: Icons.task_alt_rounded,
                       color: AppColors.successGreen,
-                      helper: context.tr(
-                        loc.AppStrings.driverCompletedHelper,
-                      ),
+                      helper: context.tr(loc.AppStrings.driverCompletedHelper),
                     ),
                   ),
                 ],
@@ -950,14 +1037,13 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                context.tr(
-                  loc.AppStrings.driverWelcomeTemplate,
-                  {'name': userName},
-                ),
+                context.tr(loc.AppStrings.driverWelcomeTemplate, {
+                  'name': userName,
+                }),
                 style: TextStyle(
                   fontSize: isNarrow ? 22 : 28,
                   fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F172A),
+                  color: const Color(0xFF0F172A),
                 ),
               ),
               SizedBox(height: isNarrow ? 4 : 6),
@@ -968,7 +1054,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                         loc.AppStrings.driverWelcomeNotificationsSubtitle,
                       ),
                 style: TextStyle(
-                  color: Color(0xFF64748B),
+                  color: const Color(0xFF64748B),
                   fontWeight: FontWeight.w600,
                   height: 1.5,
                   fontSize: isNarrow ? 13 : 14,
@@ -998,7 +1084,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         ),
       );
     }
-
     if (orderProvider.error != null && orders.isEmpty) {
       return TrackingStateCard(
         icon: Icons.error_outline_rounded,
@@ -1014,7 +1099,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         ),
       );
     }
-
     if (orders.isEmpty) {
       return TrackingStateCard(
         icon: Icons.assignment_outlined,
@@ -1023,7 +1107,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         color: AppColors.primaryBlue,
       );
     }
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -1031,7 +1114,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         final cardWidth = columns == 1
             ? width
             : (width - ((columns - 1) * 14)) / columns;
-
         return Wrap(
           spacing: 14,
           runSpacing: 14,
@@ -1050,7 +1132,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     final color = _statusColor(order.status);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isNarrow = screenWidth < 420;
-
     return AppSurfaceCard(
       padding: EdgeInsets.all(isNarrow ? 14 : 18),
       color: Colors.white.withValues(alpha: 0.82),
@@ -1087,23 +1168,22 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.tr(
-                        loc.AppStrings.driverOrderNumberTemplate,
-                        {'number': '${order.orderNumber}'},
-                      ),
+                      context.tr(loc.AppStrings.driverOrderNumberTemplate, {
+                        'number': '${order.orderNumber}',
+                      }),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: isNarrow ? 16 : 19,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
+                        color: const Color(0xFF0F172A),
                       ),
                     ),
                     SizedBox(height: isNarrow ? 2 : 4),
                     Text(
                       _stageLabel(order),
                       style: TextStyle(
-                        color: Color(0xFF64748B),
+                        color: const Color(0xFF64748B),
                         fontWeight: FontWeight.w700,
                         fontSize: isNarrow ? 12 : 14,
                       ),
@@ -1166,7 +1246,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 children: [
                   Text(
                     context.tr(loc.AppStrings.driverActualLoadingDataTitle),
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF166534),
                     ),
@@ -1215,7 +1295,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         ),
       );
     }
-
     if (notificationProvider.error != null &&
         notificationProvider.notifications.isEmpty) {
       return TrackingStateCard(
@@ -1232,7 +1311,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         ),
       );
     }
-
     if (notificationProvider.notifications.isEmpty) {
       return TrackingStateCard(
         icon: Icons.notifications_none,
@@ -1241,7 +1319,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         color: AppColors.primaryBlue,
       );
     }
-
     return Column(
       children: notificationProvider.notifications
           .map(
@@ -1258,13 +1335,15 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 }
 
+/* -----------------------------------------------------------------
+   الأدوات المساعدة (Cards، Chips …) – لا تعديل ضروري
+   ----------------------------------------------------------------- */
 class _DriverSectionCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget child;
   final Widget? badge;
   final Widget? action;
-
   const _DriverSectionCard({
     required this.title,
     required this.subtitle,
@@ -1272,7 +1351,6 @@ class _DriverSectionCard extends StatelessWidget {
     this.badge,
     this.action,
   });
-
   @override
   Widget build(BuildContext context) {
     final isNarrow = MediaQuery.sizeOf(context).width < 420;
@@ -1292,14 +1370,14 @@ class _DriverSectionCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: isNarrow ? 18 : 22,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
+                      color: const Color(0xFF0F172A),
                     ),
                   ),
                   SizedBox(height: isNarrow ? 4 : 6),
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: Color(0xFF64748B),
+                      color: const Color(0xFF64748B),
                       fontWeight: FontWeight.w600,
                       height: 1.5,
                       fontSize: isNarrow ? 12.5 : 14,
@@ -1307,7 +1385,6 @@ class _DriverSectionCard extends StatelessWidget {
                   ),
                 ],
               );
-
               final trailing = Wrap(
                 spacing: 10,
                 runSpacing: 10,
@@ -1316,7 +1393,6 @@ class _DriverSectionCard extends StatelessWidget {
                   if (action != null) action!,
                 ],
               );
-
               if (isWide) {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1327,10 +1403,13 @@ class _DriverSectionCard extends StatelessWidget {
                   ],
                 );
               }
-
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [header, SizedBox(height: isNarrow ? 12 : 14), trailing],
+                children: [
+                  header,
+                  SizedBox(height: isNarrow ? 12 : 14),
+                  trailing,
+                ],
               );
             },
           ),
@@ -1349,7 +1428,6 @@ class _DriverStatCard extends StatelessWidget {
   final Color color;
   final String helper;
   final bool compact;
-
   const _DriverStatCard({
     required this.label,
     required this.value,
@@ -1358,7 +1436,6 @@ class _DriverStatCard extends StatelessWidget {
     required this.helper,
     this.compact = false,
   });
-
   @override
   Widget build(BuildContext context) {
     final isNarrow = MediaQuery.sizeOf(context).width < 420;
@@ -1413,7 +1490,6 @@ class _DriverStatCard extends StatelessWidget {
         ),
       );
     }
-
     return AppSurfaceCard(
       padding: EdgeInsets.all(isNarrow ? 14 : 16),
       color: Colors.white.withValues(alpha: 0.72),
@@ -1446,14 +1522,14 @@ class _DriverStatCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: isNarrow ? 18 : 22,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
+                    color: const Color(0xFF0F172A),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   label,
                   style: TextStyle(
-                    color: Color(0xFF475569),
+                    color: const Color(0xFF475569),
                     fontWeight: FontWeight.w800,
                     fontSize: isNarrow ? 13 : 14,
                   ),
@@ -1462,7 +1538,7 @@ class _DriverStatCard extends StatelessWidget {
                 Text(
                   helper,
                   style: TextStyle(
-                    color: Color(0xFF94A3B8),
+                    color: const Color(0xFF94A3B8),
                     fontWeight: FontWeight.w700,
                     fontSize: isNarrow ? 11 : 12,
                   ),
@@ -1479,9 +1555,7 @@ class _DriverStatCard extends StatelessWidget {
 class _DriverOrderInfoRow extends StatelessWidget {
   final String label;
   final String value;
-
   const _DriverOrderInfoRow({required this.label, required this.value});
-
   @override
   Widget build(BuildContext context) {
     final isNarrow = MediaQuery.sizeOf(context).width < 420;
@@ -1506,7 +1580,7 @@ class _DriverOrderInfoRow extends StatelessWidget {
               value,
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A),
+                color: const Color(0xFF0F172A),
                 height: 1.4,
                 fontSize: isNarrow ? 12 : 14,
               ),
@@ -1522,13 +1596,11 @@ class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-
   const _InfoChip({
     required this.icon,
     required this.label,
     required this.color,
   });
-
   @override
   Widget build(BuildContext context) {
     final isNarrow = MediaQuery.sizeOf(context).width < 420;

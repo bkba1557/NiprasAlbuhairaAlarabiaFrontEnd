@@ -12,6 +12,7 @@ import 'package:order_tracker/providers/customer_provider.dart';
 import 'package:order_tracker/providers/driver_provider.dart';
 import 'package:order_tracker/providers/notification_provider.dart';
 import 'package:order_tracker/providers/order_provider.dart';
+import 'package:order_tracker/providers/statement_provider.dart';
 import 'package:order_tracker/providers/supplier_provider.dart';
 import 'package:order_tracker/services/movement_orders_report_pdf_service.dart';
 import 'package:order_tracker/screens/order_details_screen.dart';
@@ -113,14 +114,37 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   bool _creatingCustomerRequest = false;
   TextEditingController? _newCustomerRequestCustomerFieldController;
 
+  late final Stream<DateTime> _statementCountdownTicker =
+      Stream<DateTime>.periodic(
+        const Duration(seconds: 1),
+        (_) => DateTime.now(),
+      );
+
   bool get _movementUser =>
       context.read<AuthProvider>().user?.role == 'movement';
+
+  bool get _ownerApprovalUser {
+    final role = context.read<AuthProvider>().user?.role;
+    return role == 'owner' || role == 'admin';
+  }
 
   Supplier? get _selectedSupplier {
     for (final supplier in _suppliers) {
       if (supplier.id == _supplierId) return supplier;
     }
     return null;
+  }
+
+  List<Order> get _cancelledMovementOrders {
+    final items = <Order>[..._orders, ..._customerRequests]
+        .where((order) => order.status == 'ملغى')
+        .toList()
+      ..sort((a, b) {
+        final aDate = a.cancelledAt ?? a.updatedAt;
+        final bDate = b.cancelledAt ?? b.updatedAt;
+        return bDate.compareTo(aDate);
+      });
+    return items;
   }
 
   @override
@@ -147,10 +171,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     final suppliers = context.read<SupplierProvider>();
     final customers = context.read<CustomerProvider>();
     final drivers = context.read<DriverProvider>();
+    final statements = context.read<StatementProvider>();
 
     await Future.wait(<Future<void>>[
       suppliers.fetchSuppliers(filters: <String, dynamic>{'isActive': 'true'}),
       customers.fetchCustomers(fetchAll: true),
+      statements.fetchStatement(silent: true),
     ]);
     final activeDrivers = await drivers.fetchActiveDrivers();
     await _loadOrders(showLoader: false);
@@ -319,9 +345,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             )
             .toList()
           ..sort((a, b) {
-            final byOrderDate = a.orderDate.compareTo(b.orderDate);
+            final byOrderDate = b.orderDate.compareTo(a.orderDate);
             if (byOrderDate != 0) return byOrderDate;
-            return a.createdAt.compareTo(b.createdAt);
+            return b.createdAt.compareTo(a.createdAt);
           });
 
     if (matchingRequests.isEmpty) {
@@ -340,13 +366,13 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                   (order) => requestedFuelKey == null
                       ? true
                       : _fuelKey(order.fuelType) == requestedFuelKey,
-                )
-                .toList()
-              ..sort((a, b) {
-                final byOrderDate = a.orderDate.compareTo(b.orderDate);
-                if (byOrderDate != 0) return byOrderDate;
-                return a.createdAt.compareTo(b.createdAt);
-              });
+                 )
+                 .toList()
+               ..sort((a, b) {
+                 final byOrderDate = b.orderDate.compareTo(a.orderDate);
+                 if (byOrderDate != 0) return byOrderDate;
+                 return b.createdAt.compareTo(a.createdAt);
+               });
       }
     }
 
@@ -408,13 +434,24 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return !arrivalDateTime.isAfter(DateTime.now());
   }
 
+  bool _hasMovementExpiredFromHistory(Order order) {
+    final arrivalDateTime = _combineDateAndTime(
+      order.movementExpectedArrivalDate ?? order.arrivalDate,
+      order.arrivalTime,
+    );
+    if (arrivalDateTime == null) return false;
+    final hideAfter = arrivalDateTime.add(const Duration(days: 1));
+    return !hideAfter.isAfter(DateTime.now());
+  }
+
   List<Order> get _historyOrders {
     final query = _historySearchController.text;
     final items =
         _orders
             .where(
               (order) =>
-                  (!order.isMovementDirected || !_hasMovementArrived(order)) &&
+                  (!order.isMovementDirected ||
+                      !_hasMovementExpiredFromHistory(order)) &&
                   _matchesOrderSearch(order, query),
             )
             .toList()
@@ -441,8 +478,31 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     if (!order.isMovementOrder || _isOrderCompleted(order)) {
       return false;
     }
+    if (order.isMovementDirected) {
+      return false;
+    }
     return (order.mergedWithOrderId ?? '').trim().isEmpty &&
         order.mergeStatus != 'مدمج';
+  }
+
+  String _cancellationApprovalLabel(Order order) {
+    if (order.isCancellationPendingOwnerApproval) {
+      return 'بانتظار اعتماد المالك';
+    }
+    if (order.isCancellationApproved) {
+      return 'تم اعتماد الإلغاء';
+    }
+    return 'تم الإلغاء';
+  }
+
+  Color _cancellationApprovalColor(Order order) {
+    if (order.isCancellationPendingOwnerApproval) {
+      return AppColors.warningOrange;
+    }
+    if (order.isCancellationApproved) {
+      return AppColors.successGreen;
+    }
+    return AppColors.errorRed;
   }
 
   bool _isCustomerRequestOpen(Order order) {
@@ -478,12 +538,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
 
   bool _matchesReportAudience(Order order, _MovementReportAudience audience) {
     switch (audience) {
-      case _MovementReportAudience.all:
-        return true;
       case _MovementReportAudience.supplier:
         return order.orderSource == 'مورد';
       case _MovementReportAudience.customer:
         return _isCustomerRelatedOrder(order);
+      case _MovementReportAudience.completed:
+        return _isOrderCompleted(order) && order.status != 'ملغى';
     }
   }
 
@@ -602,7 +662,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   Future<void> _openMovementReportDialog() async {
     final now = _dateOnly(DateTime.now());
     var periodType = _MovementReportPeriodType.today;
-    var audience = _MovementReportAudience.all;
+    var audience = _MovementReportAudience.completed;
     var selectedDay = now;
     var rangeStart = now;
     var rangeEnd = now;
@@ -1570,9 +1630,179 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       );
       return false;
     }
-    _snack('تم إلغاء الطلب.', AppColors.successGreen);
+    _snack(
+      _movementUser
+          ? 'تم إلغاء الطلب وإرساله بانتظار اعتماد المالك.'
+          : 'تم إلغاء الطلب.',
+      AppColors.successGreen,
+    );
     await _loadOrders(showLoader: false);
     return true;
+  }
+
+  Future<bool> _approveCancellation(Order order) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('اعتماد الإلغاء'),
+        content: Text('هل تريد اعتماد إلغاء الطلب #${order.orderNumber}؟'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('اعتماد'),
+          ),
+        ],
+      ),
+    );
+
+    if (approved != true) {
+      return false;
+    }
+
+    setState(() => _busyOrderId = order.id);
+    final success = await context.read<OrderProvider>().approveOrderCancellation(
+      order.id,
+    );
+    if (!mounted) return false;
+    setState(() => _busyOrderId = null);
+    if (!success) {
+      _snack(
+        context.read<OrderProvider>().error ?? 'تعذر اعتماد إلغاء الطلب.',
+        AppColors.errorRed,
+      );
+      return false;
+    }
+
+    _snack('تم اعتماد إلغاء الطلب.', AppColors.successGreen);
+    await _loadOrders(showLoader: false);
+    return true;
+  }
+
+  Future<void> _showCancelledOrdersDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final cancelledOrders = _cancelledMovementOrders;
+            return AlertDialog(
+              title: Text('سجل الطلبات الملغية (${cancelledOrders.length})'),
+              content: SizedBox(
+                width: 520,
+                height: 420,
+                child: cancelledOrders.isEmpty
+                    ? const Text('لا توجد طلبات ملغية حالياً.')
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: cancelledOrders.length,
+                        separatorBuilder: (_, __) => const Divider(height: 18),
+                        itemBuilder: (context, index) {
+                          final order = cancelledOrders[index];
+                          final busy = _busyOrderId == order.id;
+                          final approvalColor = _cancellationApprovalColor(order);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Text(
+                                      order.orderNumber,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: approvalColor.withValues(alpha: 0.10),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: approvalColor.withValues(alpha: 0.28),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _cancellationApprovalLabel(order),
+                                      style: TextStyle(
+                                        color: approvalColor,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text('النوع: ${order.orderSource}'),
+                              if ((order.movementCustomerName ?? '').trim().isNotEmpty)
+                                Text('العميل: ${order.movementCustomerName}'),
+                              if (order.supplierName.trim().isNotEmpty)
+                                Text('المورد: ${order.supplierName}'),
+                              if ((order.cancellationReason ?? '').trim().isNotEmpty)
+                                Text('سبب الإلغاء: ${order.cancellationReason}'),
+                              if ((order.cancellationApprovalRequestedByName ?? '')
+                                  .trim()
+                                  .isNotEmpty)
+                                Text(
+                                  'طلب الإلغاء: ${order.cancellationApprovalRequestedByName}',
+                                ),
+                              if (order.cancelledAt != null)
+                                Text('تاريخ الإلغاء: ${_fmt(order.cancelledAt!)}'),
+                              if (order.cancellationApprovalApprovedAt != null)
+                                Text(
+                                  'تاريخ الاعتماد: ${_fmt(order.cancellationApprovalApprovedAt!)}',
+                                ),
+                              const SizedBox(height: 10),
+                              if (_ownerApprovalUser &&
+                                  order.isCancellationPendingOwnerApproval)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: FilledButton.icon(
+                                    onPressed: busy
+                                        ? null
+                                        : () async {
+                                            final success =
+                                                await _approveCancellation(order);
+                                            if (success && mounted) {
+                                              setDialogState(() {});
+                                            }
+                                          },
+                                    icon: busy
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.verified_rounded),
+                                    label: const Text('اعتماد الإلغاء'),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('إغلاق'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<bool> _deleteCustomerRequest(Order order) async {
@@ -1604,18 +1834,6 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
 
     Future<void> submitRequest(StateSetter setDialogState) async {
       if (customerId == null) return;
-
-      final existing = _pendingRequestForCustomer(
-        customerId,
-        fuelType: fuelType,
-      );
-      if (existing != null) {
-        _snack(
-          'يوجد طلب مؤقت لهذا العميل ونوع الوقود بالفعل (${existing.orderNumber}).',
-          AppColors.warningOrange,
-        );
-        return;
-      }
 
       setDialogState(() => creating = true);
       final success = await context
@@ -2076,6 +2294,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
 
     searchController.dispose();
   }
+
+
 
   Customer? _findCustomerById(String? customerId) {
     if (customerId == null || customerId.trim().isEmpty) {
@@ -3315,6 +3535,142 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
+  Widget _metricCardText(
+    String label,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
+    final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
+    return AppSurfaceCard(
+      padding: EdgeInsets.all(isWideWeb ? 12 : 14),
+      color: Colors.white.withValues(alpha: 0.72),
+      borderRadius: BorderRadius.circular(isWideWeb ? 20 : 24),
+      border: Border.all(color: color.withValues(alpha: 0.18)),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: 0.06),
+          blurRadius: 18,
+          offset: const Offset(0, 10),
+        ),
+      ],
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: isWideWeb ? 42 : 46,
+            height: isWideWeb ? 42 : 46,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+                colors: <Color>[
+                  color.withValues(alpha: 0.18),
+                  color.withValues(alpha: 0.08),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(isWideWeb ? 14 : 16),
+            ),
+            child: Icon(icon, color: color, size: isWideWeb ? 22 : 24),
+          ),
+          SizedBox(width: isWideWeb ? 10 : 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: isWideWeb ? 12 : 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.mediumGray,
+                  ),
+                ),
+                SizedBox(height: isWideWeb ? 4 : 6),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isWideWeb ? 16 : 18,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  DateTime _statementExpiryDeadline(DateTime date) {
+    return DateTime(date.year, date.month, date.day, 23, 59, 59);
+  }
+
+  String _formatStatementCountdown(Duration remaining) {
+    final totalSeconds = remaining.inSeconds;
+    if (totalSeconds <= 0) return 'منتهي';
+
+    final days = remaining.inDays;
+    final hours = remaining.inHours.remainder(24);
+    final minutes = remaining.inMinutes.remainder(60);
+    final seconds = remaining.inSeconds.remainder(60);
+
+    final hh = hours.toString().padLeft(2, '0');
+    final mm = minutes.toString().padLeft(2, '0');
+    final ss = seconds.toString().padLeft(2, '0');
+    if (days > 0) return '$days يوم $hh:$mm:$ss';
+    return '$hh:$mm:$ss';
+  }
+
+  Widget _statementCountdownSummary({required DateTime? expiryDate}) {
+    final double width = MediaQuery.sizeOf(context).width;
+    final double cardWidth = width >= 1400
+        ? 198
+        : width >= 1100
+        ? 206
+        : 220;
+
+    return SizedBox(
+      width: cardWidth,
+      child: StreamBuilder<DateTime>(
+        stream: _statementCountdownTicker,
+        builder: (context, snapshot) {
+          final now = snapshot.data ?? DateTime.now();
+          final expiry = expiryDate;
+
+          if (expiry == null) {
+            return _metricCardText(
+              'بيان النقل',
+              'غير مسجل',
+              AppColors.warningOrange,
+              Icons.description_outlined,
+            );
+          }
+
+          final remaining = _statementExpiryDeadline(expiry).difference(now);
+          final safeRemaining = remaining.isNegative ? Duration.zero : remaining;
+          final formatted = _formatStatementCountdown(safeRemaining);
+
+          final Color color = safeRemaining == Duration.zero
+              ? AppColors.errorRed
+              : safeRemaining.inDays <= 2
+              ? AppColors.warningOrange
+              : AppColors.primaryBlue;
+
+          return _metricCardText(
+            'بيان النقل',
+            formatted,
+            color,
+            Icons.description_outlined,
+          );
+        },
+      ),
+    );
+  }
+
   Widget _dateSelectorCard({
     required String label,
     required String value,
@@ -3413,6 +3769,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     required int pendingDriver,
     required int pendingDispatch,
     required int directed,
+    required int cancelled,
     required bool compact,
   }) {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
@@ -3472,6 +3829,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         '$directed',
                         Icons.task_alt_rounded,
                       ),
+                      _heroChip(
+                        'الملغاة',
+                        '$cancelled',
+                        Icons.cancel_outlined,
+                        onTap: _showCancelledOrdersDialog,
+                      ),
                     ],
                   ),
                 ],
@@ -3506,6 +3869,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                           'طلبات موجهة',
                           '$directed',
                           Icons.task_alt_rounded,
+                        ),
+                        _heroChip(
+                          'الملغاة',
+                          '$cancelled',
+                          Icons.cancel_outlined,
+                          onTap: _showCancelledOrdersDialog,
                         ),
                       ],
                     ),
@@ -3543,41 +3912,49 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
-  Widget _heroChip(String label, String value, IconData icon) {
+  Widget _heroChip(
+    String label,
+    String value,
+    IconData icon, {
+    VoidCallback? onTap,
+  }) {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isWideWeb ? 12 : 14,
-        vertical: isWideWeb ? 10 : 12,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(isWideWeb ? 16 : 18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, color: Colors.white, size: isWideWeb ? 17 : 18),
-          SizedBox(width: isWideWeb ? 7 : 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: isWideWeb ? 11 : 12,
-              fontWeight: FontWeight.w600,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: isWideWeb ? 12 : 14,
+          vertical: isWideWeb ? 10 : 12,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(isWideWeb ? 16 : 18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, color: Colors.white, size: isWideWeb ? 17 : 18),
+            SizedBox(width: isWideWeb ? 7 : 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: isWideWeb ? 11 : 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-          SizedBox(width: isWideWeb ? 8 : 10),
-          Text(
-            value,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isWideWeb ? 15 : 16,
-              fontWeight: FontWeight.w500,
+            SizedBox(width: isWideWeb ? 8 : 10),
+            Text(
+              value,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isWideWeb ? 15 : 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -3674,6 +4051,11 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     final int unreadChat = context.watch<ChatProvider>().totalUnread;
     final int unreadNotifications =
         context.watch<NotificationProvider>().unreadCount;
+    final statementExpiryDate = context
+        .watch<StatementProvider>()
+        .statement
+        ?.latestRenewal
+        ?.expiryDate;
     final double pageMaxWidth = screenWidth >= 1700
         ? 1480
         : screenWidth >= 1450
@@ -3695,6 +4077,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
               !_hasMovementArrived(o),
         )
         .length;
+    final cancelled = _cancelledMovementOrders.length;
     final pendingCustomerRequests = _customerRequests
         .where((o) => _isPendingCustomerRequest(o))
         .length;
@@ -4042,6 +4425,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                                       pendingDriver: pendingDriver,
                                       pendingDispatch: pendingDispatch,
                                       directed: directed,
+                                      cancelled: cancelled,
                                       compact: compact,
                                     ),
                                     SizedBox(height: isWideWeb ? 14 : 16),
@@ -4097,6 +4481,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                                             directed,
                                             AppColors.successGreen,
                                             Icons.task_alt_rounded,
+                                          ),
+                                          _statementCountdownSummary(
+                                            expiryDate: statementExpiryDate,
                                           ),
                                         ],
                                       ),
@@ -4910,20 +5297,6 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       final customerId = _newCustomerRequestCustomerId;
       if (customerId == null || customerId.trim().isEmpty) return;
 
-      final existing =
-          _pendingRequestForCustomer(
-            customerId,
-            fuelType: _newCustomerRequestFuelType,
-          ) ??
-          _pendingRequestForCustomer(customerId);
-      if (existing != null) {
-        _snack(
-          'يوجد طلب مؤقت لهذا العميل بالفعل (${existing.orderNumber}).',
-          AppColors.warningOrange,
-        );
-        return;
-      }
-
       setState(() => _creatingCustomerRequest = true);
       final provider = context.read<OrderProvider>();
       final success = await provider.createMovementCustomerRequest(
@@ -5462,17 +5835,17 @@ extension _MovementReportPeriodTypeLabel on _MovementReportPeriodType {
   }
 }
 
-enum _MovementReportAudience { all, supplier, customer }
+enum _MovementReportAudience { supplier, customer, completed }
 
 extension _MovementReportAudienceLabel on _MovementReportAudience {
   String get label {
     switch (this) {
-      case _MovementReportAudience.all:
-        return 'كل الطلبات';
       case _MovementReportAudience.supplier:
-        return 'مورد فقط';
+        return 'طلبات مورد';
       case _MovementReportAudience.customer:
-        return 'عميل فقط';
+        return 'طلبات عميل';
+      case _MovementReportAudience.completed:
+        return 'طلبات مكتملة';
     }
   }
 }

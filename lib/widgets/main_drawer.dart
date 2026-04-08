@@ -29,6 +29,8 @@ class MainDrawer extends StatelessWidget {
         user?.hasAnyPermission(['tasks_view', 'tasks_view_all']) ?? false;
     final canViewContracts =
         user?.hasAnyPermission(['contracts_view', 'contracts_manage']) ?? false;
+    final canViewTracking =
+        user?.hasAnyPermission(['drivers_view', 'tracking_view']) ?? false;
     final driverHomeRoute = user?.role == 'driver'
         ? AppRoutes.driverHome
         : AppRoutes.orders;
@@ -158,7 +160,23 @@ class MainDrawer extends StatelessWidget {
                     leading: const Icon(Icons.directions_car_outlined),
                     title: const Text('السائقين'),
                     onTap: () {
-                      Navigator.popAndPushNamed(context, '/drivers');
+                      Navigator.popAndPushNamed(context, AppRoutes.drivers);
+                    },
+                  ),
+                if (canViewTracking)
+                  ListTile(
+                    leading: const Icon(Icons.local_taxi_outlined),
+                    title: const Text('السيارات'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(context, AppRoutes.vehicles);
+                    },
+                  ),
+                if (canViewTracking)
+                  ListTile(
+                    leading: const Icon(Icons.local_shipping_outlined),
+                    title: const Text('الصهاريج'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(context, AppRoutes.tankers);
                     },
                   ),
                 if (hasOrderCreation)

@@ -497,6 +497,8 @@ class _NotificationUiHelper {
       case 'loading_reminder':
       case 'arrival_reminder':
         return Icons.notifications_active_outlined;
+      case 'driver_document_expiry':
+        return Icons.badge_outlined;
       case 'task_overdue':
         return Icons.warning_amber_outlined;
       case 'loading_completed':
@@ -546,6 +548,7 @@ class _NotificationUiHelper {
       case 'task_extension_requested':
       case 'loading_reminder':
       case 'arrival_reminder':
+      case 'driver_document_expiry':
         return AppColors.warningOrange;
       case 'chat_message':
         return AppColors.infoBlue;
@@ -617,6 +620,8 @@ class _NotificationUiHelper {
         return 'تذكير تحميل';
       case 'arrival_reminder':
         return 'تذكير وصول';
+      case 'driver_document_expiry':
+        return 'انتهاء وثائق سائق';
       case 'loading_completed':
       case 'execution_completed':
         return 'تم التنفيذ';

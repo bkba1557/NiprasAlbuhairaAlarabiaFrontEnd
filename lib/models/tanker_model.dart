@@ -6,12 +6,16 @@ class Tanker {
   final String? fuelType;
   final String? linkedDriverId;
   final String? linkedDriverName;
+  final String? linkedVehicleId;
   final String? linkedVehicleNumber;
   final String? linkedVehicleType;
   final String? aramcoStickerMode;
   final String? aramcoUnifiedSticker;
+  final DateTime? aramcoUnifiedStickerExpiryDate;
   final String? aramcoHeadSticker;
+  final DateTime? aramcoHeadStickerExpiryDate;
   final String? aramcoTankerSticker;
+  final DateTime? aramcoTankerStickerExpiryDate;
   final String? notes;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -24,12 +28,16 @@ class Tanker {
     this.fuelType,
     this.linkedDriverId,
     this.linkedDriverName,
+    this.linkedVehicleId,
     this.linkedVehicleNumber,
     this.linkedVehicleType,
     this.aramcoStickerMode,
     this.aramcoUnifiedSticker,
+    this.aramcoUnifiedStickerExpiryDate,
     this.aramcoHeadSticker,
+    this.aramcoHeadStickerExpiryDate,
     this.aramcoTankerSticker,
+    this.aramcoTankerStickerExpiryDate,
     this.notes,
     required this.createdAt,
     required this.updatedAt,
@@ -74,19 +82,26 @@ class Tanker {
     }
 
     final rawDriver = json['linkedDriver'];
-    final linkedDriver = rawDriver is Map<String, dynamic>
-        ? rawDriver
-        : rawDriver is Map
-        ? Map<String, dynamic>.from(rawDriver)
-        : null;
+    final rawVehicle = json['linkedVehicle'];
 
     final aramcoUnifiedSticker = parseOptionalString(
       json['aramcoUnifiedSticker'],
     );
+    final aramcoUnifiedStickerExpiryDate = json['aramcoUnifiedStickerExpiryDate'] !=
+            null
+        ? DateTime.tryParse(json['aramcoUnifiedStickerExpiryDate'].toString())
+        : null;
     final aramcoHeadSticker = parseOptionalString(json['aramcoHeadSticker']);
+    final aramcoHeadStickerExpiryDate = json['aramcoHeadStickerExpiryDate'] != null
+        ? DateTime.tryParse(json['aramcoHeadStickerExpiryDate'].toString())
+        : null;
     final aramcoTankerSticker = parseOptionalString(
       json['aramcoTankerSticker'],
     );
+    final aramcoTankerStickerExpiryDate =
+        json['aramcoTankerStickerExpiryDate'] != null
+            ? DateTime.tryParse(json['aramcoTankerStickerExpiryDate'].toString())
+            : null;
     final aramcoStickerMode =
         parseOptionalString(json['aramcoStickerMode']) ??
         (aramcoUnifiedSticker != null
@@ -102,24 +117,31 @@ class Tanker {
       capacityLiters: parseCapacity(json['capacityLiters'] ?? json['capacity']),
       fuelType: parseOptionalString(json['fuelType']),
       linkedDriverId:
-          linkedDriver?['_id']?.toString() ??
-          linkedDriver?['id']?.toString() ??
+          (rawDriver is Map ? rawDriver['_id']?.toString() : null) ??
           json['linkedDriverId']?.toString() ??
           json['driverId']?.toString(),
       linkedDriverName:
-          linkedDriver?['name']?.toString() ??
+          (rawDriver is Map ? rawDriver['name']?.toString() : null) ??
           json['linkedDriverName']?.toString() ??
           json['driverName']?.toString(),
+      linkedVehicleId:
+          json['linkedVehicleId']?.toString() ??
+          (rawVehicle is Map ? rawVehicle['_id']?.toString() : null),
       linkedVehicleNumber:
-          linkedDriver?['vehicleNumber']?.toString() ??
+          json['linkedVehicleNumber']?.toString() ??
+          (rawVehicle is Map ? rawVehicle['plateNumber']?.toString() : null) ??
           json['vehicleNumber']?.toString(),
       linkedVehicleType:
-          linkedDriver?['vehicleType']?.toString() ??
+          json['linkedVehicleType']?.toString() ??
+          (rawVehicle is Map ? rawVehicle['vehicleType']?.toString() : null) ??
           json['vehicleType']?.toString(),
       aramcoStickerMode: aramcoStickerMode,
       aramcoUnifiedSticker: aramcoUnifiedSticker,
+      aramcoUnifiedStickerExpiryDate: aramcoUnifiedStickerExpiryDate,
       aramcoHeadSticker: aramcoHeadSticker,
+      aramcoHeadStickerExpiryDate: aramcoHeadStickerExpiryDate,
       aramcoTankerSticker: aramcoTankerSticker,
+      aramcoTankerStickerExpiryDate: aramcoTankerStickerExpiryDate,
       notes: parseOptionalString(json['notes']),
       createdAt: parseDate(json['createdAt']),
       updatedAt: parseDate(json['updatedAt']),
@@ -132,11 +154,17 @@ class Tanker {
       'status': status,
       'capacityLiters': capacityLiters,
       'fuelType': fuelType,
-      'linkedDriverId': linkedDriverId,
+      'linkedVehicleId': linkedVehicleId,
       'aramcoStickerMode': aramcoStickerMode,
       'aramcoUnifiedSticker': aramcoUnifiedSticker,
+      'aramcoUnifiedStickerExpiryDate':
+          aramcoUnifiedStickerExpiryDate?.toIso8601String(),
       'aramcoHeadSticker': aramcoHeadSticker,
+      'aramcoHeadStickerExpiryDate':
+          aramcoHeadStickerExpiryDate?.toIso8601String(),
       'aramcoTankerSticker': aramcoTankerSticker,
+      'aramcoTankerStickerExpiryDate':
+          aramcoTankerStickerExpiryDate?.toIso8601String(),
       'notes': notes,
     };
   }

@@ -667,6 +667,7 @@ class ApiEndpoints {
   static const String orderAutofillDocument = '/orders/autofill/document';
   static const String orderImportDocuments = '/orders/import/documents';
   static const String tankers = '/tankers';
+  static const String vehicles = '/vehicles';
   static const String trackingDrivers = '/tracking/drivers';
   static const String driverLocations = '/driver-locations';
   static const String activities = '/activities';
@@ -692,6 +693,8 @@ class ApiEndpoints {
   static String orderById(String id) => '/orders/$id';
   static String orderMovementDispatch(String id) => '/orders/$id/movement/dispatch';
   static String orderMovementRequestById(String id) => '/orders/$id/movement/request';
+  static String orderCancellationApprove(String id) =>
+      '/orders/$id/cancellation/approve';
   static String orderSupplierReview(String id) => '/orders/$id/supplier-review';
   static String orderWhatsAppDriver(String id) => '/orders/$id/whatsapp/driver';
   static String trackingDriverById(String id) => '/tracking/drivers/$id';

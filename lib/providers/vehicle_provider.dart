@@ -2,20 +2,28 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:order_tracker/models/tanker_model.dart';
+import 'package:order_tracker/models/vehicle_model.dart';
 import 'package:order_tracker/utils/api_service.dart';
 import 'package:order_tracker/utils/constants.dart';
 
-class TankerProvider with ChangeNotifier {
-  List<Tanker> _tankers = [];
+class VehicleProvider with ChangeNotifier {
+  List<Vehicle> _vehicles = [];
   bool _isLoading = false;
   String? _error;
 
-  List<Tanker> get tankers => _tankers;
+  List<Vehicle> get vehicles => _vehicles;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> fetchTankers({bool silent = false}) async {
+  Vehicle? findById(String? id) {
+    if (id == null || id.trim().isEmpty) return null;
+    for (final vehicle in _vehicles) {
+      if (vehicle.id == id) return vehicle;
+    }
+    return null;
+  }
+
+  Future<void> fetchVehicles({bool silent = false}) async {
     if (!silent) {
       _isLoading = true;
       _error = null;
@@ -24,33 +32,28 @@ class TankerProvider with ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('${ApiEndpoints.baseUrl}/tankers'),
+        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.vehicles}'),
         headers: ApiService.headers,
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
+        final raw = data is List
+            ? List<dynamic>.from(data)
+            : data is Map && data['vehicles'] is List
+            ? List<dynamic>.from(data['vehicles'] as List)
+            : data is Map && data['data'] is List
+            ? List<dynamic>.from(data['data'] as List)
+            : <dynamic>[];
 
-        List<dynamic> tankersData = [];
-        if (data is List) {
-          tankersData = data;
-        } else if (data['tankers'] is List) {
-          tankersData = data['tankers'];
-        } else if (data['data'] is List) {
-          tankersData = data['data'];
-        }
-
-        _tankers = tankersData
+        _vehicles = raw
             .whereType<Map>()
-            .map((e) => Tanker.fromJson(Map<String, dynamic>.from(e)))
+            .map((item) => Vehicle.fromJson(Map<String, dynamic>.from(item)))
             .toList();
-
-        _isLoading = false;
-        notifyListeners();
-        return;
+        _error = null;
+      } else {
+        _error = 'فشل في جلب السيارات';
       }
-
-      _error = 'فشل في جلب الصهاريج';
     } catch (e) {
       _error = e.toString();
     }
@@ -59,37 +62,36 @@ class TankerProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> createTanker(Tanker tanker) async {
+  Future<bool> createVehicle(Vehicle vehicle) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final response = await http.post(
-        Uri.parse('${ApiEndpoints.baseUrl}/tankers'),
+        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.vehicles}'),
         headers: ApiService.headers,
-        body: json.encode(tanker.toJson()),
+        body: json.encode(vehicle.toJson()),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
-        final raw = data is Map && data['tanker'] != null
-            ? data['tanker']
+        final raw = data is Map && data['vehicle'] != null
+            ? data['vehicle']
             : data is Map && data['data'] != null
             ? data['data']
             : data;
-        final created = Tanker.fromJson(Map<String, dynamic>.from(raw));
-        _tankers.insert(0, created);
+        final created = Vehicle.fromJson(Map<String, dynamic>.from(raw));
+        _vehicles.insert(0, created);
         _isLoading = false;
         notifyListeners();
         return true;
       }
 
       final errorData = json.decode(utf8.decode(response.bodyBytes));
-      _error =
-          errorData['error'] ?? errorData['message'] ?? 'فشل إضافة الصهريج';
+      _error = errorData['error']?.toString() ?? 'فشل في إضافة السيارة';
     } catch (e) {
-      _error = 'حدث خطأ في الاتصال بالسيرفر: ${e.toString()}';
+      _error = e.toString();
     }
 
     _isLoading = false;
@@ -97,42 +99,39 @@ class TankerProvider with ChangeNotifier {
     return false;
   }
 
-  Future<bool> updateTanker(String id, Tanker tanker) async {
+  Future<bool> updateVehicle(String id, Vehicle vehicle) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final response = await http.put(
-        Uri.parse('${ApiEndpoints.baseUrl}/tankers/$id'),
+        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.vehicles}/$id'),
         headers: ApiService.headers,
-        body: json.encode(tanker.toJson()),
+        body: json.encode(vehicle.toJson()),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
-        final raw = data is Map && data['tanker'] != null
-            ? data['tanker']
+        final raw = data is Map && data['vehicle'] != null
+            ? data['vehicle']
             : data is Map && data['data'] != null
             ? data['data']
             : data;
-        final updated = Tanker.fromJson(Map<String, dynamic>.from(raw));
-
-        final index = _tankers.indexWhere((t) => t.id == id);
+        final updated = Vehicle.fromJson(Map<String, dynamic>.from(raw));
+        final index = _vehicles.indexWhere((item) => item.id == id);
         if (index != -1) {
-          _tankers[index] = updated;
+          _vehicles[index] = updated;
         }
-
         _isLoading = false;
         notifyListeners();
         return true;
       }
 
       final errorData = json.decode(utf8.decode(response.bodyBytes));
-      _error =
-          errorData['error'] ?? errorData['message'] ?? 'فشل تحديث الصهريج';
+      _error = errorData['error']?.toString() ?? 'فشل في تحديث السيارة';
     } catch (e) {
-      _error = 'حدث خطأ في الاتصال بالسيرفر: ${e.toString()}';
+      _error = e.toString();
     }
 
     _isLoading = false;
@@ -140,28 +139,28 @@ class TankerProvider with ChangeNotifier {
     return false;
   }
 
-  Future<bool> deleteTanker(String id) async {
+  Future<bool> deleteVehicle(String id) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final response = await http.delete(
-        Uri.parse('${ApiEndpoints.baseUrl}/tankers/$id'),
+        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.vehicles}/$id'),
         headers: ApiService.headers,
       );
 
       if (response.statusCode == 200 || response.statusCode == 204) {
-        _tankers.removeWhere((t) => t.id == id);
+        _vehicles.removeWhere((item) => item.id == id);
         _isLoading = false;
         notifyListeners();
         return true;
       }
 
       final errorData = json.decode(utf8.decode(response.bodyBytes));
-      _error = errorData['error'] ?? errorData['message'] ?? 'فشل حذف الصهريج';
+      _error = errorData['error']?.toString() ?? 'فشل في حذف السيارة';
     } catch (e) {
-      _error = 'حدث خطأ في الاتصال بالسيرفر: ${e.toString()}';
+      _error = e.toString();
     }
 
     _isLoading = false;

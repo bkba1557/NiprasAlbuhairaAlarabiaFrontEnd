@@ -48,6 +48,43 @@ class DriverItem extends StatelessWidget {
     }
   }
 
+  bool _isNearExpiry(DateTime? date) {
+    if (date == null) return false;
+    final now = DateTime.now();
+    return !date.isBefore(now) &&
+        date.isBefore(now.add(const Duration(days: 30)));
+  }
+
+  Widget _buildExpiryRow({
+    required IconData icon,
+    required String label,
+    required DateTime? value,
+  }) {
+    if (value == null) {
+      return const SizedBox.shrink();
+    }
+
+    final isNearExpiry = _isNearExpiry(value);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ${DateFormat('yyyy/MM/dd').format(value)}',
+            style: TextStyle(
+              color: isNearExpiry ? Colors.red : Colors.grey,
+              fontSize: 13,
+              fontWeight: isNearExpiry ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -140,6 +177,28 @@ class DriverItem extends StatelessWidget {
                                     const SizedBox(width: 8),
                                     Text(
                                       driver.phone,
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.badge_outlined,
+                                      size: 16,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      (driver.nationalId?.trim().isNotEmpty ??
+                                              false)
+                                          ? driver.nationalId!.trim()
+                                          : 'بدون هوية مسجلة',
                                       style: const TextStyle(
                                         color: Colors.grey,
                                       ),
@@ -316,6 +375,50 @@ class DriverItem extends StatelessWidget {
                           ],
                         ),
                       ),
+                    if ((driver.linkedVehiclePlateNumber ?? '')
+                        .trim()
+                        .isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.local_taxi_outlined,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'السيارة: ${driver.linkedVehiclePlateNumber!.trim()}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if ((driver.linkedTankerNumber ?? '').trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.local_shipping_outlined,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'الصهريج: ${driver.linkedTankerNumber!.trim()}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
 
                     if (driver.licenseExpiryDate != null)
                       Padding(
@@ -353,6 +456,27 @@ class DriverItem extends StatelessWidget {
                           ],
                         ),
                       ),
+
+                    _buildExpiryRow(
+                      icon: Icons.badge_outlined,
+                      label: 'إصدار الإقامة',
+                      value: driver.iqamaIssueDate,
+                    ),
+                    _buildExpiryRow(
+                      icon: Icons.event_busy_outlined,
+                      label: 'انتهاء الإقامة',
+                      value: driver.iqamaExpiryDate,
+                    ),
+                    _buildExpiryRow(
+                      icon: Icons.health_and_safety_outlined,
+                      label: 'انتهاء التأمين',
+                      value: driver.insuranceExpiryDate,
+                    ),
+                    _buildExpiryRow(
+                      icon: Icons.credit_card_outlined,
+                      label: 'انتهاء بطاقة التشغيل',
+                      value: driver.operationCardExpiryDate,
+                    ),
 
                     if (driver.notes != null && driver.notes!.isNotEmpty)
                       Container(

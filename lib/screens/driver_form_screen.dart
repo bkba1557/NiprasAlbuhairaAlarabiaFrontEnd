@@ -1,16 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:order_tracker/models/driver_model.dart';
 import 'package:order_tracker/models/models.dart';
+import 'package:order_tracker/models/vehicle_model.dart';
 import 'package:order_tracker/providers/auth_provider.dart';
+import 'package:order_tracker/providers/driver_provider.dart';
+import 'package:order_tracker/providers/vehicle_provider.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/driver_user_service.dart';
+import 'package:order_tracker/widgets/custom_text_field.dart';
+import 'package:order_tracker/widgets/gradient_button.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import '../providers/driver_provider.dart';
-import '../widgets/custom_text_field.dart';
-import '../widgets/gradient_button.dart';
 
 class DriverFormScreen extends StatefulWidget {
   final Driver? driverToEdit;
@@ -24,13 +26,12 @@ class DriverFormScreen extends StatefulWidget {
 class _DriverFormScreenState extends State<DriverFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _nationalIdController = TextEditingController();
   final TextEditingController _licenseNumberController =
       TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _vehicleNumberController =
-      TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _driverUsernameController =
       TextEditingController();
@@ -42,31 +43,20 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
   bool _didLoadArgs = false;
   bool _isLoadingLinkedUser = false;
 
-  String _vehicleType = 'شاحنة كبيرة';
-  String _vehicleStatus = 'فاضي';
+  String? _selectedVehicleId;
   String _status = 'نشط';
   DateTime? _licenseExpiryDate;
-
-  final List<String> _vehicleTypes = [
-    'سيارة صغيرة',
-    'شاحنة صغيرة',
-    'شاحنة كبيرة',
-    'تانكر',
-    'أخرى',
-  ];
+  DateTime? _iqamaIssueDate;
+  DateTime? _iqamaExpiryDate;
+  DateTime? _insuranceExpiryDate;
+  DateTime? _operationCardExpiryDate;
 
   final List<String> _statuses = [
     'نشط',
     'غير نشط',
     'في إجازة',
-    'مرفود',
+    'مرفوض',
     'معلق',
-  ];
-
-  final List<String> _vehicleStatuses = [
-    'فاضي',
-    'في طلب',
-    'تحت الصيانة',
   ];
 
   @override
@@ -78,6 +68,7 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
     }
     _setSuggestedDriverUsername(force: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_ensureVehiclesLoaded());
       unawaited(_loadLinkedDriverUser());
     });
   }
@@ -99,19 +90,34 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
     }
   }
 
+  Vehicle? get _selectedVehicle {
+    return context.read<VehicleProvider>().findById(_selectedVehicleId);
+  }
+
+  Future<void> _ensureVehiclesLoaded() async {
+    final vehicleProvider = context.read<VehicleProvider>();
+    if (vehicleProvider.vehicles.isEmpty && !vehicleProvider.isLoading) {
+      await vehicleProvider.fetchVehicles();
+    }
+    if (!mounted) return;
+    setState(() {});
+  }
+
   void _initializeFormWithDriver(Driver driver) {
     _nameController.text = driver.name;
+    _nationalIdController.text = driver.nationalId ?? '';
     _licenseNumberController.text = driver.licenseNumber;
     _phoneController.text = driver.phone;
     _emailController.text = driver.email ?? '';
     _addressController.text = driver.address ?? '';
-    _vehicleNumberController.text = driver.vehicleNumber ?? '';
     _notesController.text = driver.notes ?? '';
-
-    _vehicleType = driver.vehicleType;
-    _vehicleStatus = driver.vehicleStatus;
+    _selectedVehicleId = driver.linkedVehicleId;
     _status = driver.status;
     _licenseExpiryDate = driver.licenseExpiryDate;
+    _iqamaIssueDate = driver.iqamaIssueDate;
+    _iqamaExpiryDate = driver.iqamaExpiryDate;
+    _insuranceExpiryDate = driver.insuranceExpiryDate;
+    _operationCardExpiryDate = driver.operationCardExpiryDate;
   }
 
   Future<void> _loadLinkedDriverUser() async {
@@ -158,13 +164,21 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
     }
   }
 
+  String _usernameVehicleNumber() {
+    final vehicle = _selectedVehicle;
+    if (vehicle != null && vehicle.plateNumber.trim().isNotEmpty) {
+      return vehicle.plateNumber.trim();
+    }
+    return _driverToEdit?.linkedVehiclePlateNumber?.trim() ?? '';
+  }
+
   void _setSuggestedDriverUsername({bool force = false}) {
     if (!force && _driverUsernameController.text.trim().isNotEmpty) {
       return;
     }
 
     _driverUsernameController.text = suggestedDriverTruckUsername(
-      vehicleNumber: _vehicleNumberController.text,
+      vehicleNumber: _usernameVehicleNumber(),
       licenseNumber: _licenseNumberController.text,
       phone: _phoneController.text,
     );
@@ -188,26 +202,15 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
     return null;
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _licenseNumberController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
-    _addressController.dispose();
-    _vehicleNumberController.dispose();
-    _notesController.dispose();
-    _driverUsernameController.dispose();
-    _driverPasswordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickLicenseExpiryDate() async {
+  Future<void> _pickDate({
+    required DateTime? currentValue,
+    required ValueChanged<DateTime> onPicked,
+  }) async {
     final picked = await showDatePicker(
       context: context,
       initialDate:
-          _licenseExpiryDate ?? DateTime.now().add(const Duration(days: 365)),
-      firstDate: DateTime.now(),
+          currentValue ?? DateTime.now().add(const Duration(days: 365)),
+      firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
       builder: (context, child) {
         return Theme(
@@ -224,23 +227,31 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
 
     if (picked != null) {
       setState(() {
-        _licenseExpiryDate = picked;
+        onPicked(picked);
       });
     }
+  }
+
+  Future<void> _pickLicenseExpiryDate() async {
+    await _pickDate(
+      currentValue: _licenseExpiryDate,
+      onPicked: (value) => _licenseExpiryDate = value,
+    );
   }
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
     final wasEditing = _driverToEdit != null;
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final driverProvider = Provider.of<DriverProvider>(context, listen: false);
+    final authProvider = context.read<AuthProvider>();
+    final driverProvider = context.read<DriverProvider>();
     final normalizedUsername = normalizeDriverTruckUsername(
       _driverUsernameController.text,
     );
     final password = _driverPasswordController.text.trim();
     final accountEmail = normalizeDriverAccountEmail(_emailController.text);
     final company = authProvider.user?.company.trim() ?? '';
+    final selectedVehicle = _selectedVehicle;
 
     if (company.isEmpty) {
       _showErrorSnack('تعذر تحديد الشركة الحالية لإنشاء حساب السائق');
@@ -258,20 +269,31 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
       return;
     }
 
+    if (_iqamaIssueDate != null &&
+        _iqamaExpiryDate != null &&
+        _iqamaIssueDate!.isAfter(_iqamaExpiryDate!)) {
+      _showErrorSnack('تاريخ إصدار الإقامة يجب أن يكون قبل تاريخ الانتهاء');
+      return;
+    }
+
     final driverData = {
       'name': _nameController.text.trim(),
+      'nationalId': _nationalIdController.text.trim(),
       'licenseNumber': _licenseNumberController.text.trim(),
       'phone': _phoneController.text.trim(),
       'email': accountEmail,
       'address': _addressController.text.trim().isNotEmpty
           ? _addressController.text.trim()
           : null,
-      'vehicleType': _vehicleType,
-      'vehicleStatus': _vehicleStatus,
-      'vehicleNumber': _vehicleNumberController.text.trim().isNotEmpty
-          ? _vehicleNumberController.text.trim()
-          : null,
+      'vehicleType': selectedVehicle?.vehicleType ?? 'غير محدد',
+      'vehicleStatus': selectedVehicle?.status ?? 'فاضي',
+      'vehicleNumber': selectedVehicle?.plateNumber,
+      'linkedVehicleId': _selectedVehicleId,
       'licenseExpiryDate': _licenseExpiryDate?.toIso8601String(),
+      'iqamaIssueDate': _iqamaIssueDate?.toIso8601String(),
+      'iqamaExpiryDate': _iqamaExpiryDate?.toIso8601String(),
+      'insuranceExpiryDate': _insuranceExpiryDate?.toIso8601String(),
+      'operationCardExpiryDate': _operationCardExpiryDate?.toIso8601String(),
       'status': _status,
       'notes': _notesController.text.trim().isNotEmpty
           ? _notesController.text.trim()
@@ -280,10 +302,7 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
 
     bool success;
     if (wasEditing) {
-      success = await driverProvider.updateDriver(
-        _driverToEdit!.id,
-        driverData,
-      );
+      success = await driverProvider.updateDriver(_driverToEdit!.id, driverData);
     } else {
       success = await driverProvider.createDriver(driverData);
     }
@@ -349,64 +368,97 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
     );
   }
 
-  // تحديد إذا كان العرض واسع (ويب/كمبيوتر)
-  bool get _isWideScreen {
-    final mediaQuery = MediaQuery.of(context);
-    return mediaQuery.size.width > 768;
-  }
+  bool get _isWideScreen => MediaQuery.of(context).size.width > 900;
 
-  // تحديد إذا كان العرض كبير جداً (شاشات واسعة)
-  bool get _isExtraWideScreen {
-    final mediaQuery = MediaQuery.of(context);
-    return mediaQuery.size.width > 1200;
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _nationalIdController.dispose();
+    _licenseNumberController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _addressController.dispose();
+    _notesController.dispose();
+    _driverUsernameController.dispose();
+    _driverPasswordController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final driverProvider = Provider.of<DriverProvider>(context);
+    final driverProvider = context.watch<DriverProvider>();
+    final vehicleProvider = context.watch<VehicleProvider>();
     final isEditing = _driverToEdit != null;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
           isEditing ? 'تعديل السائق' : 'سائق جديد',
-          style: TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.white),
         ),
-        centerTitle: !_isWideScreen,
       ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: _isExtraWideScreen
-                  ? 1000
-                  : _isWideScreen
-                  ? 800
-                  : double.infinity,
-            ),
+            constraints: const BoxConstraints(maxWidth: 1100),
             child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: _isWideScreen ? 24 : 16,
-                vertical: 16,
-              ),
+              padding: const EdgeInsets.all(16),
               child: Form(
                 key: _formKey,
                 child: Column(
                   children: [
                     if (_isWideScreen)
-                      _buildWideLayout()
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: [
+                          SizedBox(
+                            width: 520,
+                            child: _buildBasicInfoCard(),
+                          ),
+                          SizedBox(
+                            width: 520,
+                            child: _buildVehicleLinkCard(vehicleProvider),
+                          ),
+                          SizedBox(
+                            width: 520,
+                            child: _buildStatusCard(),
+                          ),
+                          SizedBox(
+                            width: 520,
+                            child: _buildDocumentsCard(),
+                          ),
+                          SizedBox(
+                            width: 520,
+                            child: _buildDriverUserCard(),
+                          ),
+                          SizedBox(
+                            width: 520,
+                            child: _buildNotesCard(),
+                          ),
+                        ],
+                      )
                     else
-                      _buildMobileLayout(),
-
-                    const SizedBox(height: 32),
-
-                    // Submit Button
+                      Column(
+                        children: [
+                          _buildBasicInfoCard(),
+                          const SizedBox(height: 16),
+                          _buildVehicleLinkCard(vehicleProvider),
+                          const SizedBox(height: 16),
+                          _buildStatusCard(),
+                          const SizedBox(height: 16),
+                          _buildDocumentsCard(),
+                          const SizedBox(height: 16),
+                          _buildDriverUserCard(),
+                          const SizedBox(height: 16),
+                          _buildNotesCard(),
+                        ],
+                      ),
+                    const SizedBox(height: 24),
                     SizedBox(
-                      width: _isWideScreen ? 400 : double.infinity,
+                      width: _isWideScreen ? 360 : double.infinity,
                       child: GradientButton(
-                        onPressed: driverProvider.isLoading
-                            ? null
-                            : _submitForm,
+                        onPressed: driverProvider.isLoading ? null : _submitForm,
                         text: driverProvider.isLoading
                             ? 'جاري الحفظ...'
                             : (isEditing ? 'تحديث السائق' : 'إنشاء السائق'),
@@ -414,7 +466,6 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
                         isLoading: driverProvider.isLoading,
                       ),
                     ),
-                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -425,575 +476,281 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
     );
   }
 
-  Widget _buildMobileLayout() {
-    return Column(
+  Widget _buildBasicInfoCard() {
+    return _buildCard(
+      title: 'البيانات الأساسية',
+      icon: Icons.person_outline,
       children: [
-        // Basic Information Card
-        Card(
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'المعلومات الأساسية',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                CustomTextField(
-                  controller: _nameController,
-                  labelText: 'اسم السائق *',
-                  prefixIcon: Icons.person_outline,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'اسم السائق مطلوب';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  controller: _licenseNumberController,
-                  labelText: 'رقم الرخصة *',
-                  prefixIcon: Icons.card_membership,
-                  onChanged: (_) => _setSuggestedDriverUsername(),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'رقم الرخصة مطلوب';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  controller: _phoneController,
-                  labelText: 'رقم الهاتف *',
-                  prefixIcon: Icons.phone,
-                  keyboardType: TextInputType.phone,
-                  onChanged: (_) => _setSuggestedDriverUsername(),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'رقم الهاتف مطلوب';
-                    }
-                    if (!RegExp(r'^[0-9]{10,}$').hasMatch(value)) {
-                      return 'رقم هاتف غير صالح';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
+        CustomTextField(
+          controller: _nameController,
+          labelText: 'اسم السائق *',
+          prefixIcon: Icons.person_outline,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'اسم السائق مطلوب';
+            }
+            return null;
+          },
         ),
-        const SizedBox(height: 16),
-
-        // Vehicle Information Card
-        Card(
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'معلومات المركبة',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _buildDropdownField(
-                  label: 'نوع المركبة',
-                  value: _vehicleType,
-                  items: _vehicleTypes,
-                  onChanged: (value) {
-                    setState(() {
-                      _vehicleType = value!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  controller: _vehicleNumberController,
-                  labelText: 'رقم المركبة',
-                  prefixIcon: Icons.directions_car,
-                  onChanged: (_) => _setSuggestedDriverUsername(),
-                ),
-                const SizedBox(height: 16),
-                _buildDropdownField(
-                  label: 'حالة السيارة',
-                  value: _vehicleStatus,
-                  items: _vehicleStatuses,
-                  onChanged: (value) {
-                    setState(() {
-                      _vehicleStatus = value ?? 'فاضي';
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                _buildDateField(
-                  label: 'تاريخ انتهاء الرخصة',
-                  date: _licenseExpiryDate,
-                  onTap: _pickLicenseExpiryDate,
-                ),
-              ],
-            ),
-          ),
+        const SizedBox(height: 14),
+        CustomTextField(
+          controller: _nationalIdController,
+          labelText: 'رقم الهوية *',
+          prefixIcon: Icons.badge_outlined,
+          keyboardType: TextInputType.number,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'رقم الهوية مطلوب';
+            }
+            return null;
+          },
         ),
-        const SizedBox(height: 16),
-
-        // Status & Contact Card
-        Card(
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'الحالة ومعلومات الاتصال',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _buildDropdownField(
-                  label: 'حالة السائق',
-                  value: _status,
-                  items: _statuses,
-                  onChanged: (value) {
-                    setState(() {
-                      _status = value!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  controller: _addressController,
-                  labelText: 'العنوان',
-                  prefixIcon: Icons.location_on,
-                  maxLines: 2,
-                ),
-              ],
-            ),
-          ),
+        const SizedBox(height: 14),
+        CustomTextField(
+          controller: _licenseNumberController,
+          labelText: 'رقم الرخصة *',
+          prefixIcon: Icons.card_membership_outlined,
+          onChanged: (_) => _setSuggestedDriverUsername(),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'رقم الرخصة مطلوب';
+            }
+            return null;
+          },
         ),
-        const SizedBox(height: 16),
-
-        _buildDriverUserCard(),
-        const SizedBox(height: 16),
-
-        // Notes Card
-        Card(
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ملاحظات',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                CustomTextField(
-                  controller: _notesController,
-                  labelText: 'ملاحظات إضافية',
-                  prefixIcon: Icons.note,
-                  maxLines: 4,
-                ),
-              ],
-            ),
-          ),
+        const SizedBox(height: 14),
+        CustomTextField(
+          controller: _phoneController,
+          labelText: 'رقم الهاتف *',
+          prefixIcon: Icons.phone_outlined,
+          keyboardType: TextInputType.phone,
+          onChanged: (_) => _setSuggestedDriverUsername(),
+          validator: (value) {
+            final phone = value?.trim() ?? '';
+            if (phone.isEmpty) {
+              return 'رقم الهاتف مطلوب';
+            }
+            if (!RegExp(r'^[0-9]{10,}$').hasMatch(phone)) {
+              return 'رقم هاتف غير صالح';
+            }
+            return null;
+          },
         ),
       ],
     );
   }
 
-  Widget _buildWideLayout() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 16.0;
-        final cardWidth = (constraints.maxWidth - spacing) / 2;
+  Widget _buildVehicleLinkCard(VehicleProvider vehicleProvider) {
+    final vehicles = List<Vehicle>.from(vehicleProvider.vehicles)
+      ..sort((a, b) => a.plateNumber.compareTo(b.plateNumber));
+    final selectedVehicle = _selectedVehicle;
 
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            SizedBox(
-              width: cardWidth,
-              child: _buildDriverUserCard(elevation: 4, padding: 20),
+    final hasSelectedValue =
+        _selectedVehicleId != null &&
+        vehicles.any((vehicle) => vehicle.id == _selectedVehicleId);
+
+    return _buildCard(
+      title: 'ربط السيارة',
+      icon: Icons.local_taxi_outlined,
+      children: [
+        DropdownButtonFormField<String?>(
+          value: hasSelectedValue ? _selectedVehicleId : null,
+          decoration: const InputDecoration(
+            labelText: 'السيارة المرتبطة',
+            prefixIcon: Icon(Icons.directions_car_filled_outlined),
+            helperText: 'اختر سيارة مسجلة ليتم ربط السائق بها تلقائيًا',
+          ),
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('بدون ربط حاليًا'),
             ),
-            SizedBox(
-              width: cardWidth,
-              child: Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'المعلومات الأساسية',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 20),
-                      CustomTextField(
-                        controller: _nameController,
-                        labelText: 'اسم السائق *',
-                        prefixIcon: Icons.person_outline,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'اسم السائق مطلوب';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: CustomTextField(
-                              controller: _licenseNumberController,
-                              labelText: 'رقم الرخصة *',
-                              prefixIcon: Icons.card_membership,
-                              onChanged: (_) => _setSuggestedDriverUsername(),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'رقم الرخصة مطلوب';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: CustomTextField(
-                              controller: _phoneController,
-                              labelText: 'رقم الهاتف *',
-                              prefixIcon: Icons.phone,
-                              keyboardType: TextInputType.phone,
-                              onChanged: (_) => _setSuggestedDriverUsername(),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'رقم الهاتف مطلوب';
-                                }
-                                if (!RegExp(r'^[0-9]{10,}$').hasMatch(value)) {
-                                  return 'رقم هاتف غير صالح';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: cardWidth,
-              child: Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'معلومات المركبة',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 20),
-                      _buildDropdownField(
-                        label: 'نوع المركبة',
-                        value: _vehicleType,
-                        items: _vehicleTypes,
-                        onChanged: (value) {
-                          setState(() {
-                            _vehicleType = value!;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      CustomTextField(
-                        controller: _vehicleNumberController,
-                        labelText: 'رقم المركبة',
-                        prefixIcon: Icons.directions_car,
-                        onChanged: (_) => _setSuggestedDriverUsername(),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDropdownField(
-                        label: 'حالة السيارة',
-                        value: _vehicleStatus,
-                        items: _vehicleStatuses,
-                        onChanged: (value) {
-                          setState(() {
-                            _vehicleStatus = value ?? 'فاضي';
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDateField(
-                        label: 'تاريخ انتهاء الرخصة',
-                        date: _licenseExpiryDate,
-                        onTap: _pickLicenseExpiryDate,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: cardWidth,
-              child: Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'الحالة ومعلومات الاتصال',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 20),
-                      _buildDropdownField(
-                        label: 'حالة السائق',
-                        value: _status,
-                        items: _statuses,
-                        onChanged: (value) {
-                          setState(() {
-                            _status = value!;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      CustomTextField(
-                        controller: _addressController,
-                        labelText: 'العنوان',
-                        prefixIcon: Icons.location_on,
-                        maxLines: 3,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: cardWidth,
-              child: Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ملاحظات',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 20),
-                      CustomTextField(
-                        controller: _notesController,
-                        labelText: 'ملاحظات إضافية',
-                        prefixIcon: Icons.note,
-                        maxLines: 6,
-                      ),
-                    ],
-                  ),
+            ...vehicles.map(
+              (vehicle) => DropdownMenuItem<String?>(
+                value: vehicle.id,
+                child: Text(
+                  vehicle.optionLabel,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
           ],
-        );
-      },
+          onChanged: vehicleProvider.isLoading
+              ? null
+              : (value) {
+                  setState(() {
+                    _selectedVehicleId = value;
+                    _setSuggestedDriverUsername(force: true);
+                  });
+                },
+        ),
+        if (vehicleProvider.isLoading) ...[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ],
+        if (vehicleProvider.error != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            vehicleProvider.error!,
+            style: const TextStyle(
+              color: AppColors.errorRed,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        _buildInfoBanner(
+          icon: Icons.info_outline,
+          title: selectedVehicle == null
+              ? 'لا توجد سيارة مرتبطة'
+              : 'السيارة الحالية: ${selectedVehicle.plateNumber}',
+          subtitle: selectedVehicle == null
+              ? 'يمكنك حفظ السائق الآن وربطه بالسيارة لاحقًا من نفس الشاشة أو من شاشة السيارات.'
+              : [
+                  selectedVehicle.vehicleType,
+                  selectedVehicle.status,
+                  if (selectedVehicle.model.trim().isNotEmpty)
+                    selectedVehicle.model.trim(),
+                ].join(' • '),
+        ),
+        if (selectedVehicle != null) ...[
+          const SizedBox(height: 12),
+          _buildSummaryLine(
+            icon: Icons.person_pin_outlined,
+            label: 'السائق المرتبط الآن',
+            value: selectedVehicle.linkedDriver?.name.trim().isNotEmpty == true
+                ? selectedVehicle.linkedDriver!.name.trim()
+                : 'غير مرتبط',
+          ),
+          const SizedBox(height: 8),
+          _buildSummaryLine(
+            icon: Icons.local_shipping_outlined,
+            label: 'الصهريج المرتبط',
+            value: selectedVehicle.linkedTanker?.number.trim().isNotEmpty ==
+                    true
+                ? selectedVehicle.linkedTanker!.number.trim()
+                : 'غير مرتبط',
+          ),
+        ],
+      ],
     );
   }
 
-  Widget _buildDriverUserCard({double elevation = 2, double padding = 16}) {
-    final hasLinkedUser = _linkedDriverUser != null;
-    final accountStatusColor = hasLinkedUser
-        ? AppColors.successGreen
-        : AppColors.pendingYellow;
+  Widget _buildStatusCard() {
+    final selectedVehicle = _selectedVehicle;
 
-    return Card(
-      elevation: elevation,
-      child: Padding(
-        padding: EdgeInsets.all(padding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'حساب السائق driver_truck',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+    return _buildCard(
+      title: 'الحالة والتواصل',
+      icon: Icons.assignment_ind_outlined,
+      children: [
+        DropdownButtonFormField<String>(
+          value: _statuses.contains(_status) ? _status : _statuses.first,
+          decoration: const InputDecoration(
+            labelText: 'حالة السائق',
+            prefixIcon: Icon(Icons.flag_outlined),
+          ),
+          items: _statuses
+              .map(
+                (status) => DropdownMenuItem<String>(
+                  value: status,
+                  child: Text(status),
                 ),
-                if (_isLoadingLinkedUser)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: accountStatusColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: accountStatusColor.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Text(
-                      hasLinkedUser ? 'مرتبط' : 'ينتظر الإنشاء',
-                      style: TextStyle(
-                        color: accountStatusColor,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-              ],
+              )
+              .toList(),
+          onChanged: (value) {
+            setState(() {
+              _status = value ?? _statuses.first;
+            });
+          },
+        ),
+        const SizedBox(height: 14),
+        InkWell(
+          onTap: _pickLicenseExpiryDate,
+          borderRadius: BorderRadius.circular(14),
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'انتهاء رخصة القيادة',
+              prefixIcon: Icon(Icons.calendar_month_outlined),
             ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.backgroundGray,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    hasLinkedUser
-                        ? 'اسم المستخدم الحالي: ${_linkedDriverUser!.username}'
-                        : 'سيتم إنشاء حساب سائق مرتبط بهذا السائق',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'هذا البريد سيستقبل رمز التحقق عند دخول السائق، والحساب يشاهد فقط الطلبات المعيّنة له.',
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            CustomTextField(
-              controller: _driverUsernameController,
-              labelText: 'اسم المستخدم *',
-              prefixIcon: Icons.alternate_email,
-              suffixIcon: IconButton(
-                tooltip: 'اقتراح جديد',
-                onPressed: () => setState(
-                  () => _setSuggestedDriverUsername(force: true),
-                ),
-                icon: const Icon(Icons.auto_fix_high_outlined),
-              ),
-              validator: (value) {
-                final rawValue = (value ?? '').trim();
-                if (rawValue.isEmpty) {
-                  return 'اسم المستخدم مطلوب';
-                }
-                final normalized = normalizeDriverTruckUsername(value ?? '');
-                if (!normalized.startsWith('driver_truck')) {
-                  return 'اسم المستخدم يجب أن يبدأ بـ driver_truck';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            CustomTextField(
-              controller: _emailController,
-              labelText: 'بريد حساب السائق *',
-              prefixIcon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-              validator: _validateDriverAccountEmail,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'سيصل رمز التحقق لهذا البريد عند تسجيل دخول السائق.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.mediumGray,
+            child: Text(
+              _licenseExpiryDate == null
+                  ? 'اختر التاريخ'
+                  : DateFormat('yyyy/MM/dd').format(_licenseExpiryDate!),
+              style: TextStyle(
+                color: _licenseExpiryDate == null
+                    ? AppColors.mediumGray
+                    : AppColors.darkGray,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 16),
-            CustomTextField(
-              controller: _driverPasswordController,
-              labelText: hasLinkedUser
-                  ? 'كلمة المرور الجديدة'
-                  : 'كلمة مرور الحساب *',
-              prefixIcon: Icons.lock_outline,
-              obscureText: true,
-              validator: (value) {
-                final trimmed = value?.trim() ?? '';
-                if (!hasLinkedUser && trimmed.isEmpty) {
-                  return 'كلمة المرور مطلوبة';
-                }
-                return null;
-              },
-            ),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(height: 14),
+        CustomTextField(
+          controller: _addressController,
+          labelText: 'العنوان',
+          prefixIcon: Icons.location_on_outlined,
+          maxLines: 2,
+        ),
+        if (selectedVehicle != null) ...[
+          const SizedBox(height: 14),
+          _buildInfoBanner(
+            icon: Icons.link_rounded,
+            title: 'البيانات التشغيلية تُسحب من السيارة المرتبطة',
+            subtitle:
+                'نوع المركبة: ${selectedVehicle.vehicleType} • حالة السيارة: ${selectedVehicle.status}',
+          ),
+        ],
+      ],
     );
   }
 
-  Widget _buildDropdownField({
-    required String label,
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildDocumentsCard() {
+    return _buildCard(
+      title: 'وثائق السائق',
+      icon: Icons.badge_outlined,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: AppColors.mediumGray,
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
+        _buildDateField(
+          label: 'تاريخ إصدار الإقامة',
+          value: _iqamaIssueDate,
+          icon: Icons.event_available_outlined,
+          onTap: () => _pickDate(
+            currentValue: _iqamaIssueDate,
+            onPicked: (value) => _iqamaIssueDate = value,
           ),
         ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: AppColors.backgroundGray,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.lightGray),
+        const SizedBox(height: 14),
+        _buildDateField(
+          label: 'تاريخ انتهاء الإقامة',
+          value: _iqamaExpiryDate,
+          icon: Icons.event_busy_outlined,
+          onTap: () => _pickDate(
+            currentValue: _iqamaExpiryDate,
+            onPicked: (value) => _iqamaExpiryDate = value,
           ),
-          child: DropdownButton<String>(
-            value: value,
-            isExpanded: true,
-            underline: const SizedBox(),
-            items: items.map((String value) {
-              return DropdownMenuItem<String>(value: value, child: Text(value));
-            }).toList(),
-            onChanged: onChanged,
+          highlightWhenNearExpiry: true,
+        ),
+        const SizedBox(height: 14),
+        _buildDateField(
+          label: 'تاريخ انتهاء التأمين',
+          value: _insuranceExpiryDate,
+          icon: Icons.health_and_safety_outlined,
+          onTap: () => _pickDate(
+            currentValue: _insuranceExpiryDate,
+            onPicked: (value) => _insuranceExpiryDate = value,
           ),
+          highlightWhenNearExpiry: true,
+        ),
+        const SizedBox(height: 14),
+        _buildDateField(
+          label: 'تاريخ انتهاء بطاقة التشغيل',
+          value: _operationCardExpiryDate,
+          icon: Icons.credit_card_outlined,
+          onTap: () => _pickDate(
+            currentValue: _operationCardExpiryDate,
+            onPicked: (value) => _operationCardExpiryDate = value,
+          ),
+          highlightWhenNearExpiry: true,
         ),
       ],
     );
@@ -1001,45 +758,248 @@ class _DriverFormScreenState extends State<DriverFormScreen> {
 
   Widget _buildDateField({
     required String label,
-    required DateTime? date,
+    required DateTime? value,
+    required IconData icon,
     required VoidCallback onTap,
+    bool highlightWhenNearExpiry = false,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
+    final isNearExpiry =
+        highlightWhenNearExpiry &&
+        value != null &&
+        !value.isBefore(DateTime.now()) &&
+        value.isBefore(DateTime.now().add(const Duration(days: 30)));
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+        ),
+        child: Text(
+          value == null ? 'اختر التاريخ' : DateFormat('yyyy/MM/dd').format(value),
           style: TextStyle(
-            color: AppColors.mediumGray,
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
+            color: value == null
+                ? AppColors.mediumGray
+                : (isNearExpiry ? AppColors.errorRed : AppColors.darkGray),
+            fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
-        InkWell(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.backgroundGray,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.lightGray),
+      ),
+    );
+  }
+
+  Widget _buildNotesCard() {
+    return _buildCard(
+      title: 'ملاحظات',
+      icon: Icons.note_alt_outlined,
+      children: [
+        CustomTextField(
+          controller: _notesController,
+          labelText: 'ملاحظات إضافية',
+          prefixIcon: Icons.notes_outlined,
+          maxLines: 5,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDriverUserCard() {
+    final hasLinkedUser = _linkedDriverUser != null;
+    final accountStatusColor = hasLinkedUser
+        ? AppColors.successGreen
+        : AppColors.pendingYellow;
+
+    return _buildCard(
+      title: 'حساب السائق driver_truck',
+      icon: Icons.verified_user_outlined,
+      trailing: _isLoadingLinkedUser
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: accountStatusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: accountStatusColor.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Text(
+                hasLinkedUser ? 'مرتبط' : 'ينتظر الإنشاء',
+                style: TextStyle(
+                  color: accountStatusColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _buildInfoBanner(
+          icon: hasLinkedUser
+              ? Icons.verified_user_outlined
+              : Icons.person_off_outlined,
+          title: hasLinkedUser
+              ? 'اسم المستخدم الحالي: ${_linkedDriverUser!.username}'
+              : 'سيتم إنشاء حساب سائق مرتبط بهذا السائق',
+          subtitle:
+              'هذا البريد سيستقبل رمز التحقق عند دخول السائق، والحساب يشاهد فقط الطلبات المعيّنة له.',
+        ),
+        const SizedBox(height: 14),
+        CustomTextField(
+          controller: _driverUsernameController,
+          labelText: 'اسم المستخدم *',
+          prefixIcon: Icons.alternate_email,
+          suffixIcon: IconButton(
+            tooltip: 'اقتراح جديد',
+            onPressed: () => setState(
+              () => _setSuggestedDriverUsername(force: true),
+            ),
+            icon: const Icon(Icons.auto_fix_high_outlined),
+          ),
+          validator: (value) {
+            final rawValue = (value ?? '').trim();
+            if (rawValue.isEmpty) {
+              return 'اسم المستخدم مطلوب';
+            }
+            final normalized = normalizeDriverTruckUsername(value ?? '');
+            if (!normalized.startsWith('driver_truck')) {
+              return 'اسم المستخدم يجب أن يبدأ بـ driver_truck';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 14),
+        CustomTextField(
+          controller: _emailController,
+          labelText: 'بريد حساب السائق *',
+          prefixIcon: Icons.email_outlined,
+          keyboardType: TextInputType.emailAddress,
+          validator: _validateDriverAccountEmail,
+        ),
+        const SizedBox(height: 14),
+        CustomTextField(
+          controller: _driverPasswordController,
+          labelText: hasLinkedUser
+              ? 'كلمة المرور الجديدة'
+              : 'كلمة مرور الحساب *',
+          prefixIcon: Icons.lock_outline,
+          obscureText: true,
+          validator: (value) {
+            final trimmed = value?.trim() ?? '';
+            if (!hasLinkedUser && trimmed.isEmpty) {
+              return 'كلمة المرور مطلوبة';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+    Widget? trailing,
+  }) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  date != null
-                      ? DateFormat('yyyy/MM/dd').format(date)
-                      : 'اختر التاريخ',
-                  style: TextStyle(
-                    color: date != null
-                        ? AppColors.darkGray
-                        : AppColors.mediumGray,
+                Icon(icon, color: AppColors.primaryBlue),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-                const Icon(Icons.calendar_today, size: 20),
+                if (trailing != null) trailing,
               ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoBanner({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundGray,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: AppColors.primaryBlue),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryLine({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF64748B)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '$label: $value',
+            style: const TextStyle(
+              color: Color(0xFF334155),
+              fontWeight: FontWeight.w700,
+              height: 1.4,
             ),
           ),
         ),

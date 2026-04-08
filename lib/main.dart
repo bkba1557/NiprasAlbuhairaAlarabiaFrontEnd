@@ -35,6 +35,7 @@ import 'package:order_tracker/providers/system_pause_provider.dart';
 import 'package:order_tracker/providers/tax_provider.dart';
 import 'package:order_tracker/providers/theme_provider.dart';
 import 'package:order_tracker/providers/task_provider.dart';
+import 'package:order_tracker/providers/vehicle_provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:order_tracker/services/local_notification_service.dart';
 import 'package:order_tracker/widgets/app_shell.dart';
@@ -98,6 +99,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => DriverProvider()),
         ChangeNotifierProvider(create: (_) => DriverTrackingProvider()),
         ChangeNotifierProvider(create: (_) => TankerProvider()),
+        ChangeNotifierProvider(create: (_) => VehicleProvider()),
         ChangeNotifierProvider(create: (_) => SupplierProvider()),
         ChangeNotifierProvider(create: (_) => MaintenanceProvider()),
         ChangeNotifierProvider(create: (_) => SystemPauseProvider()..initialize()),

@@ -119,6 +119,10 @@ class DriverProvider with ChangeNotifier {
     } else {
       _filteredDrivers = _drivers.where((driver) {
         return driver.name.toLowerCase().contains(query.toLowerCase()) ||
+            (driver.nationalId?.toLowerCase().contains(
+                  query.toLowerCase(),
+                ) ??
+                false) ||
             driver.licenseNumber.toLowerCase().contains(query.toLowerCase()) ||
             driver.phone.toLowerCase().contains(query.toLowerCase()) ||
             (driver.vehicleNumber?.toLowerCase().contains(

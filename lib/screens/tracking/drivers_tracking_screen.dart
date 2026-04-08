@@ -70,7 +70,8 @@ class _DriversTrackingScreenState extends State<DriversTrackingScreen> {
       return driver.name.toLowerCase().contains(q) ||
           driver.phone.toLowerCase().contains(q) ||
           driver.licenseNumber.toLowerCase().contains(q) ||
-          (driver.vehicleNumber ?? '').toLowerCase().contains(q);
+          (driver.vehicleNumber ?? '').toLowerCase().contains(q) ||
+          (driver.linkedTankerNumber ?? '').toLowerCase().contains(q);
     }).toList();
   }
 
@@ -400,6 +401,13 @@ class _DriversTrackingScreenState extends State<DriversTrackingScreen> {
             summary.driver.vehicleNumber?.trim().isNotEmpty == true
                 ? 'مركبة ${summary.driver.vehicleNumber}'
                 : 'لا يوجد رقم مركبة',
+          ),
+          const SizedBox(height: 8),
+          _buildInfoRow(
+            Icons.local_shipping_outlined,
+            summary.driver.linkedTankerNumber?.trim().isNotEmpty == true
+                ? 'صهريج ${summary.driver.linkedTankerNumber}'
+                : 'لا يوجد صهريج مرتبط',
           ),
           const SizedBox(height: 8),
           _buildInfoRow(Icons.badge_outlined, summary.driver.licenseNumber),

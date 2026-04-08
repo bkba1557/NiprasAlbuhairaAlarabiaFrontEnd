@@ -10,6 +10,20 @@ import 'package:order_tracker/services/firebase_storage_service.dart';
 import 'package:order_tracker/utils/api_service.dart';
 import 'package:order_tracker/utils/constants.dart';
 
+class OrderPageSnapshot {
+  const OrderPageSnapshot({
+    required this.orders,
+    required this.currentPage,
+    required this.totalPages,
+    required this.totalOrders,
+  });
+
+  final List<Order> orders;
+  final int currentPage;
+  final int totalPages;
+  final int totalOrders;
+}
+
 class OrderProvider with ChangeNotifier {
   List<Order> _orders = [];
   List<Order> _filteredOrders = [];
@@ -221,6 +235,14 @@ class OrderProvider with ChangeNotifier {
       _upsertOrderLocally(order);
     }
     return orders;
+  }
+
+  Order? _extractSingleOrderFromPayload(dynamic payload) {
+    final orders = _parseOrdersFromPayload(payload);
+    if (orders.isEmpty) return null;
+    final order = orders.first;
+    _upsertOrderLocally(order);
+    return order;
   }
 
   List<Order> get orders => _filters.isNotEmpty ? _filteredOrders : _orders;
@@ -499,6 +521,44 @@ class OrderProvider with ChangeNotifier {
     } catch (e) {
       _error = e.toString();
       return const <Order>[];
+    }
+  }
+
+  Future<OrderPageSnapshot> fetchOrdersPageSnapshot({
+    Map<String, dynamic>? filters,
+    int page = 1,
+  }) async {
+    try {
+      final requestFilters = <String, dynamic>{...?filters};
+      if (requestFilters['forMerge'] == true) {
+        requestFilters['mergeStatus'] = 'منفصل';
+      }
+
+      final response = await http.get(
+        _ordersUri(page: page, filters: requestFilters),
+        headers: ApiService.headers,
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('فشل في جلب البيانات');
+      }
+
+      final data = ApiService.decodeJson(response);
+      final orders = _parseOrdersFromPayload(data);
+      for (final order in orders) {
+        _ordersCache[order.id] = order;
+      }
+
+      final pagination = _extractPagination(data);
+      return OrderPageSnapshot(
+        orders: orders,
+        currentPage: _intOrFallback(pagination?['page'], page),
+        totalPages: _intOrFallback(pagination?['pages'], 1),
+        totalOrders: _intOrFallback(pagination?['total'], orders.length),
+      );
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
     }
   }
 
@@ -1306,37 +1366,7 @@ class OrderProvider with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = ApiService.decodeJson(response);
-
-        Order updatedOrder;
-        if (data['order'] != null) {
-          updatedOrder = Order.fromJson(data['order']);
-        } else if (data['data'] != null) {
-          updatedOrder = Order.fromJson(data['data']);
-        } else {
-          updatedOrder = Order.fromJson(data);
-        }
-
-        // Update in list
-        final index = _orders.indexWhere((o) => o.id == id);
-        if (index != -1) {
-          _orders[index] = updatedOrder;
-        }
-
-        // Update selected order if it's the same
-        if (_selectedOrder?.id == id) {
-          _selectedOrder = updatedOrder;
-        }
-
-        // Update cache
-        _ordersCache[id] = updatedOrder;
-
-        // Update filteredOrders if exists
-        if (_filteredOrders.isNotEmpty) {
-          final filteredIndex = _filteredOrders.indexWhere((o) => o.id == id);
-          if (filteredIndex != -1) {
-            _filteredOrders[filteredIndex] = updatedOrder;
-          }
-        }
+        _extractSingleOrderFromPayload(data);
 
         _isLoading = false;
         notifyListeners();
@@ -1357,6 +1387,47 @@ class OrderProvider with ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> approveOrderCancellation(
+    String id, {
+    String? approvalNotes,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.post(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderCancellationApprove(id)}',
+        ),
+        headers: ApiService.headers,
+        body: json.encode({
+          if (approvalNotes != null && approvalNotes.trim().isNotEmpty)
+            'approvalNotes': approvalNotes.trim(),
+        }),
+      );
+
+      final data = ApiService.decodeJson(response);
+      if (response.statusCode == 200) {
+        _extractSingleOrderFromPayload(data);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'فشل اعتماد إلغاء الطلب';
+    } catch (e) {
+      _error = 'حدث خطأ أثناء اعتماد إلغاء الطلب: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 
   Future<bool> submitDriverLoadingData(

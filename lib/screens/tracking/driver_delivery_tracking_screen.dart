@@ -15,6 +15,7 @@ import 'package:order_tracker/services/firebase_storage_service.dart';
 import 'package:order_tracker/utils/api_service.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/driver_background_location_permission.dart';
+import 'package:order_tracker/utils/driver_trip_lock.dart';
 import 'package:order_tracker/utils/tracking_directions_service.dart';
 import 'package:order_tracker/widgets/maps/advanced_web_map.dart';
 import 'package:provider/provider.dart';
@@ -37,7 +38,8 @@ class DriverDeliveryTrackingScreen extends StatefulWidget {
 }
 
 class _DriverDeliveryTrackingScreenState
-    extends State<DriverDeliveryTrackingScreen> {
+    extends State<DriverDeliveryTrackingScreen>
+    with WidgetsBindingObserver {
   static const String _defaultLoadingStationLabelAr = 'أرامكو بريدة';
   static const String _defaultLoadingStationLabelEn = 'Aramco Buraidah';
   static const String _defaultLoadingStationQueryAr =
@@ -55,6 +57,7 @@ class _DriverDeliveryTrackingScreenState
 
   Order? _order;
   String? _driverId;
+  String? _userId;
   LatLng? _currentLocation;
   StreamSubscription<Position>? _positionSubscription;
   Timer? _orderRefreshTimer;
@@ -77,17 +80,33 @@ class _DriverDeliveryTrackingScreenState
   bool _isCustomerLocationLoading = false;
   String? _customerLocationError;
 
+  bool get _canLeaveScreen => _order == null || _isFinalStatus;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _orderRefreshTimer?.cancel();
     _positionSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted || _order == null || _isFinalStatus) return;
+
+    if (state == AppLifecycleState.resumed) {
+      if (!_isSharing) {
+        unawaited(_startSharing());
+      }
+      unawaited(_refreshRoute(force: true));
+    }
   }
 
   String get _normalizedStatus => _order?.status.trim() ?? '';
@@ -391,10 +410,51 @@ class _DriverDeliveryTrackingScreenState
   }
 
   bool get _canSubmitLoadingData {
-    if (_hasLoadingData || _isFinalStatus || _isWaitingMovementDispatch) {
+    const blockedStatuses = <String>{
+      'في الطريق',
+      'تم التسليم',
+      'تم التنفيذ',
+      'مكتمل',
+      'ملغى',
+    };
+    if (_hasLoadingData || _isFinalStatus) {
       return false;
     }
-    return _isHeadingToLoadingStation || _normalizedStatus == 'تم التحميل';
+    return _normalizedStatus.isNotEmpty &&
+        !blockedStatuses.contains(_normalizedStatus);
+  }
+
+  String _photoExtension(String value) {
+    final normalized = value.replaceAll('\\', '/').trim();
+    final slashIndex = normalized.lastIndexOf('/');
+    final dotIndex = normalized.lastIndexOf('.');
+    if (dotIndex <= slashIndex) return '.jpg';
+    final extension = normalized.substring(dotIndex).trim();
+    return extension.isEmpty ? '.jpg' : extension;
+  }
+
+  Future<XFile?> _capturePersistentPhoto({required String prefix}) async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+    );
+    if (picked == null || kIsWeb) return picked;
+
+    try {
+      final bytes = await picked.readAsBytes();
+      final extension = _photoExtension(
+        picked.name.isNotEmpty ? picked.name : picked.path,
+      );
+      return XFile.fromData(
+        bytes,
+        name:
+            '${prefix}_${DateTime.now().millisecondsSinceEpoch}$extension',
+        mimeType: picked.mimeType,
+      );
+    } catch (error) {
+      debugPrint('Failed to persist captured photo bytes: $error');
+      return null;
+    }
   }
 
   String get _loadingStationName {
@@ -507,6 +567,7 @@ class _DriverDeliveryTrackingScreenState
 
   Future<void> _initialize() async {
     final auth = context.read<AuthProvider>();
+    _userId = auth.user?.id.trim();
     final driverId = auth.user?.driverId;
     if (driverId == null || driverId.trim().isEmpty) {
       setState(() {
@@ -614,8 +675,41 @@ class _DriverDeliveryTrackingScreenState
     }
 
     if (_isFinalStatus) {
+      unawaited(_clearTripLock());
       unawaited(_stopSharing());
+    } else {
+      unawaited(_persistTripLock(order.id));
     }
+  }
+
+  Future<void> _persistTripLock(String orderId) async {
+    final userId = _userId?.trim();
+    if (userId == null || userId.isEmpty) return;
+    await DriverTripLock.save(
+      userId: userId,
+      orderId: orderId,
+      showMap: widget.showMap,
+    );
+  }
+
+  Future<void> _clearTripLock() async {
+    final userId = _userId?.trim();
+    if (userId == null || userId.isEmpty) return;
+    await DriverTripLock.clear(userId);
+  }
+
+  void _showLockedExitMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isArabic
+              ? 'لا يمكن الخروج من تنفيذ الطلب قبل اكتماله. التتبع يستمر في الخلفية.'
+              : 'You cannot leave the active trip before it is completed. Tracking continues in the background.',
+        ),
+        backgroundColor: AppColors.errorRed,
+      ),
+    );
   }
 
   void _syncCustomerCoordinates(Order order) {
@@ -1050,9 +1144,8 @@ class _DriverDeliveryTrackingScreenState
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             Future<void> pickPhoto(String key) async {
-              final photo = await _imagePicker.pickImage(
-                source: ImageSource.camera,
-                imageQuality: 85,
+              final photo = await _capturePersistentPhoto(
+                prefix: 'delivery_$key',
               );
               if (photo == null) return;
               setDialogState(() {
@@ -1383,10 +1476,9 @@ class _DriverDeliveryTrackingScreenState
                                   onPressed: isSubmitting
                                       ? null
                                       : () async {
-                                          final picked = await _imagePicker
-                                              .pickImage(
-                                                source: ImageSource.camera,
-                                                imageQuality: 85,
+                                          final picked =
+                                              await _capturePersistentPhoto(
+                                                prefix: 'loading_aramco_card',
                                               );
                                           if (picked == null) return;
                                           setDialogState(() {
@@ -2028,48 +2120,57 @@ class _DriverDeliveryTrackingScreenState
         ? const <String>[]
         : _allowedNextStatuses(order);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_text('screenTitle')),
-        actions: [
-          IconButton(
-            tooltip: _text('refresh'),
-            onPressed: _isPreparing ? null : _refreshAll,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: _isPreparing
-          ? const Center(child: CircularProgressIndicator())
-          : order == null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _error ?? _text('noOrderData'),
-                  textAlign: TextAlign.center,
+    return PopScope(
+      canPop: _canLeaveScreen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_canLeaveScreen) {
+          _showLockedExitMessage();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: _canLeaveScreen,
+          title: Text(_text('screenTitle')),
+          actions: [
+            IconButton(
+              tooltip: _text('refresh'),
+              onPressed: _isPreparing ? null : _refreshAll,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        body: _isPreparing
+            ? const Center(child: CircularProgressIndicator())
+            : order == null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    _error ?? _text('noOrderData'),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            : RefreshIndicator(
+                onRefresh: _refreshAll,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (widget.showMap) ...[
+                      _buildMap(),
+                      const SizedBox(height: 16),
+                    ],
+                    _buildTrackingSummaryCard(order),
+                    const SizedBox(height: 12),
+                    _buildOrderDetailsCard(order),
+                    const SizedBox(height: 12),
+                    _buildLoadingCard(order),
+                    const SizedBox(height: 12),
+                    _buildDriverActionsCard(nextStatuses),
+                  ],
                 ),
               ),
-            )
-          : RefreshIndicator(
-              onRefresh: _refreshAll,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (widget.showMap) ...[
-                    _buildMap(),
-                    const SizedBox(height: 16),
-                  ],
-                  _buildTrackingSummaryCard(order),
-                  const SizedBox(height: 12),
-                  _buildOrderDetailsCard(order),
-                  const SizedBox(height: 12),
-                  _buildLoadingCard(order),
-                  const SizedBox(height: 12),
-                  _buildDriverActionsCard(nextStatuses),
-                ],
-              ),
-            ),
+      ),
     );
   }
 }
@@ -2108,3 +2209,5 @@ class _DeliveryInfoRow extends StatelessWidget {
     );
   }
 }
+
+

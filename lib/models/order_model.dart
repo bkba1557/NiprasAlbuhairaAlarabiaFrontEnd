@@ -134,6 +134,12 @@ class Order {
   final DateTime? completedAt;
   final DateTime? cancelledAt;
   final String? cancellationReason;
+  final String? cancellationApprovalStatus;
+  final DateTime? cancellationApprovalRequestedAt;
+  final String? cancellationApprovalRequestedByName;
+  final DateTime? cancellationApprovalApprovedAt;
+  final String? cancellationApprovalApprovedByName;
+  final String? cancellationApprovalNotes;
 
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -247,6 +253,12 @@ class Order {
     this.completedAt,
     this.cancelledAt,
     this.cancellationReason,
+    this.cancellationApprovalStatus,
+    this.cancellationApprovalRequestedAt,
+    this.cancellationApprovalRequestedByName,
+    this.cancellationApprovalApprovedAt,
+    this.cancellationApprovalApprovedByName,
+    this.cancellationApprovalNotes,
 
     required this.createdAt,
     required this.updatedAt,
@@ -463,6 +475,8 @@ class Order {
       }
     }
 
+    final cancellationApproval = _asOrderMap(json['cancellationApproval']);
+
     return Order(
       id: json['_id']?.toString() ?? '',
       orderDate:
@@ -659,6 +673,19 @@ class Order {
       completedAt: DateTime.tryParse(json['completedAt']?.toString() ?? ''),
       cancelledAt: DateTime.tryParse(json['cancelledAt']?.toString() ?? ''),
       cancellationReason: json['cancellationReason']?.toString(),
+      cancellationApprovalStatus: cancellationApproval?['status']?.toString(),
+      cancellationApprovalRequestedAt: DateTime.tryParse(
+        cancellationApproval?['requestedAt']?.toString() ?? '',
+      ),
+      cancellationApprovalRequestedByName:
+          cancellationApproval?['requestedByName']?.toString(),
+      cancellationApprovalApprovedAt: DateTime.tryParse(
+        cancellationApproval?['approvedAt']?.toString() ?? '',
+      ),
+      cancellationApprovalApprovedByName:
+          cancellationApproval?['approvedByName']?.toString(),
+      cancellationApprovalNotes:
+          cancellationApproval?['approvalNotes']?.toString(),
 
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
@@ -788,6 +815,20 @@ class Order {
       'completedAt': completedAt?.toIso8601String(),
       'cancelledAt': cancelledAt?.toIso8601String(),
       'cancellationReason': cancellationReason,
+      if (cancellationApprovalStatus != null ||
+          cancellationApprovalRequestedAt != null ||
+          cancellationApprovalRequestedByName != null ||
+          cancellationApprovalApprovedAt != null ||
+          cancellationApprovalApprovedByName != null ||
+          cancellationApprovalNotes != null)
+        'cancellationApproval': {
+          'status': cancellationApprovalStatus,
+          'requestedAt': cancellationApprovalRequestedAt?.toIso8601String(),
+          'requestedByName': cancellationApprovalRequestedByName,
+          'approvedAt': cancellationApprovalApprovedAt?.toIso8601String(),
+          'approvedByName': cancellationApprovalApprovedByName,
+          'approvalNotes': cancellationApprovalNotes,
+        },
 
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -895,6 +936,11 @@ class Order {
     final finalStatuses = ['تم التسليم', 'تم التنفيذ', 'مكتمل', 'ملغى'];
     return finalStatuses.contains(status);
   }
+
+  bool get isCancellationPendingOwnerApproval =>
+      cancellationApprovalStatus == 'pending_owner_approval';
+
+  bool get isCancellationApproved => cancellationApprovalStatus == 'approved';
 
   /// الحصول على لون الحالة
   Color get statusColor {
@@ -1261,6 +1307,12 @@ class Order {
     DateTime? completedAt,
     DateTime? cancelledAt,
     String? cancellationReason,
+    String? cancellationApprovalStatus,
+    DateTime? cancellationApprovalRequestedAt,
+    String? cancellationApprovalRequestedByName,
+    DateTime? cancellationApprovalApprovedAt,
+    String? cancellationApprovalApprovedByName,
+    String? cancellationApprovalNotes,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -1368,6 +1420,22 @@ class Order {
       completedAt: completedAt ?? this.completedAt,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       cancellationReason: cancellationReason ?? this.cancellationReason,
+      cancellationApprovalStatus:
+          cancellationApprovalStatus ?? this.cancellationApprovalStatus,
+      cancellationApprovalRequestedAt:
+          cancellationApprovalRequestedAt ??
+          this.cancellationApprovalRequestedAt,
+      cancellationApprovalRequestedByName:
+          cancellationApprovalRequestedByName ??
+          this.cancellationApprovalRequestedByName,
+      cancellationApprovalApprovedAt:
+          cancellationApprovalApprovedAt ??
+          this.cancellationApprovalApprovedAt,
+      cancellationApprovalApprovedByName:
+          cancellationApprovalApprovedByName ??
+          this.cancellationApprovalApprovedByName,
+      cancellationApprovalNotes:
+          cancellationApprovalNotes ?? this.cancellationApprovalNotes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

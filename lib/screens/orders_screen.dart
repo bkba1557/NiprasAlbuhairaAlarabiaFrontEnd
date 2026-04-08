@@ -32,7 +32,13 @@ class _OrdersScreenState extends State<OrdersScreen>
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   Map<String, dynamic> _extraFilters = {};
   Map<String, int> _summaryCounts = const {};
+  List<Order> _orders = const [];
+  bool _isLoading = false;
   bool _isStatsLoading = false;
+  String? _error;
+  int _currentPage = 1;
+  int _totalPages = 1;
+  int _totalOrders = 0;
 
   @override
   void initState() {
@@ -99,15 +105,20 @@ class _OrdersScreenState extends State<OrdersScreen>
     final filters = <String, dynamic>{..._extraFilters, ..._monthFilters()};
     filters.remove('page');
     filters.remove('limit');
+    filters.remove('dateField');
     return filters;
   }
 
   Map<String, dynamic> _statsFilters() {
-    return <String, dynamic>{..._baseFilters(), 'dateField': 'arrivalDate'};
+    return <String, dynamic>{..._baseFilters(), 'dateField': 'orderDate'};
   }
 
   Map<String, dynamic> _tableFilters() {
-    final filters = <String, dynamic>{..._baseFilters(), 'limit': _pageSize};
+    final filters = <String, dynamic>{
+      ..._baseFilters(),
+      'dateField': 'orderDate',
+      'limit': _pageSize,
+    };
 
     final orderSource = _currentOrderSourceFilter();
     if (orderSource != null) {
@@ -120,19 +131,43 @@ class _OrdersScreenState extends State<OrdersScreen>
   Future<void> _refreshOrders({
     bool resetPage = false,
     bool refreshStats = false,
+    int? pageOverride,
   }) async {
     final provider = context.read<OrderProvider>();
-    final page = resetPage ? 1 : provider.currentPage;
+    final page = resetPage ? 1 : (pageOverride ?? _currentPage);
 
-    final futures = <Future<void>>[
-      provider.fetchOrders(page: page, filters: _tableFilters()),
-    ];
-
-    if (refreshStats) {
-      futures.add(_loadStats());
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
     }
 
-    await Future.wait(futures);
+    try {
+      final pageFuture = provider.fetchOrdersPageSnapshot(
+        page: page,
+        filters: _tableFilters(),
+      );
+      final statsFuture = refreshStats ? _loadStats() : Future<void>.value();
+
+      final pageSnapshot = await pageFuture;
+      await statsFuture;
+
+      if (!mounted) return;
+      setState(() {
+        _orders = pageSnapshot.orders;
+        _currentPage = pageSnapshot.currentPage;
+        _totalPages = pageSnapshot.totalPages;
+        _totalOrders = pageSnapshot.totalOrders;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _loadStats() async {
@@ -238,9 +273,12 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   Future<void> _goToPage(int page) async {
     if (page < 1) return;
-    final provider = context.read<OrderProvider>();
-    if (provider.isLoading || page == provider.currentPage) return;
-    await provider.fetchOrders(page: page, filters: _tableFilters());
+    if (_isLoading || page == _currentPage) return;
+    await _refreshOrders(
+      resetPage: false,
+      refreshStats: false,
+      pageOverride: page,
+    );
   }
 
   String _filterLabel(String key) {
@@ -268,14 +306,14 @@ class _OrdersScreenState extends State<OrdersScreen>
     return '${item.label} ($count)';
   }
 
-  List<Widget> _buildHeaderSlivers(OrderProvider orderProvider) {
+  List<Widget> _buildHeaderSlivers() {
     return [
       SliverToBoxAdapter(child: _buildMonthSelector()),
       SliverToBoxAdapter(child: _buildStatsSection()),
       SliverToBoxAdapter(child: _buildActiveFiltersBanner()),
       SliverToBoxAdapter(child: _buildSearchField()),
-      if (orderProvider.error != null && !orderProvider.isLoading)
-        SliverToBoxAdapter(child: _buildErrorBanner(orderProvider.error!)),
+      if (_error != null && !_isLoading)
+        SliverToBoxAdapter(child: _buildErrorBanner(_error!)),
       const SliverToBoxAdapter(child: SizedBox(height: 6)),
     ];
   }
@@ -357,7 +395,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  'الإحصائيات أدناه تعتمد على تاريخ التسليم للعميل.',
+                  'الإحصائيات أدناه تعتمد على تاريخ الطلب.',
                   style: TextStyle(
                     fontSize: 10.5,
                     color: AppColors.mediumGray,
@@ -639,12 +677,12 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
-  Widget _buildOrdersTable(OrderProvider orderProvider, bool isDriverUser) {
-    if (orderProvider.isLoading) {
+  Widget _buildOrdersTable(bool isDriverUser) {
+    if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final filtered = _applySearch(orderProvider.orders);
+    final filtered = _applySearch(_orders);
 
     if (filtered.isEmpty) {
       final isSearching = _searchController.text.trim().isNotEmpty;
@@ -690,11 +728,11 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
-  Widget _buildPagination(OrderProvider provider) {
-    final totalOrders = provider.totalOrders;
-    final currentPage = provider.currentPage;
-    final totalPages = provider.totalPages;
-    final pageItems = provider.orders.length;
+  Widget _buildPagination() {
+    final totalOrders = _totalOrders;
+    final currentPage = _currentPage;
+    final totalPages = _totalPages;
+    final pageItems = _orders.length;
 
     if (totalOrders <= 0) {
       return const SizedBox.shrink();
@@ -745,14 +783,14 @@ class _OrdersScreenState extends State<OrdersScreen>
               runSpacing: 8,
               children: [
                 OutlinedButton.icon(
-                  onPressed: currentPage > 1 && !provider.isLoading
+                  onPressed: currentPage > 1 && !_isLoading
                       ? () => _goToPage(currentPage - 1)
                       : null,
                   icon: const Icon(Icons.chevron_right),
                   label: const Text('السابق'),
                 ),
                 FilledButton.icon(
-                  onPressed: currentPage < totalPages && !provider.isLoading
+                  onPressed: currentPage < totalPages && !_isLoading
                       ? () => _goToPage(currentPage + 1)
                       : null,
                   icon: const Icon(Icons.chevron_left),
@@ -782,7 +820,6 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   @override
   Widget build(BuildContext context) {
-    final orderProvider = context.watch<OrderProvider>();
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
     final isDriverUser =
@@ -826,12 +863,12 @@ class _OrdersScreenState extends State<OrdersScreen>
           Expanded(
             child: NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) {
-                return _buildHeaderSlivers(orderProvider);
+                return _buildHeaderSlivers();
               },
-              body: _buildOrdersTable(orderProvider, isDriverUser),
+              body: _buildOrdersTable(isDriverUser),
             ),
           ),
-          _buildPagination(orderProvider),
+          _buildPagination(),
         ],
       ),
     );

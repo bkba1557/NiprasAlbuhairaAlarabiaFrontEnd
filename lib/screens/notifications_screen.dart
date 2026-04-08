@@ -1195,6 +1195,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (type.contains('task')) {
       return AppColors.accentBlue;
     }
+    if (type.contains('driver_document_expiry')) {
+      return AppColors.warningOrange;
+    }
     if (type.contains('chat') || type.contains('message')) {
       return AppColors.secondaryTeal;
     }
@@ -1209,6 +1212,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
     if (type.contains('task')) {
       return Icons.task_alt_rounded;
+    }
+    if (type.contains('driver_document_expiry')) {
+      return Icons.badge_outlined;
     }
     if (type.contains('chat') || type.contains('message')) {
       return Icons.chat_bubble_outline_rounded;

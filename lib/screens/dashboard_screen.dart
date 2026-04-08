@@ -45,6 +45,11 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  static const double _desktopSidebarWidth = 280;
+  static const double _desktopContentMaxWidth = 1480;
+  static const double _desktopCompactBreakpoint = 1180;
+  static const double _desktopStackedChartsBreakpoint = 1280;
+
   List<OrderTimer> _approachingTimers = [];
   List<OrderTimer> _allOrderTimers = [];
   bool _loadingTimers = false;
@@ -1220,7 +1225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: AppColors.secondaryTeal,
           onTap: () =>
               _navigateFromMobileDrawer(context, AppRoutes.mergeOrders),
-        ),
+        ), 
       if (canViewMovementPage)
         _DashboardDrawerItemData(
           icon: Icons.alt_route_rounded,
@@ -1251,6 +1256,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: 'السائقين',
           color: AppColors.warningOrange,
           onTap: () => _navigateFromMobileDrawer(context, AppRoutes.drivers),
+        ),
+      if (canViewTracking)
+        _DashboardDrawerItemData(
+          icon: Icons.directions_car_filled_rounded,
+          title: 'السيارات',
+          color: AppColors.primaryBlue,
+          onTap: () => _navigateFromMobileDrawer(context, AppRoutes.vehicles),
+        ),
+      if (canViewTracking)
+        _DashboardDrawerItemData(
+          icon: Icons.local_shipping_rounded,
+          title: 'الصهاريج',
+          color: AppColors.infoBlue,
+          onTap: () => _navigateFromMobileDrawer(context, AppRoutes.tankers),
         ),
       if (canViewTracking)
         _DashboardDrawerItemData(
@@ -5925,6 +5944,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required bool canViewUsers,
   }) {
     final user = authProvider.user;
+    final canViewTracking = user?.hasPermission('tracking_view') ?? false;
     final canViewFuelSales =
         user?.hasAnyPermission(['fuel_sales_view', 'fuel_sales_manage']) ??
         false;
@@ -6121,6 +6141,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.people_outline,
           title: 'السائقين',
           onTap: () => Navigator.pushNamed(context, AppRoutes.drivers),
+        ),
+      if (canViewTracking)
+        _buildDesktopFolderItem(
+          icon: Icons.directions_car_filled_outlined,
+          title: 'السيارات',
+          onTap: () => Navigator.pushNamed(context, AppRoutes.vehicles),
+        ),
+      if (canViewTracking)
+        _buildDesktopFolderItem(
+          icon: Icons.local_shipping_outlined,
+          title: 'الصهاريج',
+          onTap: () => Navigator.pushNamed(context, AppRoutes.tankers),
         ),
       // if (canViewDrivers)
       //   _buildDesktopFolderItem(
@@ -8716,6 +8748,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 title: 'السائقين',
                 color: AppColors.attendanceLate,
                 onTap: () => Navigator.pushNamed(context, AppRoutes.drivers),
+              ),
+            if (canViewTracking)
+              _navItem(
+                icon: Icons.directions_car_filled_outlined,
+                title: 'السيارات',
+                color: AppColors.primaryBlue,
+                onTap: () => Navigator.pushNamed(context, AppRoutes.vehicles),
+              ),
+            if (canViewTracking)
+              _navItem(
+                icon: Icons.local_shipping_outlined,
+                title: 'الصهاريج',
+                color: AppColors.infoBlue,
+                onTap: () => Navigator.pushNamed(context, AppRoutes.tankers),
               ),
             if (canViewTracking)
               _navItem(

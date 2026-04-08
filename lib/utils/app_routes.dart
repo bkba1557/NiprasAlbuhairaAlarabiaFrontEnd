@@ -167,6 +167,8 @@ class AppRoutes {
 
   static const String driverForm = '/driver/form';
   static const String drivers = '/drivers';
+  static const String vehicles = '/vehicles';
+  static const String tankers = '/tankers';
   static const String fuelStationManagement = '/fuel-station/management';
 
   static const String reports = '/reports';
@@ -323,6 +325,8 @@ class AppRoutes {
     login: (_) => const LoginScreen(),
     register: (_) => const RegisterScreen(),
     drivers: (context) => const DriversScreen(),
+    vehicles: (_) => const TrackingScreen(initialTabIndex: 1),
+    tankers: (_) => const TrackingScreen(initialTabIndex: 0),
     tasks: (_) => const TasksScreen(),
     contractsManagement: (_) => const ContractsManagementScreen(),
     chat: (_) => const ChatListScreen(),
