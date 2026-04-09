@@ -255,7 +255,7 @@ class Vehicle {
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    final json = <String, dynamic>{
       'plateNumber': plateNumber,
       'vehicleType': vehicleType,
       'status': status,
@@ -291,6 +291,9 @@ class Vehicle {
       'linkedDriverId': linkedDriverId,
       'linkedTankerId': linkedTankerId,
     };
+
+    json.removeWhere((key, value) => value == null);
+    return json;
   }
 
   Vehicle copyWith({

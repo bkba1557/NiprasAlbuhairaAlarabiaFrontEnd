@@ -31,13 +31,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
    * 1️⃣   الحالات النهائية للطلب
    * ------------------------------------------------------------ */
   static const Set<String> _finalStatuses = {
-    // الحالات التي تُعتبر إنتهاءً نهائيًا
-    'تم التحميل',
-    'في الطريق',
+    // الحالات التي تعتبر منتهية نهائيًا
     'تم التسليم',
-    'تم التنفيذ', // تم إضافتها حسب طلبك
+    'تم التنفيذ',
     'مكتمل',
     'ملغى',
+    // الطلبات مثل "تم التحميل" و"في الطريق" تظل نشطة للسائق
   };
 
   static const List<loc.AppLanguage> _driverLanguageOptions = [
@@ -488,13 +487,16 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   bool _isDriverEndedOrder(Order order) {
     final status = order.status.trim();
 
-    // إذا كان status من ضمن الحالات النهائية → منتهي
+    // إذا كان الطلب منتهيًا فعليًا فلا يظهر ضمن الطلبات النشطة
     if (_finalStatuses.contains(status) || order.isFinalStatus) {
       return true;
     }
 
-    // **نُزيل** الاعتماد على مرور تاريخ الوصول
-    // (إلا إذا كان status نهائيًا، وهو ما عُولِج أعلاه)
+    if (status == 'تم دمجه مع العميل' &&
+        _hasCustomerArrivalPassed(order)) {
+      return true;
+    }
+
     return false;
   }
 
@@ -517,12 +519,15 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
           final activeOrders = orders
               .where((o) => !_isDriverEndedOrder(o))
               .toList();
+          final warehouseOrders = activeOrders
+              .where((o) => o.status.trim() == 'في المستودع')
+              .toList();
 
           final unreadCount = notificationProvider.unreadCount;
-          final loadingCount = activeOrders
+          final loadingCount = warehouseOrders
               .where(_isLoadingStationStage)
               .length;
-          final deliveringCount = activeOrders.where(_isDeliveringStage).length;
+          final deliveringCount = 0;
           final completedCount = orders.where(_isDriverEndedOrder).length;
 
           return Scaffold(
@@ -535,7 +540,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     children: [
                       _buildOrdersTab(
                         userName: userName,
-                        orders: activeOrders,
+                        orders: warehouseOrders,
                         unreadCount: unreadCount,
                         loadingCount: loadingCount,
                         deliveringCount: deliveringCount,
@@ -544,7 +549,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                       ),
                       _buildNotificationsTab(
                         userName: userName,
-                        ordersCount: activeOrders.length,
+                        ordersCount: warehouseOrders.length,
                         unreadCount: unreadCount,
                         loadingCount: loadingCount,
                         deliveringCount: deliveringCount,
@@ -567,10 +572,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       ),
     );
   }
-
-  /* -------------------------------------------------------------
-   * 7️⃣   باقي الـ UI (AppBar, Tabs, Cards …) – لا تغيير
-   * ------------------------------------------------------------ */
   PreferredSizeWidget _buildAppBar() {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isNarrow = screenWidth < 420;

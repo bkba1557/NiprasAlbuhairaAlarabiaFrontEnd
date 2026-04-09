@@ -73,6 +73,10 @@ class _DriverDeliveryTrackingScreenState
   bool _isSharing = false;
   bool _isRouteLoading = false;
   bool _isUpdatingStatus = false;
+  GoogleMapController? _mapController;
+  final DraggableScrollableController _detailsSheetController =
+      DraggableScrollableController();
+  MapType _mapType = MapType.normal;
 
   final ImagePicker _imagePicker = ImagePicker();
   String? _cachedCustomerId;
@@ -94,6 +98,7 @@ class _DriverDeliveryTrackingScreenState
     WidgetsBinding.instance.removeObserver(this);
     _orderRefreshTimer?.cancel();
     _positionSubscription?.cancel();
+    _detailsSheetController.dispose();
     super.dispose();
   }
 
@@ -386,8 +391,18 @@ class _DriverDeliveryTrackingScreenState
         _normalizedStatus == 'تم التحميل';
   }
 
+  bool get _isMovementDirectedToCustomerStage {
+    final order = _order;
+    if (order == null) return false;
+    return order.isMovementOrder &&
+        order.isMovementDirected &&
+        _normalizedStatus == 'تم دمجه مع العميل';
+  }
+
   bool get _isHeadingToLoadingStation {
-    if (_isWaitingMovementDispatch) return false;
+    if (_isWaitingMovementDispatch || _isMovementDirectedToCustomerStage) {
+      return false;
+    }
     const postLoadingStatuses = <String>{
       'تم التحميل',
       'في الطريق',
@@ -866,6 +881,7 @@ class _DriverDeliveryTrackingScreenState
       _currentLocation = LatLng(position.latitude, position.longitude);
     });
     await _publishLocation(position, force: true);
+    unawaited(_fitMapToTrip(forceZoom: true));
   }
 
   Future<void> _startSharing() async {
@@ -1018,6 +1034,7 @@ class _DriverDeliveryTrackingScreenState
         _routeError = null;
         _isRouteLoading = false;
       });
+      unawaited(_fitMapToTrip());
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -1332,6 +1349,11 @@ class _DriverDeliveryTrackingScreenState
     }
 
     switch (currentStatus) {
+      case 'تم دمجه مع العميل':
+        if (order.isMovementOrder && order.isMovementDirected) {
+          return const <String>['في الطريق'];
+        }
+        return const <String>[];
       case 'تم التحميل':
         return const <String>['في الطريق'];
       case 'في الطريق':
@@ -1704,6 +1726,99 @@ class _DriverDeliveryTrackingScreenState
     return const LatLng(24.7136, 46.6753);
   }
 
+  Future<void> _fitMapToTrip({bool forceZoom = false}) async {
+    if (kIsWeb) return;
+
+    final controller = _mapController;
+    if (controller == null) return;
+
+    final points = <LatLng>[
+      if (_currentLocation != null) _currentLocation!,
+      ..._routePoints,
+    ];
+
+    if (points.isEmpty) {
+      await controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _mapCenter, zoom: forceZoom ? 15.8 : 13),
+        ),
+      );
+      return;
+    }
+
+    if (points.length == 1) {
+      await controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: points.first, zoom: forceZoom ? 16.5 : 15.2),
+        ),
+      );
+      return;
+    }
+
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (final point in points.skip(1)) {
+      minLat = point.latitude < minLat ? point.latitude : minLat;
+      maxLat = point.latitude > maxLat ? point.latitude : maxLat;
+      minLng = point.longitude < minLng ? point.longitude : minLng;
+      maxLng = point.longitude > maxLng ? point.longitude : maxLng;
+    }
+
+    if ((maxLat - minLat).abs() < 0.0001 && (maxLng - minLng).abs() < 0.0001) {
+      await controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: points.first, zoom: forceZoom ? 16.5 : 15.2),
+        ),
+      );
+      return;
+    }
+
+    await controller.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat, minLng),
+          northeast: LatLng(maxLat, maxLng),
+        ),
+        84,
+      ),
+    );
+  }
+
+  Future<void> _focusOnCurrentLocation() async {
+    final controller = _mapController;
+    final location = _currentLocation;
+    if (controller == null || location == null) return;
+    await controller.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: location, zoom: 17, tilt: 36),
+      ),
+    );
+  }
+
+  Future<void> _zoomMap(double delta) async {
+    final controller = _mapController;
+    if (controller == null) return;
+
+    try {
+      final currentZoom = await controller.getZoomLevel();
+      await controller.animateCamera(
+        CameraUpdate.zoomTo((currentZoom + delta).clamp(4.0, 20.0)),
+      );
+    } catch (_) {
+      // Ignore zoom read failures on unsupported map implementations.
+    }
+  }
+
+  void _toggleMapType() {
+    setState(() {
+      _mapType =
+          _mapType == MapType.satellite ? MapType.normal : MapType.satellite;
+    });
+  }
+
   Widget _buildMap() {
     final currentLocation = _currentLocation;
     final destinationLocation = _routePoints.isEmpty ? null : _routePoints.last;
@@ -1713,13 +1828,40 @@ class _DriverDeliveryTrackingScreenState
         Marker(
           markerId: const MarkerId('driver-current'),
           position: currentLocation,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
           infoWindow: InfoWindow(title: _text('currentLocation')),
         ),
       if (destinationLocation != null)
         Marker(
           markerId: const MarkerId('driver-destination'),
           position: destinationLocation,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueOrange,
+          ),
           infoWindow: InfoWindow(title: _destinationMarkerTitle),
+        ),
+    };
+
+    final circles = <Circle>{
+      if (currentLocation != null)
+        Circle(
+          circleId: const CircleId('driver-accuracy'),
+          center: currentLocation,
+          radius: 18,
+          fillColor: AppColors.primaryBlue.withValues(alpha: 0.18),
+          strokeColor: AppColors.primaryBlue.withValues(alpha: 0.42),
+          strokeWidth: 2,
+        ),
+      if (destinationLocation != null)
+        Circle(
+          circleId: const CircleId('driver-destination-glow'),
+          center: destinationLocation,
+          radius: 22,
+          fillColor: AppColors.statusGold.withValues(alpha: 0.14),
+          strokeColor: AppColors.statusGold.withValues(alpha: 0.35),
+          strokeWidth: 2,
         ),
     };
 
@@ -1729,60 +1871,373 @@ class _DriverDeliveryTrackingScreenState
           polylineId: const PolylineId('delivery-route'),
           points: _routePoints,
           color: AppColors.primaryBlue,
-          width: 5,
+          width: 6,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+          jointType: JointType.round,
         ),
     };
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: 320,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: kIsWeb
-                  ? AdvancedWebMap(
-                      center: _mapCenter,
-                      zoom: 13,
-                      primaryMarker: destinationLocation ?? currentLocation,
-                      secondaryMarker: destinationLocation != null
-                          ? currentLocation
-                          : null,
-                      polyline: _routePoints.length >= 2 ? _routePoints : null,
-                    )
-                  : GoogleMap(
-                      key: ValueKey(
-                        '${_mapCenter.latitude}-${_mapCenter.longitude}-${_routePoints.length}-${(_destinationQuery ?? _destinationText).hashCode}',
-                      ),
-                      initialCameraPosition: CameraPosition(
-                        target: _mapCenter,
-                        zoom: 13,
-                      ),
-                      markers: markers,
-                      polylines: polylines,
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: true,
-                      zoomControlsEnabled: false,
-                    ),
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFEAF3FF), Color(0xFFDCEEFF), Color(0xFFF7FBFF)],
+              ),
             ),
-            if (_isRouteLoading)
-              const Positioned(
-                top: 12,
-                right: 12,
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(8),
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+            child: kIsWeb
+                ? AdvancedWebMap(
+                    center: _mapCenter,
+                    zoom: 13,
+                    primaryMarker: destinationLocation ?? currentLocation,
+                    secondaryMarker:
+                        destinationLocation != null ? currentLocation : null,
+                    polyline: _routePoints.length >= 2 ? _routePoints : null,
+                  )
+                : GoogleMap(
+                    key: ValueKey(
+                      '${_mapCenter.latitude}-${_mapCenter.longitude}-${_routePoints.length}-${(_destinationQuery ?? _destinationText).hashCode}-${_mapType.name}',
                     ),
+                    onMapCreated: (controller) {
+                      _mapController = controller;
+                      unawaited(_fitMapToTrip(forceZoom: true));
+                    },
+                    initialCameraPosition: CameraPosition(
+                      target: _mapCenter,
+                      zoom: 13,
+                    ),
+                    mapType: _mapType,
+                    markers: markers,
+                    circles: circles,
+                    polylines: polylines,
+                    myLocationEnabled: true,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    compassEnabled: true,
+                    mapToolbarEnabled: true,
+                    tiltGesturesEnabled: true,
+                    rotateGesturesEnabled: true,
+                    zoomGesturesEnabled: true,
+                    buildingsEnabled: true,
+                    minMaxZoomPreference: const MinMaxZoomPreference(4, 20),
+                    padding: const EdgeInsets.fromLTRB(12, 110, 12, 220),
+                  ),
+          ),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    const Color(0xCC0C2B66),
+                    Colors.transparent,
+                    Colors.white.withValues(alpha: 0.08),
+                    Colors.white.withValues(alpha: 0.38),
+                  ],
+                  stops: const [0, 0.18, 0.56, 1],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: MediaQuery.of(context).padding.top + kToolbarHeight + 12,
+          left: 16,
+          right: 88,
+          child: _buildMapStatusBanner(),
+        ),
+        Positioned(
+          top: MediaQuery.of(context).padding.top + kToolbarHeight + 16,
+          right: 16,
+          child: _buildMapTools(),
+        ),
+        if (_isRouteLoading)
+          Positioned(
+            bottom: 240,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.96),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2.2),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMapStatusBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.14),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _stageTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
               ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.statusGold.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _localizedStatus(_normalizedStatus),
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.statusGold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _destinationText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF475569),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildMapTools() {
+    return Column(
+      children: [
+        _MapToolButton(
+          icon: _mapType == MapType.satellite
+              ? Icons.layers_clear_rounded
+              : Icons.satellite_alt_rounded,
+          tooltip: _mapType == MapType.satellite ? 'Normal' : 'Satellite',
+          onTap: _toggleMapType,
+          highlighted: _mapType == MapType.satellite,
+        ),
+        const SizedBox(height: 10),
+        _MapToolButton(
+          icon: Icons.my_location_rounded,
+          tooltip: _text('currentLocation'),
+          onTap: _focusOnCurrentLocation,
+        ),
+        const SizedBox(height: 10),
+        _MapToolButton(
+          icon: Icons.alt_route_rounded,
+          tooltip: _text('updateRoute'),
+          onTap: () {
+            unawaited(_refreshRoute(force: true));
+            unawaited(_fitMapToTrip(forceZoom: true));
+          },
+        ),
+        const SizedBox(height: 10),
+        _MapToolButton(
+          icon: Icons.add_rounded,
+          tooltip: 'Zoom in',
+          onTap: () => _zoomMap(1),
+        ),
+        const SizedBox(height: 10),
+        _MapToolButton(
+          icon: Icons.remove_rounded,
+          tooltip: 'Zoom out',
+          onTap: () => _zoomMap(-1),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailSection({
+    required IconData icon,
+    required String title,
+    required Widget child,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFF),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD9E7FB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 18, color: AppColors.primaryBlue),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingDetailsSheet(Order order, List<String> nextStatuses) {
+    return DraggableScrollableSheet(
+      controller: _detailsSheetController,
+      initialChildSize: 0.27,
+      minChildSize: 0.19,
+      maxChildSize: 0.82,
+      snap: true,
+      snapSizes: const [0.19, 0.27, 0.5, 0.82],
+      builder: (context, scrollController) {
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.97),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.16),
+                blurRadius: 28,
+                offset: const Offset(0, -8),
+              ),
+            ],
+          ),
+          child: CustomScrollView(
+            controller: scrollController,
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 48,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFCBD5E1),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _text('screenTitle'),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBlue.withValues(alpha: 0.09),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              _localizedStatus(order.status),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primaryBlue,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
+                sliver: SliverList.list(
+                  children: [
+                    _buildTrackingSummaryCard(order),
+                    _buildOrderDetailsCard(order),
+                    _buildLoadingCard(order),
+                    _buildDriverActionsCard(nextStatuses),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2080,9 +2535,9 @@ class _DriverDeliveryTrackingScreenState
               runSpacing: 10,
               children: nextStatuses.map((status) {
                 final actionLabel = status == 'تم التسليم'
-                    ? _text('unload')
+                    ? (_isArabic ? 'التفريغ عند العميل' : 'Unload at customer')
                     : status == 'في الطريق'
-                        ? 'Start'
+                        ? (_isArabic ? 'التوجه للعميل' : 'Head to customer')
                         : _localizedStatus(status);
                 final actionIcon = status == 'تم التسليم'
                     ? Icons.outbox_rounded
@@ -2128,9 +2583,15 @@ class _DriverDeliveryTrackingScreenState
         }
       },
       child: Scaffold(
+        extendBodyBehindAppBar: widget.showMap,
         appBar: AppBar(
           automaticallyImplyLeading: _canLeaveScreen,
           title: Text(_text('screenTitle')),
+          backgroundColor: widget.showMap
+              ? const Color(0x8A0B2A66)
+              : null,
+          elevation: widget.showMap ? 0 : null,
+          foregroundColor: widget.showMap ? Colors.white : null,
           actions: [
             IconButton(
               tooltip: _text('refresh'),
@@ -2151,15 +2612,43 @@ class _DriverDeliveryTrackingScreenState
                   ),
                 ),
               )
+            : widget.showMap
+            ? Stack(
+                children: [
+                  Positioned.fill(child: _buildMap()),
+                  Positioned.fill(
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        cardTheme: CardThemeData(
+                          elevation: 0,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          color: const Color(0xFFF8FBFF),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(22),
+                            side: const BorderSide(color: Color(0xFFD9E7FB)),
+                          ),
+                        ),
+                        textTheme: Theme.of(context).textTheme.copyWith(
+                              titleMedium: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontSize: 14),
+                              bodyMedium: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(fontSize: 12.5),
+                            ),
+                      ),
+                      child: _buildFloatingDetailsSheet(order, nextStatuses),
+                    ),
+                  ),
+                ],
+              )
             : RefreshIndicator(
                 onRefresh: _refreshAll,
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    if (widget.showMap) ...[
-                      _buildMap(),
-                      const SizedBox(height: 16),
-                    ],
                     _buildTrackingSummaryCard(order),
                     const SizedBox(height: 12),
                     _buildOrderDetailsCard(order),
@@ -2184,27 +2673,89 @@ class _DeliveryInfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 9),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 104,
             child: Text(
               label,
               style: const TextStyle(
                 color: AppColors.mediumGray,
                 fontWeight: FontWeight.w600,
+                fontSize: 11.5,
+                height: 1.35,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+                color: Color(0xFF0F172A),
+                height: 1.35,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MapToolButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool highlighted;
+
+  const _MapToolButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.highlighted = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Tooltip(
+          message: tooltip,
+          child: Ink(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: highlighted
+                  ? AppColors.primaryBlue
+                  : Colors.white.withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: highlighted
+                    ? Colors.white.withValues(alpha: 0.14)
+                    : const Color(0xFFD8E5F8),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: highlighted ? Colors.white : const Color(0xFF18428F),
+            ),
+          ),
+        ),
       ),
     );
   }
