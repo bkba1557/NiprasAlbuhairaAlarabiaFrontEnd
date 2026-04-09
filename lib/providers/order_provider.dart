@@ -2306,6 +2306,53 @@ class OrderProvider with ChangeNotifier {
     return false;
   }
 
+  Future<Order?> setDriverAssignmentReminder(
+    String orderId, {
+    required int days,
+    required int hours,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.post(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderById(orderId)}/movement/driver-reminder',
+        ),
+        headers: ApiService.headers,
+        body: json.encode({
+          'days': days,
+          'hours': hours,
+        }),
+      );
+
+      final data = ApiService.decodeJson(response);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final rawOrder =
+            data['order'] ?? data['data'] ?? data['updatedOrder'] ?? data;
+        final updatedOrder = Order.fromJson(
+          Map<String, dynamic>.from(rawOrder as Map),
+        );
+        _upsertOrderLocally(updatedOrder);
+        _isLoading = false;
+        notifyListeners();
+        return updatedOrder;
+      }
+
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'تعذر حفظ تذكير تعيين السائق';
+    } catch (e) {
+      _error = 'خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return null;
+  }
+
   // ============================================
   // فك دمج الطلبات
   // ============================================

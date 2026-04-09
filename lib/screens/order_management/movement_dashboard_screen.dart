@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:order_tracker/models/customer_model.dart';
 import 'package:order_tracker/models/driver_model.dart';
@@ -118,7 +119,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       Stream<DateTime>.periodic(
         const Duration(seconds: 1),
         (_) => DateTime.now(),
-      );
+      ).asBroadcastStream();
 
   bool get _movementUser =>
       context.read<AuthProvider>().user?.role == 'movement';
@@ -231,6 +232,53 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return normalized;
   }
 
+  String _normalizeDigits(String value) {
+    var normalized = value;
+    _arabicDigitMap.forEach((arabicDigit, latinDigit) {
+      normalized = normalized.replaceAll(arabicDigit, latinDigit);
+    });
+    return normalized;
+  }
+
+  String? _normalizeSupplierOrderNumber(String? value) {
+    if (value == null) return null;
+    var normalized = _normalizeDigits(value);
+    normalized = normalized.replaceAll(
+      RegExp(r'[\u200E\u200F\u202A-\u202E]'),
+      '',
+    );
+    normalized = normalized
+        .replaceAll(RegExp(r'[^A-Za-z0-9\-_\/]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toUpperCase();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  double? _parseQuantityValue(String? value) {
+    if (value == null) return null;
+    var normalized = _normalizeDigits(value).trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+    normalized = normalized
+        .replaceAll('لتر', '')
+        .replaceAll('لترات', '')
+        .replaceAll('liter', '')
+        .replaceAll('liters', '')
+        .replaceAll('ltr', '')
+        .replaceAll('،', '')
+        .replaceAll(',', '')
+        .replaceAll(RegExp(r'[^0-9.]'), '');
+    if (normalized.isEmpty) return null;
+    return double.tryParse(normalized);
+  }
+
+  String? _normalizedQuantityText(String? value) {
+    final parsed = _parseQuantityValue(value);
+    if (parsed == null || parsed <= 0) return null;
+    final isWholeNumber = parsed.truncateToDouble() == parsed;
+    return isWholeNumber ? parsed.toStringAsFixed(0) : parsed.toString();
+  }
+
   String? _normalizeFuelType(String? value) {
     if (value == null) return null;
     var normalized = value;
@@ -261,6 +309,31 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     }
 
     return lower;
+  }
+
+  String? _resolveFuelType(String? value) {
+    final normalized = _normalize(value ?? '');
+    if (normalized.contains('ممتاز')) {
+      return 'بنزين 95';
+    }
+    if (normalized.contains('سولار')) {
+      return 'ديزل';
+    }
+
+    final key = _fuelKey(value);
+    switch (key) {
+      case 'gas95':
+        return 'بنزين 95';
+      case 'gas91':
+      case 'gasoline':
+        return 'بنزين 91';
+      case 'diesel':
+        return 'ديزل';
+      case 'kerosene':
+        return 'كيروسين';
+      default:
+        return null;
+    }
   }
 
   bool _matchesOrderSearch(Order order, String query) {
@@ -444,18 +517,38 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return !hideAfter.isAfter(DateTime.now());
   }
 
+  int _historyOrderPriority(Order order) {
+    switch (order.movementState) {
+      case 'pending_driver':
+        return 0;
+      case 'pending_dispatch':
+        return 1;
+      case 'directed':
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
   List<Order> get _historyOrders {
     final query = _historySearchController.text;
     final items =
         _orders
             .where(
               (order) =>
+                  order.status != 'ملغى' &&
                   (!order.isMovementDirected ||
                       !_hasMovementExpiredFromHistory(order)) &&
                   _matchesOrderSearch(order, query),
             )
             .toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          ..sort((a, b) {
+            final byPriority = _historyOrderPriority(a).compareTo(
+              _historyOrderPriority(b),
+            );
+            if (byPriority != 0) return byPriority;
+            return b.createdAt.compareTo(a.createdAt);
+          });
     return items;
   }
 
@@ -867,13 +960,6 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     }
   }
 
-  String _normalizeDigits(String value) {
-    return value.replaceAllMapped(
-      RegExp(r'[٠-٩۰-۹]'),
-      (m) => _arabicDigitMap[m.group(0)] ?? m.group(0)!,
-    );
-  }
-
   Map<String, String?> _extractTimesFromText(String? text) {
     if (text == null || text.trim().isEmpty) {
       return <String, String?>{'loading': null, 'arrival': null};
@@ -1228,13 +1314,17 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             applied += 1;
           }
 
-          final supplierOrderNumber = _text(mapDraft['supplierOrderNumber']);
+          final supplierOrderNumber = _normalizeSupplierOrderNumber(
+            _text(mapDraft['supplierOrderNumber']),
+          );
           if (supplierOrderNumber != null) {
             _supplierOrderNumber.text = supplierOrderNumber;
             applied += 1;
           }
 
-          final quantityText = _text(mapDraft['quantity']);
+          final quantityText = _normalizedQuantityText(
+            _text(mapDraft['quantity']),
+          );
           if (quantityText != null) {
             _quantity.text = quantityText;
             applied += 1;
@@ -1362,6 +1452,13 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
               applied += 1;
             }
           }
+          final resolvedFuelType = _resolveFuelType(_text(mapDraft['fuelType']));
+          if (resolvedFuelType != null) {
+            if (_fuelType != resolvedFuelType) {
+              applied += 1;
+            }
+            _fuelType = resolvedFuelType;
+          }
         });
 
         if (applied == 0) {
@@ -1436,8 +1533,21 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final supplier = _selectedSupplier;
-    final qty = double.tryParse(_quantity.text.trim());
-    if (supplier == null || qty == null || qty <= 0) {
+    final supplierOrderNumber = _normalizeSupplierOrderNumber(
+      _supplierOrderNumber.text,
+    );
+    final normalizedQuantity = _normalizedQuantityText(_quantity.text);
+    final qty = _parseQuantityValue(_quantity.text);
+    if (supplierOrderNumber != null) {
+      _supplierOrderNumber.text = supplierOrderNumber;
+    }
+    if (normalizedQuantity != null) {
+      _quantity.text = normalizedQuantity;
+    }
+    if (supplier == null ||
+        supplierOrderNumber == null ||
+        qty == null ||
+        qty <= 0) {
       _snack('أكمل بيانات الطلب بشكل صحيح.', AppColors.errorRed);
       return;
     }
@@ -1452,9 +1562,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       entryChannel: 'movement',
       supplierName: supplier.name,
       orderNumber: '',
-      supplierOrderNumber: _supplierOrderNumber.text.trim().isEmpty
-          ? null
-          : _supplierOrderNumber.text.trim(),
+      supplierOrderNumber: supplierOrderNumber,
       loadingDate: _loadingDate,
       loadingTime: _loadingTime.text,
       arrivalDate: _arrivalDate,
@@ -1468,7 +1576,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       city: _city.text.trim(),
       area: _area.text.trim(),
       address: '${_city.text.trim()} - ${_area.text.trim()}',
-      fuelType: _fuelType,
+      fuelType: _resolveFuelType(_fuelType) ?? _fuelType,
       quantity: qty,
       unit: 'لتر',
       notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
@@ -1517,6 +1625,140 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     }
     _snack('تم تحديث السائق.', AppColors.successGreen);
     await _loadOrders(showLoader: false);
+  }
+
+  Future<void> _setDriverReminder(Order order) async {
+    final daysController = TextEditingController(
+      text: (order.driverAssignmentReminderDays ?? 0) > 0
+          ? '${order.driverAssignmentReminderDays}'
+          : '',
+    );
+    final hoursController = TextEditingController(
+      text: (order.driverAssignmentReminderHours ?? 0) > 0
+          ? '${order.driverAssignmentReminderHours}'
+          : '',
+    );
+
+    final payload = await showDialog<Map<String, int>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            int parse(String value) => int.tryParse(value.trim()) ?? 0;
+
+            final days = parse(daysController.text);
+            final hours = parse(hoursController.text);
+            final totalHours = (days * 24) + hours;
+            final reminderAt = totalHours > 0
+                ? DateTime.now().add(Duration(hours: totalHours))
+                : null;
+
+            return AlertDialog(
+              title: const Text('تذكير بتعيين السائق'),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'حدد متى تريد تذكيرًا إذا بقي الطلب بانتظار السائق.',
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: TextField(
+                            controller: daysController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'أيام',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: hoursController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'ساعات',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      reminderAt == null
+                          ? 'أدخل مدة أكبر من صفر.'
+                          : 'سيتم التذكير في ${_formatScheduleLabel(reminderAt, DateFormat('HH:mm').format(reminderAt))}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: reminderAt == null
+                            ? AppColors.errorRed
+                            : AppColors.primaryDarkBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton(
+                  onPressed: reminderAt == null
+                      ? null
+                      : () {
+                          Navigator.pop(dialogContext, <String, int>{
+                            'days': days,
+                            'hours': hours,
+                          });
+                        },
+                  child: Text(
+                    order.hasActiveDriverAssignmentReminder
+                        ? 'تحديث التذكير'
+                        : 'حفظ التذكير',
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    daysController.dispose();
+    hoursController.dispose();
+
+    if (payload == null) return;
+
+    setState(() => _busyOrderId = order.id);
+    final updatedOrder = await context.read<OrderProvider>()
+        .setDriverAssignmentReminder(
+          order.id,
+          days: payload['days'] ?? 0,
+          hours: payload['hours'] ?? 0,
+        );
+    if (!mounted) return;
+    setState(() => _busyOrderId = null);
+
+    if (updatedOrder == null) {
+      _snack(
+        context.read<OrderProvider>().error ?? 'تعذر حفظ التذكير.',
+        AppColors.errorRed,
+      );
+      return;
+    }
+
+    _replaceOrderLocally(updatedOrder);
+    _snack('تم حفظ تذكير تعيين السائق.', AppColors.successGreen);
   }
 
   Future<void> _dispatch(
@@ -2517,6 +2759,38 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return diff.isNegative ? 'متأخر $formatted' : 'متبقي $formatted';
   }
 
+  String _formatDateLabel(DateTime value) {
+    return DateFormat('yyyy/MM/dd').format(value);
+  }
+
+  String _formatScheduleLabel(DateTime date, String? time) {
+    final normalizedTime = (time ?? '').trim();
+    if (normalizedTime.isEmpty) {
+      return _formatDateLabel(date);
+    }
+    return '${_formatDateLabel(date)} - $normalizedTime';
+  }
+
+  String _formatReminderDuration(Order order) {
+    final parts = <String>[];
+    final days = order.driverAssignmentReminderDays ?? 0;
+    final hours = order.driverAssignmentReminderHours ?? 0;
+    if (days > 0) parts.add('$days يوم');
+    if (hours > 0) parts.add('$hours ساعة');
+    return parts.isEmpty ? 'مرة واحدة' : parts.join(' و ');
+  }
+
+  void _replaceOrderLocally(Order updatedOrder) {
+    Order patch(Order order) =>
+        order.id == updatedOrder.id ? updatedOrder : order;
+    setState(() {
+      _orders = _orders.map(patch).toList(growable: false);
+      _customerRequests = _customerRequests
+          .map(patch)
+          .toList(growable: false);
+    });
+  }
+
   bool _isOrderCompleted(Order order) {
     const completedStatuses = <String>{
       'تم التسليم',
@@ -3340,6 +3614,139 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       default:
         return AppColors.mediumGray;
     }
+  }
+
+  Widget _buildScheduleChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.mediumGray,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingDriverSchedule(Order order) {
+    if (!order.isMovementPendingDriver) {
+      return const SizedBox.shrink();
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        _buildScheduleChip(
+          icon: Icons.schedule_rounded,
+          label: 'موعد التحميل',
+          value: _formatScheduleLabel(order.loadingDate, order.loadingTime),
+          color: AppColors.infoBlue,
+        ),
+        _buildScheduleChip(
+          icon: Icons.flag_outlined,
+          label: 'موعد الوصول',
+          value: _formatScheduleLabel(order.arrivalDate, order.arrivalTime),
+          color: AppColors.successGreen,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDriverReminderBanner(Order order) {
+    if (!order.hasActiveDriverAssignmentReminder) {
+      return const SizedBox.shrink();
+    }
+
+    final reminderAt = order.driverAssignmentReminderAt;
+    if (reminderAt == null) {
+      return const SizedBox.shrink();
+    }
+
+    return StreamBuilder<DateTime>(
+      stream: _statementCountdownTicker,
+      initialData: DateTime.now(),
+      builder: (context, snapshot) {
+        final label = _formatRemainingTime(reminderAt);
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.warningOrange.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.warningOrange.withValues(alpha: 0.24),
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                Icons.notifications_active_outlined,
+                size: 18,
+                color: AppColors.warningOrange,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'تذكير تعيين السائق',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.warningOrange,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$label • ${_formatReminderDuration(order)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primaryDarkBlue.withValues(alpha: 0.86),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   InputDecoration _glassInputDecoration(
@@ -5152,15 +5559,47 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                               .toList(),
                           onChanged: (String? value) =>
                               setState(() => _supplierId = value),
-                          validator: (String? value) =>
-                              value == null ? 'اختر المورد' : null,
+                          validator: (String? value) {
+                            return value == null ? 'اختر المورد' : null;
+                          },
                         ),
                         TextFormField(
                           controller: _supplierOrderNumber,
+                          textCapitalization: TextCapitalization.characters,
+                          inputFormatters: <TextInputFormatter>[
+                            FilteringTextInputFormatter.allow(
+                              RegExp(
+                                r'[A-Za-z0-9\u0660-\u0669\u06F0-\u06F9\-_\/ ]',
+                              ),
+                            ),
+                          ],
                           decoration: _glassInputDecoration(
                             'رقم طلب المورد',
                             icon: Icons.confirmation_number_rounded,
                           ),
+                          onChanged: (String value) {
+                            final normalized = _normalizeSupplierOrderNumber(
+                              value,
+                            );
+                            if (normalized == null || normalized == value) {
+                              return;
+                            }
+                            _supplierOrderNumber.value = TextEditingValue(
+                              text: normalized,
+                              selection: TextSelection.collapsed(
+                                offset: normalized.length,
+                              ),
+                            );
+                          },
+                          validator: (String? value) {
+                            final normalized = _normalizeSupplierOrderNumber(
+                              value,
+                            );
+                            if (normalized == null) {
+                              return 'أدخل رقم طلب المورد بشكل صحيح';
+                            }
+                            return null;
+                          },
                         ),
                         DropdownButtonFormField<String>(
                           initialValue: _fuelType,
@@ -5184,15 +5623,35 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
+                          inputFormatters: <TextInputFormatter>[
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9\u0660-\u0669\u06F0-\u06F9.,، ]'),
+                            ),
+                          ],
                           decoration: _glassInputDecoration(
                             'الكمية',
                             icon: Icons.scale_rounded,
                             suffixText: 'لتر',
                           ),
-                          validator: (String? value) =>
-                              (double.tryParse((value ?? '').trim()) ?? 0) <= 0
-                              ? 'أدخل كمية صحيحة'
-                              : null,
+                          onChanged: (String value) {
+                            final normalized = _normalizedQuantityText(value);
+                            if (normalized == null || normalized == value) {
+                              return;
+                            }
+                            _quantity.value = TextEditingValue(
+                              text: normalized,
+                              selection: TextSelection.collapsed(
+                                offset: normalized.length,
+                              ),
+                            );
+                          },
+                          validator: (String? value) {
+                            final parsed = _parseQuantityValue(value);
+                            if (parsed == null || parsed <= 0) {
+                              return 'أدخل كمية صحيحة';
+                            }
+                            return null;
+                          },
                         ),
                         TextFormField(
                           controller: _city,
@@ -5389,6 +5848,14 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 if (order.movementMergedOrderNumber != null)
                   Text('رقم الدمج: ${order.movementMergedOrderNumber}'),
                 Text('رقم المركبة: ${order.vehicleNumber ?? '-'}'),
+                if (order.isMovementPendingDriver) ...<Widget>[
+                  const SizedBox(height: 10),
+                  _buildPendingDriverSchedule(order),
+                ],
+                if (order.hasActiveDriverAssignmentReminder) ...<Widget>[
+                  const SizedBox(height: 10),
+                  _buildDriverReminderBanner(order),
+                ],
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -5402,6 +5869,16 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                           order.driverId == null
                               ? 'اختيار سائق'
                               : 'تغيير السائق',
+                        ),
+                      ),
+                    if (order.isMovementPendingDriver)
+                      OutlinedButton.icon(
+                        onPressed: busy ? null : () => _setDriverReminder(order),
+                        icon: const Icon(Icons.alarm_add_rounded),
+                        label: Text(
+                          order.hasActiveDriverAssignmentReminder
+                              ? 'تحديث التذكير'
+                              : 'تذكير',
                         ),
                       ),
                     if (order.isMovementPendingDispatch)

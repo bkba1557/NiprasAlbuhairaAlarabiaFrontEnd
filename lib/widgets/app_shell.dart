@@ -146,7 +146,25 @@ class _AppShellState extends State<AppShell>
   /* -------------------------------------------------------
    |  حساب الموضع الذي تُفتح تحت الزرّ فيه لوحة الملاحظات      |
    ------------------------------------------------------- */
-  Offset _panelOffsetBelowFab() {
+  Size _resolveQuickNotesPanelSize() {
+    final mq = MediaQuery.of(context);
+    final EdgeInsets safe = mq.padding;
+    final Size screen = mq.size;
+
+    final maxWidth = (screen.width - safe.left - safe.right - 24)
+        .clamp(300.0, 420.0)
+        .toDouble();
+    final maxHeight = (screen.height - safe.top - safe.bottom - 24)
+        .clamp(360.0, 560.0)
+        .toDouble();
+
+    final width = _panelSize.width.clamp(300.0, maxWidth).toDouble();
+    final height = _panelSize.height.clamp(360.0, maxHeight).toDouble();
+
+    return Size(width, height);
+  }
+
+  Offset _panelOffsetBelowFab(Size panelSize) {
     final mq = MediaQuery.of(context);
     final EdgeInsets safe = mq.padding;
     final Size screen = mq.size;
@@ -156,11 +174,21 @@ class _AppShellState extends State<AppShell>
     double top = _notesFabOffset.dy + _fabSize + _fabMargin;
 
     // لا نسمح للـ panel بالخروج من اليمين أو الأسفل
-    final double maxLeft = screen.width - safe.right - _panelSize.width;
-    final double maxTop = screen.height - safe.bottom - _panelSize.height;
+    final double maxLeft =
+        (screen.width - safe.right - panelSize.width).clamp(safe.left, double.infinity).toDouble();
+    final double maxTop =
+        (screen.height - safe.bottom - panelSize.height).clamp(safe.top, double.infinity).toDouble();
 
     left = left.clamp(safe.left, maxLeft);
     top = top.clamp(safe.top, maxTop);
+
+    final double minTop = safe.top + 12;
+    if (top <= minTop + 4 && _notesFabOffset.dy > screen.height * 0.5) {
+      top = (_notesFabOffset.dy - panelSize.height - _fabMargin)
+          .clamp(minTop, maxTop)
+          .toDouble();
+    }
+
     return Offset(left, top);
   }
 
@@ -168,9 +196,13 @@ class _AppShellState extends State<AppShell>
    |  فتح وإغلاق لوحة الملاحظات                           |
    ------------------------------------------------------- */
   void _openQuickNotesPanel() {
-    // حساب الموضع الجديد لكل مرة يُفتح فيها الـ panel
-    _panelOffset = _panelOffsetBelowFab();
-    setState(() => _showQuickNotesPanel = true);
+    final resolvedSize = _resolveQuickNotesPanelSize();
+    final resolvedOffset = _panelOffsetBelowFab(resolvedSize);
+    setState(() {
+      _panelSize = resolvedSize;
+      _panelOffset = resolvedOffset;
+      _showQuickNotesPanel = true;
+    });
     // تحميل الملاحظات إن لم تكن محمّلة
     context.read<NoteProvider>().fetchNotes();
   }
@@ -200,7 +232,7 @@ class _AppShellState extends State<AppShell>
 
       // إذا كانت لوحة الملاحظات مفتوحة، نجعلها تتبع الزرّ
       if (_showQuickNotesPanel) {
-        _panelOffset = _panelOffsetBelowFab();
+        _panelOffset = _panelOffsetBelowFab(_panelSize);
       }
     });
   }

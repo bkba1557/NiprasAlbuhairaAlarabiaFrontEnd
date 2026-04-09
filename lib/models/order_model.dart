@@ -103,6 +103,13 @@ class Order {
 
   final DateTime? notificationSentAt;
   final DateTime? arrivalNotificationSentAt;
+  final DateTime? driverAssignmentReminderAt;
+  final int? driverAssignmentReminderDays;
+  final int? driverAssignmentReminderHours;
+  final bool driverAssignmentReminderActive;
+  final String? driverAssignmentReminderCreatedById;
+  final String? driverAssignmentReminderCreatedByName;
+  final DateTime? driverAssignmentReminderNotifiedAt;
   final DateTime? loadingCompletedAt;
   final String? actualFuelType;
   final double? actualLoadedLiters;
@@ -222,6 +229,13 @@ class Order {
 
     this.notificationSentAt,
     this.arrivalNotificationSentAt,
+    this.driverAssignmentReminderAt,
+    this.driverAssignmentReminderDays,
+    this.driverAssignmentReminderHours,
+    this.driverAssignmentReminderActive = false,
+    this.driverAssignmentReminderCreatedById,
+    this.driverAssignmentReminderCreatedByName,
+    this.driverAssignmentReminderNotifiedAt,
     this.loadingCompletedAt,
     this.actualFuelType,
     this.actualLoadedLiters,
@@ -476,6 +490,12 @@ class Order {
     }
 
     final cancellationApproval = _asOrderMap(json['cancellationApproval']);
+    final driverAssignmentReminder = _asOrderMap(
+      json['driverAssignmentReminder'],
+    );
+    final driverReminderDaysRaw = driverAssignmentReminder?['days'];
+    final driverReminderHoursRaw = driverAssignmentReminder?['hours'];
+    final driverReminderCreatedByRaw = driverAssignmentReminder?['createdBy'];
 
     return Order(
       id: json['_id']?.toString() ?? '',
@@ -615,6 +635,28 @@ class Order {
       ),
       arrivalNotificationSentAt: DateTime.tryParse(
         json['arrivalNotificationSentAt']?.toString() ?? '',
+      ),
+      driverAssignmentReminderAt: DateTime.tryParse(
+        driverAssignmentReminder?['remindAt']?.toString() ?? '',
+      ),
+      driverAssignmentReminderDays:
+          driverReminderDaysRaw is int
+              ? driverReminderDaysRaw
+              : int.tryParse(driverReminderDaysRaw?.toString() ?? ''),
+      driverAssignmentReminderHours:
+          driverReminderHoursRaw is int
+              ? driverReminderHoursRaw
+              : int.tryParse(driverReminderHoursRaw?.toString() ?? ''),
+      driverAssignmentReminderActive:
+          driverAssignmentReminder?['active'] == true,
+      driverAssignmentReminderCreatedById:
+          driverReminderCreatedByRaw is Map
+              ? driverReminderCreatedByRaw['_id']?.toString()
+              : driverReminderCreatedByRaw?.toString(),
+      driverAssignmentReminderCreatedByName:
+          driverAssignmentReminder?['createdByName']?.toString(),
+      driverAssignmentReminderNotifiedAt: DateTime.tryParse(
+        driverAssignmentReminder?['notifiedAt']?.toString() ?? '',
       ),
       loadingCompletedAt: DateTime.tryParse(
         json['loadingCompletedAt']?.toString() ?? '',
@@ -784,6 +826,19 @@ class Order {
 
       'notificationSentAt': notificationSentAt?.toIso8601String(),
       'arrivalNotificationSentAt': arrivalNotificationSentAt?.toIso8601String(),
+      if (driverAssignmentReminderAt != null ||
+          driverAssignmentReminderActive ||
+          driverAssignmentReminderCreatedById != null)
+        'driverAssignmentReminder': {
+          'remindAt': driverAssignmentReminderAt?.toIso8601String(),
+          'days': driverAssignmentReminderDays,
+          'hours': driverAssignmentReminderHours,
+          'active': driverAssignmentReminderActive,
+          'createdBy': driverAssignmentReminderCreatedById,
+          'createdByName': driverAssignmentReminderCreatedByName,
+          'notifiedAt':
+              driverAssignmentReminderNotifiedAt?.toIso8601String(),
+        },
       'loadingCompletedAt': loadingCompletedAt?.toIso8601String(),
       'actualFuelType': actualFuelType,
       'actualLoadedLiters': actualLoadedLiters,
@@ -866,6 +921,9 @@ class Order {
   bool get isMovementPendingDispatch => movementState == 'pending_dispatch';
 
   bool get isMovementDirected => movementState == 'directed';
+
+  bool get hasActiveDriverAssignmentReminder =>
+      driverAssignmentReminderActive && driverAssignmentReminderAt != null;
 
   double? pricingNumber(String key) {
     final value = pricingSnapshot?[key];
@@ -1279,6 +1337,13 @@ class Order {
     Map<String, dynamic>? mergedWithInfo,
     DateTime? notificationSentAt,
     DateTime? arrivalNotificationSentAt,
+    DateTime? driverAssignmentReminderAt,
+    int? driverAssignmentReminderDays,
+    int? driverAssignmentReminderHours,
+    bool? driverAssignmentReminderActive,
+    String? driverAssignmentReminderCreatedById,
+    String? driverAssignmentReminderCreatedByName,
+    DateTime? driverAssignmentReminderNotifiedAt,
     DateTime? loadingCompletedAt,
     String? actualFuelType,
     double? actualLoadedLiters,
@@ -1389,6 +1454,24 @@ class Order {
       notificationSentAt: notificationSentAt ?? this.notificationSentAt,
       arrivalNotificationSentAt:
           arrivalNotificationSentAt ?? this.arrivalNotificationSentAt,
+      driverAssignmentReminderAt:
+          driverAssignmentReminderAt ?? this.driverAssignmentReminderAt,
+      driverAssignmentReminderDays:
+          driverAssignmentReminderDays ?? this.driverAssignmentReminderDays,
+      driverAssignmentReminderHours:
+          driverAssignmentReminderHours ?? this.driverAssignmentReminderHours,
+      driverAssignmentReminderActive:
+          driverAssignmentReminderActive ??
+          this.driverAssignmentReminderActive,
+      driverAssignmentReminderCreatedById:
+          driverAssignmentReminderCreatedById ??
+          this.driverAssignmentReminderCreatedById,
+      driverAssignmentReminderCreatedByName:
+          driverAssignmentReminderCreatedByName ??
+          this.driverAssignmentReminderCreatedByName,
+      driverAssignmentReminderNotifiedAt:
+          driverAssignmentReminderNotifiedAt ??
+          this.driverAssignmentReminderNotifiedAt,
       loadingCompletedAt: loadingCompletedAt ?? this.loadingCompletedAt,
       actualFuelType: actualFuelType ?? this.actualFuelType,
       actualLoadedLiters: actualLoadedLiters ?? this.actualLoadedLiters,
