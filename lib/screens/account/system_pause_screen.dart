@@ -143,7 +143,7 @@ class _SystemPauseScreenState extends State<SystemPauseScreen> {
     if (!mounted) return;
 
     final audienceLabel = _audienceScope == _PauseAudienceScope.all
-        ? 'جميع المستخدمين'
+        ? '\u062C\u0645\u064A\u0639 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0645\u0627 \u0639\u062F\u0627 \u0627\u0644\u0645\u0627\u0644\u0643'
         : '${_selectedUserIds.length} مستخدم';
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -299,7 +299,7 @@ class _SystemPauseScreenState extends State<SystemPauseScreen> {
 
   String _draftAudienceLabel() {
     if (_audienceScope == _PauseAudienceScope.all) {
-      return 'جميع المستخدمين';
+      return '\u062C\u0645\u064A\u0639 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0645\u0627 \u0639\u062F\u0627 \u0627\u0644\u0645\u0627\u0644\u0643';
     }
     if (_selectedUserIds.isEmpty) {
       return 'اختر مستخدمين محددين';
@@ -1468,3 +1468,4 @@ class _EmptyAudienceState extends StatelessWidget {
     );
   }
 }
+

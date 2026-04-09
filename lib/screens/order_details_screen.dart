@@ -6430,42 +6430,70 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   ) {
     final customerName = _getCustomerName(order);
     final driverName = _getDriverName(order);
+    final isCompact = MediaQuery.of(context).size.width < 380;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          Card(
-            elevation: 3,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: orderTypeColor, width: 2),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white,
+                  orderTypeColor.withOpacity(0.025),
+                  orderTypeColor.withOpacity(0.06),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: orderTypeColor.withOpacity(0.38),
+                width: 1.4,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: orderTypeColor.withOpacity(0.12),
+                  blurRadius: 22,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        width: 60,
-                        height: 60,
+                        width: isCompact ? 56 : 64,
+                        height: isCompact ? 56 : 64,
                         decoration: BoxDecoration(
-                          color: orderTypeColor.withOpacity(0.1),
-                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              orderTypeColor.withOpacity(0.16),
+                              orderTypeColor.withOpacity(0.06),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: orderTypeColor.withOpacity(0.16)),
                         ),
                         child: Icon(
                           orderType == 'مورد'
-                              ? Icons.business
+                              ? Icons.business_center_rounded
                               : orderType == 'عميل'
-                              ? Icons.person
-                              : Icons.link,
+                              ? Icons.account_circle_rounded
+                              : Icons.hub_rounded,
                           color: orderTypeColor,
-                          size: 32,
+                          size: isCompact ? 28 : 32,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -6473,61 +6501,80 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                             Text(
                               'طلب $orderType',
                               style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                                fontSize: isCompact ? 16 : 18,
+                                fontWeight: FontWeight.w900,
                                 color: orderTypeColor,
                               ),
                             ),
+                            const SizedBox(height: 4),
                             Text(
                               'رقم الطلب: ${order.orderNumber}',
                               style: const TextStyle(
-                                fontSize: 16,
-                                color: AppColors.mediumGray,
+                                fontSize: 15,
+                                color: AppColors.primaryDarkBlue,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                             if ((orderType == 'مدمج' || orderType == 'مورد') &&
                                 order.supplierOrderNumber != null &&
-                                order.supplierOrderNumber!.isNotEmpty)
-                              Text(
-                                'رقم طلب المورد: ${order.supplierOrderNumber}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.infoBlue,
-                                  fontWeight: FontWeight.bold,
+                                order.supplierOrderNumber!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.infoBlue.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'رقم طلب المورد: ${order.supplierOrderNumber}',
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    color: AppColors.infoBlue,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                               ),
+                            ],
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(order.status).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: _getStatusColor(order.status),
-                          ),
-                        ),
-                        child: Text(
-                          order.status,
-                          style: TextStyle(
-                            color: _getStatusColor(order.status),
-                            fontWeight: FontWeight.bold,
-                          ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(order.status).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: _getStatusColor(order.status).withOpacity(0.25),
                         ),
                       ),
-                    ],
+                      child: Text(
+                        order.status,
+                        style: TextStyle(
+                          color: _getStatusColor(order.status),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                   ),
                   if (customerName != null) ...[
                     const SizedBox(height: 12),
                     const Divider(),
                     const SizedBox(height: 8),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.person, color: orderTypeColor, size: 18),
+                        _buildSummarySideIcon(Icons.person_rounded, orderTypeColor),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
@@ -6575,8 +6622,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     const Divider(),
                     const SizedBox(height: 8),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.business, color: orderTypeColor, size: 18),
+                        _buildSummarySideIcon(
+                          Icons.local_shipping_rounded,
+                          orderTypeColor,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
@@ -7186,18 +7237,27 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.10),
+            color.withOpacity(0.03),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withOpacity(0.14)),
       ),
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.70),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: color.withOpacity(0.12)),
             ),
             child: Icon(icon, color: color, size: 20),
           ),
@@ -7218,6 +7278,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -7234,27 +7295,47 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     required Color color,
     required List<Widget> children,
   }) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: color.withOpacity(0.10)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon, color: color),
-                const SizedBox(width: 8),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                const SizedBox(width: 10),
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
                     color: color,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             ...children,
           ],
         ),
@@ -7263,29 +7344,34 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   Widget _buildUiDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundGray.withOpacity(0.45),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.silverLight.withOpacity(0.8)),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: AppColors.mediumGray,
-                fontWeight: FontWeight.w500,
-              ),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.mediumGray,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            flex: 2,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.darkGray,
-                fontWeight: FontWeight.w600,
-              ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.primaryDarkBlue,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+              height: 1.35,
             ),
           ),
         ],
@@ -7299,44 +7385,73 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     IconData icon,
     Color color,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.16)),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: color),
-                const SizedBox(width: 8),
-                Text(
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 16, color: color),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
                   label,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.mediumGray,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: color.withOpacity(0.3)),
               ),
-              child: Text(
-                value,
-                style: TextStyle(color: color, fontWeight: FontWeight.bold),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 13.5,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSummarySideIcon(IconData icon, Color color) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: color, size: 18),
     );
   }
 

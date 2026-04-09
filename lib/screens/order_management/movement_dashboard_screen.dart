@@ -3473,10 +3473,22 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
-  Widget _metricCard(String label, int value, Color color, IconData icon) {
+  Widget _metricCard(
+    String label,
+    int value,
+    Color color,
+    IconData icon, {
+    bool dense = false,
+  }) {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
     return AppSurfaceCard(
-      padding: EdgeInsets.all(isWideWeb ? 12 : 14),
+      padding: EdgeInsets.all(
+        dense
+            ? 10
+            : isWideWeb
+            ? 12
+            : 14,
+      ),
       color: Colors.white.withValues(alpha: 0.72),
       borderRadius: BorderRadius.circular(isWideWeb ? 20 : 24),
       border: Border.all(color: color.withValues(alpha: 0.18)),
@@ -3490,8 +3502,16 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       child: Row(
         children: <Widget>[
           Container(
-            width: isWideWeb ? 42 : 46,
-            height: isWideWeb ? 42 : 46,
+            width: dense
+                ? 34
+                : isWideWeb
+                ? 42
+                : 46,
+            height: dense
+                ? 34
+                : isWideWeb
+                ? 42
+                : 46,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topRight,
@@ -3501,30 +3521,68 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                   color.withValues(alpha: 0.08),
                 ],
               ),
-              borderRadius: BorderRadius.circular(isWideWeb ? 14 : 16),
+              borderRadius: BorderRadius.circular(
+                dense
+                    ? 12
+                    : isWideWeb
+                    ? 14
+                    : 16,
+              ),
             ),
-            child: Icon(icon, color: color, size: isWideWeb ? 22 : 24),
+            child: Icon(
+              icon,
+              color: color,
+              size: dense
+                  ? 18
+                  : isWideWeb
+                  ? 22
+                  : 24,
+            ),
           ),
-          SizedBox(width: isWideWeb ? 10 : 12),
+          SizedBox(
+            width: dense
+                ? 8
+                : isWideWeb
+                ? 10
+                : 12,
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   label,
+                  maxLines: dense ? 2 : 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: isWideWeb ? 12 : 13,
+                    fontSize: dense
+                        ? 10
+                        : isWideWeb
+                        ? 12
+                        : 13,
                     fontWeight: FontWeight.w600,
                     color: AppColors.mediumGray,
+                    height: dense ? 1.15 : null,
                   ),
                 ),
-                SizedBox(height: isWideWeb ? 4 : 6),
+                SizedBox(
+                  height: dense
+                      ? 4
+                      : isWideWeb
+                      ? 4
+                      : 6,
+                ),
                 Text(
                   '$value',
                   style: TextStyle(
-                    fontSize: isWideWeb ? 22 : 26,
+                    fontSize: dense
+                        ? 17
+                        : isWideWeb
+                        ? 22
+                        : 26,
                     fontWeight: FontWeight.w500,
                     color: color,
+                    height: 1,
                   ),
                 ),
               ],
@@ -3539,11 +3597,18 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     String label,
     String value,
     Color color,
-    IconData icon,
-  ) {
+    IconData icon, {
+    bool dense = false,
+  }) {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
     return AppSurfaceCard(
-      padding: EdgeInsets.all(isWideWeb ? 12 : 14),
+      padding: EdgeInsets.all(
+        dense
+            ? 10
+            : isWideWeb
+            ? 12
+            : 14,
+      ),
       color: Colors.white.withValues(alpha: 0.72),
       borderRadius: BorderRadius.circular(isWideWeb ? 20 : 24),
       border: Border.all(color: color.withValues(alpha: 0.18)),
@@ -3557,8 +3622,16 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       child: Row(
         children: <Widget>[
           Container(
-            width: isWideWeb ? 42 : 46,
-            height: isWideWeb ? 42 : 46,
+            width: dense
+                ? 34
+                : isWideWeb
+                ? 42
+                : 46,
+            height: dense
+                ? 34
+                : isWideWeb
+                ? 42
+                : 46,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topRight,
@@ -3568,30 +3641,67 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                   color.withValues(alpha: 0.08),
                 ],
               ),
-              borderRadius: BorderRadius.circular(isWideWeb ? 14 : 16),
+              borderRadius: BorderRadius.circular(
+                dense
+                    ? 12
+                    : isWideWeb
+                    ? 14
+                    : 16,
+              ),
             ),
-            child: Icon(icon, color: color, size: isWideWeb ? 22 : 24),
+            child: Icon(
+              icon,
+              color: color,
+              size: dense
+                  ? 18
+                  : isWideWeb
+                  ? 22
+                  : 24,
+            ),
           ),
-          SizedBox(width: isWideWeb ? 10 : 12),
+          SizedBox(
+            width: dense
+                ? 8
+                : isWideWeb
+                ? 10
+                : 12,
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: isWideWeb ? 12 : 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.mediumGray,
-                  ),
-                ),
-                SizedBox(height: isWideWeb ? 4 : 6),
-                Text(
-                  value,
-                  maxLines: 1,
+                  maxLines: dense ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: isWideWeb ? 16 : 18,
+                    fontSize: dense
+                        ? 10
+                        : isWideWeb
+                        ? 12
+                        : 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.mediumGray,
+                    height: dense ? 1.15 : null,
+                  ),
+                ),
+                SizedBox(
+                  height: dense
+                      ? 4
+                      : isWideWeb
+                      ? 4
+                      : 6,
+                ),
+                Text(
+                  value,
+                  maxLines: dense ? 2 : 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: dense
+                        ? 12
+                        : isWideWeb
+                        ? 16
+                        : 18,
                     fontWeight: FontWeight.w800,
                     color: color,
                     height: 1.0,
@@ -3625,13 +3735,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return '$hh:$mm:$ss';
   }
 
-  Widget _statementCountdownSummary({required DateTime? expiryDate}) {
-    final double width = MediaQuery.sizeOf(context).width;
-    final double cardWidth = width >= 1400
-        ? 198
-        : width >= 1100
-        ? 206
-        : 220;
+  Widget _statementCountdownSummary({
+    required DateTime? expiryDate,
+    double? width,
+    bool dense = false,
+  }) {
+    final double cardWidth = width ?? _defaultSummaryCardWidth();
 
     return SizedBox(
       width: cardWidth,
@@ -3647,6 +3756,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
               'غير مسجل',
               AppColors.warningOrange,
               Icons.description_outlined,
+              dense: dense,
             );
           }
 
@@ -3665,6 +3775,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             formatted,
             color,
             Icons.description_outlined,
+            dense: dense,
           );
         },
       ),
@@ -3773,21 +3884,34 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     required bool compact,
   }) {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
+    final bool isMobile = MediaQuery.sizeOf(context).width < 600;
     return AppSurfaceCard(
       padding: const EdgeInsets.all(0),
       color: Colors.white.withValues(alpha: 0.50),
-      borderRadius: BorderRadius.circular(isWideWeb ? 28 : 32),
+      borderRadius: BorderRadius.circular(
+        isMobile
+            ? 26
+            : isWideWeb
+            ? 28
+            : 32,
+      ),
       border: Border.all(color: Colors.white.withValues(alpha: 0.36)),
       boxShadow: [
         BoxShadow(
           color: AppColors.primaryDarkBlue.withValues(alpha: 0.10),
-          blurRadius: 34,
-          offset: const Offset(0, 20),
+          blurRadius: isMobile ? 24 : 34,
+          offset: Offset(0, isMobile ? 14 : 20),
         ),
       ],
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(isWideWeb ? 28 : 32),
+          borderRadius: BorderRadius.circular(
+            isMobile
+                ? 26
+                : isWideWeb
+                ? 28
+                : 32,
+          ),
           gradient: LinearGradient(
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
@@ -3798,42 +3922,53 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             ],
           ),
         ),
-        padding: EdgeInsets.all(compact ? 18 : (isWideWeb ? 20 : 24)),
+        padding: EdgeInsets.all(
+          isMobile
+              ? 14
+              : compact
+              ? 18
+              : (isWideWeb ? 20 : 24),
+        ),
         child: compact
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  _heroText(),
-                  const SizedBox(height: 18),
+                  _heroText(isMobile: isMobile),
+                  SizedBox(height: isMobile ? 12 : 18),
                   Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                    spacing: isMobile ? 8 : 10,
+                    runSpacing: isMobile ? 8 : 10,
                     children: <Widget>[
                       _heroChip(
                         'إجمالي الطلبات',
                         '$total',
                         Icons.inventory_2_rounded,
+                        compact: isMobile,
                       ),
                       _heroChip(
                         'بانتظار السائق',
                         '$pendingDriver',
                         Icons.drive_eta_rounded,
+                        compact: isMobile,
                       ),
                       _heroChip(
                         'بانتظار التوجيه',
                         '$pendingDispatch',
                         Icons.near_me_rounded,
+                        compact: isMobile,
                       ),
                       _heroChip(
                         'طلبات موجهة',
                         '$directed',
                         Icons.task_alt_rounded,
+                        compact: isMobile,
                       ),
                       _heroChip(
                         'الملغاة',
                         '$cancelled',
                         Icons.cancel_outlined,
                         onTap: _showCancelledOrdersDialog,
+                        compact: isMobile,
                       ),
                     ],
                   ),
@@ -3841,7 +3976,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
               )
             : Row(
                 children: <Widget>[
-                  Expanded(flex: 6, child: _heroText()),
+                  Expanded(flex: 6, child: _heroText(isMobile: false)),
                   const SizedBox(width: 20),
                   Expanded(
                     flex: 5,
@@ -3885,7 +4020,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
-  Widget _heroText() {
+  Widget _heroText({required bool isMobile}) {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3894,17 +4029,25 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
           'حركة الطلبات',
           style: TextStyle(
             color: Colors.white,
-            fontSize: isWideWeb ? 22 : 26,
+            fontSize: isMobile
+                ? 20
+                : isWideWeb
+                ? 22
+                : 26,
             fontWeight: FontWeight.w500,
           ),
         ),
-        SizedBox(height: isWideWeb ? 6 : 8),
+        SizedBox(height: isMobile ? 4 : (isWideWeb ? 6 : 8)),
         Text(
           'متابعة طلبات المورد، تعيين السائقين، وتنفيذ التوجيهات.',
           style: TextStyle(
             color: Colors.white70,
-            fontSize: isWideWeb ? 13 : 14,
-            height: 1.7,
+            fontSize: isMobile
+                ? 12
+                : isWideWeb
+                ? 13
+                : 14,
+            height: isMobile ? 1.5 : 1.7,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -3917,39 +4060,70 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     String value,
     IconData icon, {
     VoidCallback? onTap,
+    bool compact = false,
   }) {
     final bool isWideWeb = MediaQuery.sizeOf(context).width >= 1100;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: isWideWeb ? 12 : 14,
-          vertical: isWideWeb ? 10 : 12,
+          horizontal: compact
+              ? 10
+              : isWideWeb
+              ? 12
+              : 14,
+          vertical: compact
+              ? 8
+              : isWideWeb
+              ? 10
+              : 12,
         ),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(isWideWeb ? 16 : 18),
+          borderRadius: BorderRadius.circular(
+            compact
+                ? 14
+                : isWideWeb
+                ? 16
+                : 18,
+          ),
           border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, color: Colors.white, size: isWideWeb ? 17 : 18),
-            SizedBox(width: isWideWeb ? 7 : 8),
+            Icon(
+              icon,
+              color: Colors.white,
+              size: compact
+                  ? 15
+                  : isWideWeb
+                  ? 17
+                  : 18,
+            ),
+            SizedBox(width: compact ? 6 : (isWideWeb ? 7 : 8)),
             Text(
               label,
               style: TextStyle(
                 color: Colors.white70,
-                fontSize: isWideWeb ? 11 : 12,
+                fontSize: compact
+                    ? 10
+                    : isWideWeb
+                    ? 11
+                    : 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(width: isWideWeb ? 8 : 10),
+            SizedBox(width: compact ? 7 : (isWideWeb ? 8 : 10)),
             Text(
               value,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: isWideWeb ? 15 : 16,
+                fontSize: compact
+                    ? 13
+                    : isWideWeb
+                    ? 15
+                    : 16,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -4047,6 +4221,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     final double screenWidth = MediaQuery.sizeOf(context).width;
     // Mobile screens are those with width < 600 px
     final bool isMobile = screenWidth < 600;
+    final bool compact = screenWidth < 900;
     final bool isWideWebScreen = screenWidth >= 1100;
     final int unreadChat = context.watch<ChatProvider>().totalUnread;
     final int unreadNotifications =
@@ -4400,113 +4575,45 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                           ),
                         ),
                       ),
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: pageMaxWidth),
+                            child: _dashboardScrollHeader(
+                              compact: compact,
+                              isMobile: isMobile,
+                              isWideWeb: isWideWebScreen,
+                              pendingDriver: pendingDriver,
+                              pendingDispatch: pendingDispatch,
+                              directed: directed,
+                              cancelled: cancelled,
+                              pendingCustomerRequests:
+                                  pendingCustomerRequests,
+                              statementExpiryDate: statementExpiryDate,
+                            ),
+                          ),
+                        ),
+                      ),
                     ];
                   },
                   body: LayoutBuilder(
                     builder: (BuildContext context, BoxConstraints constraints) {
-                      final bool compact = constraints.maxWidth < 900;
-                      final bool isWideWeb = constraints.maxWidth >= 1100;
                       return Center(
                         child: ConstrainedBox(
                           constraints: BoxConstraints(maxWidth: pageMaxWidth),
-                          child: Column(
-                            children: <Widget>[
-                              Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  compact ? 14 : (isWideWeb ? 16 : 18),
-                                  compact ? 14 : (isWideWeb ? 16 : 18),
-                                  compact ? 14 : (isWideWeb ? 16 : 18),
-                                  10,
-                                ),
-                                child: Column(
-                                  children: <Widget>[
-                                    _heroSection(
-                                      total: _orders.length,
-                                      pendingDriver: pendingDriver,
-                                      pendingDispatch: pendingDispatch,
-                                      directed: directed,
-                                      cancelled: cancelled,
-                                      compact: compact,
-                                    ),
-                                    SizedBox(height: isWideWeb ? 14 : 16),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: Wrap(
-                                        spacing: 10,
-                                        runSpacing: 10,
-                                        children: <Widget>[
-                                          _customerRequestsButton(
-                                            isWideWeb: isWideWeb,
-                                          ),
-                                          _exportReportButton(
-                                            isWideWeb: isWideWeb,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    SizedBox(height: isWideWeb ? 12 : 14),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: Wrap(
-                                        spacing: isWideWeb ? 10 : 12,
-                                        runSpacing: isWideWeb ? 10 : 12,
-                                        children: <Widget>[
-                                          _summaryAction(
-                                            'طلبات العملاء',
-                                            pendingCustomerRequests,
-                                            AppColors.secondaryTeal,
-                                            Icons.assignment_turned_in_outlined,
-                                            _openCustomerRequestsDialog,
-                                          ),
-                                          _summary(
-                                            'إجمالي',
-                                            _orders.length,
-                                            AppColors.primaryBlue,
-                                            Icons.inventory_2_rounded,
-                                          ),
-                                          _summary(
-                                            'بانتظار سائق',
-                                            pendingDriver,
-                                            AppColors.warningOrange,
-                                            Icons.drive_eta_rounded,
-                                          ),
-                                          _summary(
-                                            'بانتظار التوجيه',
-                                            pendingDispatch,
-                                            AppColors.infoBlue,
-                                            Icons.near_me_rounded,
-                                          ),
-                                          _summary(
-                                            'موجه',
-                                            directed,
-                                            AppColors.successGreen,
-                                            Icons.task_alt_rounded,
-                                          ),
-                                          _statementCountdownSummary(
-                                            expiryDate: statementExpiryDate,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    SizedBox(height: isWideWeb ? 12 : 14),
-                                    _historySearchField(isWideWeb: isWideWeb),
-                                  ],
-                                ),
-                              ),
-                                  Expanded(
-                                    child: TabBarView(
-                                      children: <Widget>[
-                                        _entryTab(),
-                                        _historyTab(),
-                                        _customerRequestsTab(),
-                                        _dispatchesTab(),
-                                        _driversTrackingTab(),
-                                        const StatementTab(),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          child: SizedBox(
+                            height: constraints.maxHeight,
+                            child: TabBarView(
+                              children: <Widget>[
+                                _entryTab(),
+                                _historyTab(),
+                                _customerRequestsTab(),
+                                _dispatchesTab(),
+                                _driversTrackingTab(),
+                                const StatementTab(),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     },
@@ -4520,16 +4627,18 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
-  Widget _summary(String label, int value, Color color, IconData icon) {
-    final double width = MediaQuery.sizeOf(context).width;
-    final double cardWidth = width >= 1400
-        ? 198
-        : width >= 1100
-        ? 206
-        : 220;
+  Widget _summary(
+    String label,
+    int value,
+    Color color,
+    IconData icon, {
+    double? width,
+    bool dense = false,
+  }) {
+    final double cardWidth = width ?? _defaultSummaryCardWidth();
     return SizedBox(
       width: cardWidth,
-      child: _metricCard(label, value, color, icon),
+      child: _metricCard(label, value, color, icon, dense: dense),
     );
   }
 
@@ -4538,19 +4647,166 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     int value,
     Color color,
     IconData icon,
-    VoidCallback onTap,
-  ) {
-    final double width = MediaQuery.sizeOf(context).width;
-    final double cardWidth = width >= 1400
-        ? 198
-        : width >= 1100
-        ? 206
-        : 220;
+    VoidCallback onTap, {
+    double? width,
+    bool dense = false,
+  }) {
+    final double cardWidth = width ?? _defaultSummaryCardWidth();
     return SizedBox(
       width: cardWidth,
       child: GestureDetector(
         onTap: onTap,
-        child: _metricCard(label, value, color, icon),
+        child: _metricCard(label, value, color, icon, dense: dense),
+      ),
+    );
+  }
+
+  double _defaultSummaryCardWidth() {
+    final double width = MediaQuery.sizeOf(context).width;
+    return width >= 1400
+        ? 198
+        : width >= 1100
+        ? 206
+        : 220;
+  }
+
+  Widget _summaryMetricsSection({
+    required bool isMobile,
+    required bool isWideWeb,
+    required int pendingCustomerRequests,
+    required int pendingDriver,
+    required int pendingDispatch,
+    required int directed,
+    required DateTime? statementExpiryDate,
+  }) {
+    final double spacing = isMobile ? 8 : (isWideWeb ? 10 : 12);
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double cardWidth;
+        if (isMobile) {
+          final double availableWidth =
+              constraints.maxWidth - (spacing * 2);
+          cardWidth = availableWidth > 0
+              ? availableWidth / 3
+              : constraints.maxWidth / 3;
+        } else {
+          cardWidth = _defaultSummaryCardWidth();
+        }
+
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            alignment: WrapAlignment.end,
+            children: <Widget>[
+              _summaryAction(
+                'طلبات العملاء',
+                pendingCustomerRequests,
+                AppColors.secondaryTeal,
+                Icons.assignment_turned_in_outlined,
+                _openCustomerRequestsDialog,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+              _summary(
+                'إجمالي',
+                _orders.length,
+                AppColors.primaryBlue,
+                Icons.inventory_2_rounded,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+              _summary(
+                'بانتظار سائق',
+                pendingDriver,
+                AppColors.warningOrange,
+                Icons.drive_eta_rounded,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+              _summary(
+                'بانتظار التوجيه',
+                pendingDispatch,
+                AppColors.infoBlue,
+                Icons.near_me_rounded,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+              _summary(
+                'موجه',
+                directed,
+                AppColors.successGreen,
+                Icons.task_alt_rounded,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+              _statementCountdownSummary(
+                expiryDate: statementExpiryDate,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _dashboardScrollHeader({
+    required bool compact,
+    required bool isMobile,
+    required bool isWideWeb,
+    required int pendingDriver,
+    required int pendingDispatch,
+    required int directed,
+    required int cancelled,
+    required int pendingCustomerRequests,
+    required DateTime? statementExpiryDate,
+  }) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        compact ? 14 : (isWideWeb ? 16 : 18),
+        compact ? 14 : (isWideWeb ? 16 : 18),
+        compact ? 14 : (isWideWeb ? 16 : 18),
+        isMobile ? 8 : 10,
+      ),
+      child: Column(
+        children: <Widget>[
+          _heroSection(
+            total: _orders.length,
+            pendingDriver: pendingDriver,
+            pendingDispatch: pendingDispatch,
+            directed: directed,
+            cancelled: cancelled,
+            compact: compact,
+          ),
+          SizedBox(height: isWideWeb ? 14 : 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _customerRequestsButton(isWideWeb: isWideWeb),
+                _exportReportButton(isWideWeb: isWideWeb),
+              ],
+            ),
+          ),
+          SizedBox(height: isWideWeb ? 12 : 14),
+          _summaryMetricsSection(
+            isMobile: isMobile,
+            isWideWeb: isWideWeb,
+            pendingCustomerRequests: pendingCustomerRequests,
+            pendingDriver: pendingDriver,
+            pendingDispatch: pendingDispatch,
+            directed: directed,
+            statementExpiryDate: statementExpiryDate,
+          ),
+          SizedBox(height: isWideWeb ? 12 : 14),
+          _historySearchField(isWideWeb: isWideWeb),
+        ],
       ),
     );
   }

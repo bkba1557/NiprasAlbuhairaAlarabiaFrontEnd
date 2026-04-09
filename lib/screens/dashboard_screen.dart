@@ -10,12 +10,14 @@ import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/notification_provider.dart';
 import 'package:order_tracker/providers/order_provider.dart';
 import 'package:order_tracker/services/backup_service.dart';
+import 'package:order_tracker/services/whatsapp_service.dart';
 import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/widgets/recent_orders_widget.dart';
 import 'package:order_tracker/widgets/candlestick_chart_widget.dart';
 import 'package:order_tracker/widgets/overdue_orders_widget.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
+import 'package:order_tracker/widgets/whatsapp_compose_dialog.dart';
 import 'package:order_tracker/utils/file_saver.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -500,6 +502,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       Navigator.pushNamed(context, route);
     });
+  }
+
+  void _openWhatsAppFromMobileDrawer(BuildContext drawerContext) {
+    Navigator.pop(drawerContext);
+    Future.microtask(() {
+      if (!mounted) return;
+      WhatsAppComposeDialog.show(context);
+    });
+  }
+
+  void _openWhatsAppFromSidebar() {
+    WhatsAppComposeDialog.show(context);
   }
 
   Future<void> _logoutFromMobileDrawer(
@@ -1188,6 +1202,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'maintenance_technician',
       'Maintenance_Technician',
     ].contains(user?.role);
+    final canAccessWhatsApp = WhatsAppService.canAccessForRole(user?.role);
 
     final canViewCirculars = user?.role == 'owner' || user?.role == 'manager';
     final canViewMovementPage = user?.role == 'owner' || user?.role == 'admin';
@@ -1397,6 +1412,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onTap: () =>
             _navigateFromMobileDrawer(context, AppRoutes.notifications),
       ),
+      if (canAccessWhatsApp)
+        _DashboardDrawerItemData(
+          icon: Icons.chat_rounded,
+          title: 'واتساب',
+          color: AppColors.successGreen,
+          onTap: () => _openWhatsAppFromMobileDrawer(context),
+        ),
       if (canManageSystemPause)
         _DashboardDrawerItemData(
           icon: Icons.pause_circle_outline_rounded,
@@ -5996,6 +6018,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'maintenance_technician',
       'Maintenance_Technician',
     ].contains(authProvider.user?.role);
+    final canAccessWhatsApp = WhatsAppService.canAccessForRole(user?.role);
 
     final canViewCirculars =
         authProvider.user?.role == 'owner' ||
@@ -6321,6 +6344,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         badge: notificationProvider.unreadCount,
         onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
       ),
+      if (canAccessWhatsApp)
+        _buildDesktopFolderItem(
+          icon: Icons.chat_rounded,
+          title: 'واتساب',
+          onTap: _openWhatsAppFromSidebar,
+          color: AppColors.successGreen,
+        ),
       if (authProvider.user?.role == 'owner')
         _buildDesktopFolderItem(
           icon: Icons.pause_circle_outline_rounded,

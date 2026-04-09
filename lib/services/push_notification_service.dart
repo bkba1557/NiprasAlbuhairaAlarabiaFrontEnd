@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 class PushNotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static String? _lastToken;
+  static bool _isBootstrappingToken = false;
 
   static Future<void> init() async {
     await LocalNotificationService.init();
@@ -34,16 +35,6 @@ class PushNotificationService {
     if (kIsWeb) {
       await ensureWebNotificationPermission();
       initWebNotificationSound();
-    }
-
-    final token = await _getInitialToken();
-
-    if (token != null) {
-      debugPrint('FCM token: $token');
-      _lastToken = token;
-      await _registerToken(token);
-    } else {
-      debugPrint('FCM token is null (permission denied or not ready).');
     }
 
     FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
@@ -70,6 +61,8 @@ class PushNotificationService {
       _refreshChat();
       _handleOpenedMessage(initialMessage);
     }
+
+    unawaited(_bootstrapTokenRegistration());
   }
 
   static Future<void> _requestPermissions() async {
@@ -81,38 +74,60 @@ class PushNotificationService {
     );
   }
 
-  static Future<String?> _getInitialToken() async {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      final apnsToken = await _waitForApnsToken();
-      if (apnsToken == null || apnsToken.isEmpty) {
-        debugPrint(
-          'APNs token is unavailable on iOS, so initial FCM registration is skipped.',
-        );
-        return null;
-      }
-      debugPrint('APNs token is ready on iOS.');
-    }
+  static Future<void> _bootstrapTokenRegistration() async {
+    if (_isBootstrappingToken) return;
+    _isBootstrappingToken = true;
 
+    try {
+      final token = await _waitForUsableToken();
+      if (token == null || token.isEmpty) {
+        debugPrint(
+          'FCM token is still unavailable after retrying bootstrap registration.',
+        );
+        return;
+      }
+
+      debugPrint('FCM token: $token');
+      _lastToken = token;
+      await _registerToken(token);
+    } finally {
+      _isBootstrappingToken = false;
+    }
+  }
+
+  static Future<String?> _waitForUsableToken() async {
     final vapidKey = const String.fromEnvironment(
       'FCM_VAPID_KEY',
       defaultValue: '',
     );
-    return _messaging.getToken(
-      vapidKey: kIsWeb && vapidKey.isNotEmpty ? vapidKey : null,
-    );
-  }
 
-  static Future<String?> _waitForApnsToken() async {
-    for (var attempt = 1; attempt <= 12; attempt++) {
-      final apnsToken = await _messaging.getAPNSToken();
-      if (apnsToken != null && apnsToken.isNotEmpty) {
-        debugPrint('APNs token acquired on attempt $attempt.');
-        return apnsToken;
+    for (var attempt = 1; attempt <= 20; attempt++) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        final apnsToken = await _messaging.getAPNSToken();
+        if (apnsToken == null || apnsToken.isEmpty) {
+          if (attempt == 1 || attempt % 5 == 0) {
+            debugPrint(
+              'APNs token not ready on iOS yet. Waiting before FCM registration attempt $attempt.',
+            );
+          }
+          await Future.delayed(const Duration(seconds: 2));
+          continue;
+        }
+        if (attempt == 1) {
+          debugPrint('APNs token is ready on iOS.');
+        }
       }
-      await Future.delayed(const Duration(milliseconds: 500));
+
+      final token = await _messaging.getToken(
+        vapidKey: kIsWeb && vapidKey.isNotEmpty ? vapidKey : null,
+      );
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
+
+      await Future.delayed(const Duration(seconds: 2));
     }
 
-    debugPrint('APNs token did not become available within 6 seconds.');
     return null;
   }
 

@@ -29,7 +29,8 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   final TextEditingController _searchController = TextEditingController();
   late final TabController _tabController;
-  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  late DateTime _rangeStart;
+  late DateTime _rangeEnd;
   Map<String, dynamic> _extraFilters = {};
   Map<String, int> _summaryCounts = const {};
   List<Order> _orders = const [];
@@ -43,6 +44,9 @@ class _OrdersScreenState extends State<OrdersScreen>
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _rangeStart = DateTime(now.year, now.month, 1);
+    _rangeEnd = DateTime(now.year, now.month + 1, 0);
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(_handleTabChanged);
 
@@ -66,6 +70,10 @@ class _OrdersScreenState extends State<OrdersScreen>
     setState(() {});
   }
 
+  String _formatRangeDate(DateTime value) {
+    return DateFormat('yyyy/MM/dd', 'ar').format(value);
+  }
+
   String _formatMonthLabel(DateTime value) {
     return DateFormat('MMMM yyyy', 'ar').format(value);
   }
@@ -83,40 +91,47 @@ class _OrdersScreenState extends State<OrdersScreen>
     }
   }
 
-  Map<String, dynamic> _monthFilters() {
-    final start = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
-    final end = DateTime(
-      _selectedMonth.year,
-      _selectedMonth.month + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
+  bool _tabUsesArrivalDate() => _tabController.index == 3;
 
+  String _tableDateField() {
+    return _tabUsesArrivalDate() ? 'arrivalDate' : 'orderDate';
+  }
+
+  DateTime _normalizeDate(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  Map<String, dynamic> _dateRangeFilters() {
     return {
-      'startDate': start.toIso8601String(),
-      'endDate': end.toIso8601String(),
+      'startDate': DateTime(
+        _rangeStart.year,
+        _rangeStart.month,
+        _rangeStart.day,
+      ).toIso8601String(),
+      'endDate': DateTime(
+        _rangeEnd.year,
+        _rangeEnd.month,
+        _rangeEnd.day,
+        23,
+        59,
+        59,
+        999,
+      ).toIso8601String(),
     };
   }
 
   Map<String, dynamic> _baseFilters() {
-    final filters = <String, dynamic>{..._extraFilters, ..._monthFilters()};
+    final filters = <String, dynamic>{..._extraFilters, ..._dateRangeFilters()};
     filters.remove('page');
     filters.remove('limit');
     filters.remove('dateField');
     return filters;
   }
 
-  Map<String, dynamic> _statsFilters() {
-    return <String, dynamic>{..._baseFilters(), 'dateField': 'orderDate'};
-  }
-
   Map<String, dynamic> _tableFilters() {
     final filters = <String, dynamic>{
       ..._baseFilters(),
-      'dateField': 'orderDate',
+      'dateField': _tableDateField(),
       'limit': _pageSize,
     };
 
@@ -175,17 +190,36 @@ class _OrdersScreenState extends State<OrdersScreen>
     setState(() => _isStatsLoading = true);
 
     final provider = context.read<OrderProvider>();
-    final filters = _statsFilters();
+    final orderDateFilters = <String, dynamic>{
+      ..._baseFilters(),
+      'dateField': 'orderDate',
+    };
+    final arrivalDateFilters = <String, dynamic>{
+      ..._baseFilters(),
+      'dateField': 'arrivalDate',
+    };
 
     final results = await Future.wait<int>([
-      provider.fetchOrdersCount(filters: filters),
-      provider.fetchOrdersCount(filters: {...filters, 'orderSource': 'عميل'}),
-      provider.fetchOrdersCount(filters: {...filters, 'orderSource': 'مورد'}),
-      provider.fetchOrdersCount(filters: {...filters, 'orderSource': 'مدمج'}),
-      provider.fetchOrdersCount(filters: {...filters, 'status': 'تم التحميل'}),
-      provider.fetchOrdersCount(filters: {...filters, 'status': 'تم التنفيذ'}),
-      provider.fetchOrdersCount(filters: {...filters, 'status': 'مكتمل'}),
-      provider.fetchOrdersCount(filters: {...filters, 'status': 'ملغى'}),
+      provider.fetchOrdersCount(filters: orderDateFilters),
+      provider.fetchOrdersCount(
+        filters: {...orderDateFilters, 'orderSource': 'عميل'},
+      ),
+      provider.fetchOrdersCount(
+        filters: {...orderDateFilters, 'orderSource': 'مورد'},
+      ),
+      provider.fetchOrdersCount(
+        filters: {...arrivalDateFilters, 'orderSource': 'مدمج'},
+      ),
+      provider.fetchOrdersCount(
+        filters: {...arrivalDateFilters, 'status': 'تم التحميل'},
+      ),
+      provider.fetchOrdersCount(
+        filters: {...arrivalDateFilters, 'status': 'تم التنفيذ'},
+      ),
+      provider.fetchOrdersCount(
+        filters: {...arrivalDateFilters, 'status': 'مكتمل'},
+      ),
+      provider.fetchOrdersCount(filters: {...orderDateFilters, 'status': 'ملغى'}),
     ]);
 
     if (!mounted) return;
@@ -241,6 +275,70 @@ class _OrdersScreenState extends State<OrdersScreen>
     if (_extraFilters.isEmpty) return;
     setState(() => _extraFilters = {});
     await _refreshOrders(resetPage: true, refreshStats: true);
+  }
+
+  DateTime get _selectedMonth => DateTime(_rangeStart.year, _rangeStart.month);
+
+  set _selectedMonth(DateTime value) {
+    _rangeStart = DateTime(value.year, value.month, 1);
+    _rangeEnd = DateTime(value.year, value.month + 1, 0);
+  }
+
+  Future<void> _applyDateRange(DateTime start, DateTime end) async {
+    final normalizedStart = _normalizeDate(start);
+    final normalizedEnd = _normalizeDate(end);
+    final safeStart = normalizedStart.isAfter(normalizedEnd)
+        ? normalizedEnd
+        : normalizedStart;
+    final safeEnd = normalizedStart.isAfter(normalizedEnd)
+        ? normalizedStart
+        : normalizedEnd;
+
+    setState(() {
+      _rangeStart = safeStart;
+      _rangeEnd = safeEnd;
+    });
+    await _refreshOrders(resetPage: true, refreshStats: true);
+  }
+
+  Future<void> _pickRangeDate({required bool isStart}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isStart ? _rangeStart : _rangeEnd,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035, 12, 31),
+      helpText: isStart ? 'اختر تاريخ البداية' : 'اختر تاريخ النهاية',
+    );
+
+    if (picked == null || !mounted) return;
+
+    await _applyDateRange(
+      isStart ? picked : _rangeStart,
+      isStart ? _rangeEnd : picked,
+    );
+  }
+
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035, 12, 31),
+      initialDateRange: DateTimeRange(start: _rangeStart, end: _rangeEnd),
+      helpText: 'اختر الفترة المطلوبة',
+      saveText: 'تطبيق',
+      confirmText: 'تطبيق',
+      cancelText: 'إلغاء',
+    );
+
+    if (picked == null || !mounted) return;
+    await _applyDateRange(picked.start, picked.end);
+  }
+
+  Future<void> _setQuickRange({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    await _applyDateRange(start, end);
   }
 
   Future<void> _pickMonth() async {
@@ -308,7 +406,7 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   List<Widget> _buildHeaderSlivers() {
     return [
-      SliverToBoxAdapter(child: _buildMonthSelector()),
+      SliverToBoxAdapter(child: _buildDateRangeSelector()),
       SliverToBoxAdapter(child: _buildStatsSection()),
       SliverToBoxAdapter(child: _buildActiveFiltersBanner()),
       SliverToBoxAdapter(child: _buildSearchField()),
@@ -425,6 +523,272 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
+  Widget _buildDateQuickAction({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return ActionChip(
+      onPressed: onTap,
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: AppColors.primaryBlue.withValues(alpha: 0.14),
+      ),
+      labelStyle: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: AppColors.primaryDarkBlue,
+      ),
+      avatar: const Icon(
+        Icons.bolt_outlined,
+        size: 14,
+        color: AppColors.primaryBlue,
+      ),
+      label: Text(label),
+    );
+  }
+
+  Widget _buildDateSelectorCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+    required Color color,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.14)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.mediumGray,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.primaryDarkBlue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.edit_calendar_outlined, size: 18, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateRangeSelector() {
+    final now = _normalizeDate(DateTime.now());
+    final currentMonthStart = DateTime(now.year, now.month, 1);
+    final currentMonthEnd = DateTime(now.year, now.month + 1, 0);
+    final last7DaysStart = now.subtract(const Duration(days: 6));
+    final last30DaysStart = now.subtract(const Duration(days: 29));
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: AppColors.lightGray.withValues(alpha: 0.22),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 760;
+
+            final details = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'فلترة الطلبات حسب الفترة',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryDarkBlue,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_formatRangeDate(_rangeStart)} - ${_formatRangeDate(_rangeEnd)}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'يمكنك تحديد فترة من تاريخ إلى تاريخ، مع اعتماد الطلبات المدمجة والمكتملة على تاريخ الوصول للعميل.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.mediumGray,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            );
+
+            final selectors = compact
+                ? Column(
+                    children: [
+                      _buildDateSelectorCard(
+                        label: 'من تاريخ',
+                        value: _formatRangeDate(_rangeStart),
+                        icon: Icons.calendar_today_outlined,
+                        onTap: () => _pickRangeDate(isStart: true),
+                        color: AppColors.primaryBlue,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildDateSelectorCard(
+                        label: 'إلى تاريخ',
+                        value: _formatRangeDate(_rangeEnd),
+                        icon: Icons.event_available_outlined,
+                        onTap: () => _pickRangeDate(isStart: false),
+                        color: AppColors.successGreen,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _buildDateSelectorCard(
+                          label: 'من تاريخ',
+                          value: _formatRangeDate(_rangeStart),
+                          icon: Icons.calendar_today_outlined,
+                          onTap: () => _pickRangeDate(isStart: true),
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildDateSelectorCard(
+                          label: 'إلى تاريخ',
+                          value: _formatRangeDate(_rangeEnd),
+                          icon: Icons.event_available_outlined,
+                          onTap: () => _pickRangeDate(isStart: false),
+                          color: AppColors.successGreen,
+                        ),
+                      ),
+                    ],
+                  );
+
+            final controls = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _pickDateRange,
+                  icon: const Icon(Icons.date_range_outlined),
+                  label: const Text('اختيار الفترة'),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildDateQuickAction(
+                      label: 'اليوم',
+                      onTap: () => _setQuickRange(start: now, end: now),
+                    ),
+                    _buildDateQuickAction(
+                      label: 'آخر 7 أيام',
+                      onTap: () => _setQuickRange(
+                        start: last7DaysStart,
+                        end: now,
+                      ),
+                    ),
+                    _buildDateQuickAction(
+                      label: 'آخر 30 يوم',
+                      onTap: () => _setQuickRange(
+                        start: last30DaysStart,
+                        end: now,
+                      ),
+                    ),
+                    _buildDateQuickAction(
+                      label: 'هذا الشهر',
+                      onTap: () => _setQuickRange(
+                        start: currentMonthStart,
+                        end: currentMonthEnd,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  details,
+                  const SizedBox(height: 12),
+                  selectors,
+                  const SizedBox(height: 10),
+                  controls,
+                ],
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: details),
+                    const SizedBox(width: 12),
+                    controls,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                selectors,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   List<_OrdersStatCardData> _statsData() {
     return [
       _OrdersStatCardData(
@@ -466,8 +830,49 @@ class _OrdersScreenState extends State<OrdersScreen>
     ];
   }
 
+  List<_OrdersStatCardData> _periodStatsData() {
+    return [
+      _OrdersStatCardData(
+        title: 'إجمالي الفترة',
+        value: _summaryCounts['all'] ?? 0,
+        icon: Icons.receipt_long_outlined,
+        color: AppColors.primaryBlue,
+      ),
+      _OrdersStatCardData(
+        title: 'طلبات العملاء',
+        value: _summaryCounts['customer'] ?? 0,
+        icon: Icons.people_alt_outlined,
+        color: const Color(0xFF00796B),
+      ),
+      _OrdersStatCardData(
+        title: 'طلبات الموردين',
+        value: _summaryCounts['supplier'] ?? 0,
+        icon: Icons.local_shipping_outlined,
+        color: const Color(0xFFEF6C00),
+      ),
+      _OrdersStatCardData(
+        title: 'الطلبات المدمجة',
+        value: _summaryCounts['merged'] ?? 0,
+        icon: Icons.merge_type_outlined,
+        color: const Color(0xFF6A1B9A),
+      ),
+      _OrdersStatCardData(
+        title: 'الطلبات المكتملة',
+        value: _summaryCounts['completed'] ?? 0,
+        icon: Icons.task_alt_outlined,
+        color: AppColors.successGreen,
+      ),
+      _OrdersStatCardData(
+        title: 'الطلبات الملغاة',
+        value: _summaryCounts['cancelled'] ?? 0,
+        icon: Icons.cancel_outlined,
+        color: AppColors.errorRed,
+      ),
+    ];
+  }
+
   Widget _buildStatsSection() {
-    final items = _statsData();
+    final items = _periodStatsData();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -677,6 +1082,435 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
+  void _openOrder(Order order, bool isDriverUser) {
+    if (isDriverUser) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DriverDeliveryTrackingScreen(initialOrder: order),
+        ),
+      );
+      return;
+    }
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.orderDetails,
+      arguments: order.id,
+    );
+  }
+
+  String _formatDate(DateTime value) {
+    return DateFormat('yyyy/MM/dd', 'ar').format(value);
+  }
+
+  String _formatQuantity(Order order) {
+    final quantity = order.quantity;
+    if (quantity == null) {
+      return order.fuelType?.trim().isNotEmpty == true
+          ? order.fuelType!.trim()
+          : 'غير محدد';
+    }
+
+    final formatted = quantity % 1 == 0
+        ? quantity.toStringAsFixed(0)
+        : quantity.toStringAsFixed(2);
+    final unit = (order.unit ?? '').trim();
+    final fuel = (order.fuelType ?? '').trim();
+
+    if (fuel.isEmpty && unit.isEmpty) return formatted;
+    if (fuel.isEmpty) return '$formatted $unit';
+    if (unit.isEmpty) return '$fuel • $formatted';
+    return '$fuel • $formatted $unit';
+  }
+
+  String _valueOrFallback(String? value, {String fallback = 'غير محدد'}) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? fallback : normalized;
+  }
+
+  String _partyName(Order order) {
+    final customerName = (order.customer?.name ?? '').trim();
+    final movementCustomerName = (order.movementCustomerName ?? '').trim();
+    final supplierName = order.supplierName.trim();
+
+    if (order.orderSource == 'عميل') {
+      return customerName.isNotEmpty
+          ? customerName
+          : movementCustomerName.isNotEmpty
+          ? movementCustomerName
+          : supplierName;
+    }
+
+    return supplierName.isNotEmpty
+        ? supplierName
+        : customerName.isNotEmpty
+        ? customerName
+        : 'غير محدد';
+  }
+
+  String _driverStatusText(Order order) {
+    final driverName = order.driverName?.trim();
+    if (driverName != null && driverName.isNotEmpty) {
+      return '${order.status} • $driverName';
+    }
+    return order.status;
+  }
+
+  String _locationText(Order order) {
+    final parts = <String>[
+      if ((order.location).trim().isNotEmpty &&
+          order.location.trim() != 'غير محدد')
+        order.location.trim(),
+      if ((order.address ?? '').trim().isNotEmpty) order.address!.trim(),
+    ];
+
+    if (parts.isEmpty) {
+      return 'غير محدد';
+    }
+
+    return parts.join(' • ');
+  }
+
+  Widget _mobileMetaChip({
+    required String label,
+    required Color color,
+    IconData? icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 5),
+          ],
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 170),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileDetailTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color accent,
+    int maxLines = 3,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 15, color: accent),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.mediumGray,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: maxLines,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryDarkBlue,
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileOrderCard(Order order, bool isDriverUser) {
+    final statusColor = order.statusColor;
+    final sourceLabel = order.orderSourceText;
+    final partyName = _partyName(order);
+    final requestType = order.effectiveRequestType.trim().isEmpty
+        ? 'غير محدد'
+        : order.effectiveRequestType.trim();
+    final supplierOrderNumber = _valueOrFallback(order.supplierOrderNumber);
+    final location = _locationText(order);
+    final narrowLayout = MediaQuery.sizeOf(context).width < 360;
+    final actionLabel = isDriverUser ? 'فتح التتبع' : 'عرض التفاصيل';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openOrder(order, isDriverUser),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: statusColor.withValues(alpha: 0.16)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.orderNumber,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.primaryDarkBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          partyName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.mediumGray,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      order.status,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _mobileMetaChip(
+                    label: sourceLabel,
+                    color: AppColors.primaryBlue,
+                    icon: Icons.inventory_2_outlined,
+                  ),
+                  _mobileMetaChip(
+                    label: requestType,
+                    color: AppColors.warningOrange,
+                    icon: Icons.category_outlined,
+                  ),
+                  _mobileMetaChip(
+                    label: 'رقم المورد: $supplierOrderNumber',
+                    color: AppColors.secondaryTeal,
+                    icon: Icons.pin_outlined,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  const spacing = 8.0;
+                  final columns = narrowLayout || constraints.maxWidth < 330
+                      ? 1
+                      : 2;
+                  final itemWidth = (constraints.maxWidth -
+                          (spacing * (columns - 1))) /
+                      columns;
+
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: [
+                      SizedBox(
+                        width: itemWidth,
+                        child: _mobileDetailTile(
+                          icon: Icons.calendar_month_outlined,
+                          label: 'تاريخ الطلب',
+                          value: _formatDate(order.orderDate),
+                          accent: AppColors.primaryBlue,
+                        ),
+                      ),
+                      SizedBox(
+                        width: itemWidth,
+                        child: _mobileDetailTile(
+                          icon: Icons.local_shipping_outlined,
+                          label: 'المورد / العميل',
+                          value: partyName,
+                          accent: AppColors.secondaryTeal,
+                        ),
+                      ),
+                      SizedBox(
+                        width: itemWidth,
+                        child: _mobileDetailTile(
+                          icon: Icons.category_outlined,
+                          label: 'الوقود / الكمية',
+                          value: _formatQuantity(order),
+                          accent: AppColors.warningOrange,
+                        ),
+                      ),
+                      SizedBox(
+                        width: itemWidth,
+                        child: _mobileDetailTile(
+                          icon: Icons.pin_outlined,
+                          label: 'رقم طلب المورد',
+                          value: supplierOrderNumber,
+                          accent: AppColors.infoBlue,
+                        ),
+                      ),
+                      SizedBox(
+                        width: itemWidth,
+                        child: _mobileDetailTile(
+                          icon: Icons.schedule_outlined,
+                          label: 'تاريخ التحميل',
+                          value: order.formattedLoadingDateTime,
+                          accent: const Color(0xFF5E35B1),
+                        ),
+                      ),
+                      SizedBox(
+                        width: itemWidth,
+                        child: _mobileDetailTile(
+                          icon: Icons.event_available_outlined,
+                          label: 'تاريخ الوصول',
+                          value: order.formattedArrivalDateTime,
+                          accent: const Color(0xFF00897B),
+                        ),
+                      ),
+                      SizedBox(
+                        width: itemWidth,
+                        child: _mobileDetailTile(
+                          icon: Icons.drive_eta_outlined,
+                          label: 'الحالة / السائق',
+                          value: _driverStatusText(order),
+                          accent: statusColor,
+                        ),
+                      ),
+                      SizedBox(
+                        width: itemWidth,
+                        child: _mobileDetailTile(
+                          icon: Icons.place_outlined,
+                          label: 'الموقع',
+                          value: location,
+                          accent: const Color(0xFF6D4C41),
+                          maxLines: 4,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => _openOrder(order, isDriverUser),
+                  icon: Icon(
+                    isDriverUser
+                        ? Icons.route_outlined
+                        : Icons.open_in_new_outlined,
+                    size: 18,
+                  ),
+                  label: Text(actionLabel),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileOrdersList(List<Order> orders, bool isDriverUser) {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+      itemCount: orders.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        return _buildMobileOrderCard(orders[index], isDriverUser);
+      },
+    );
+  }
+
   Widget _buildOrdersTable(bool isDriverUser) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -706,23 +1540,16 @@ class _OrdersScreenState extends State<OrdersScreen>
       );
     }
 
-    return OrderDataGrid(
-      orders: filtered,
-      onRowTap: (order) {
-        if (isDriverUser) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => DriverDeliveryTrackingScreen(initialOrder: order),
-            ),
-          );
-          return;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 760;
+        if (isMobile) {
+          return _buildMobileOrdersList(filtered, isDriverUser);
         }
 
-        Navigator.pushNamed(
-          context,
-          AppRoutes.orderDetails,
-          arguments: order.id,
+        return OrderDataGrid(
+          orders: filtered,
+          onRowTap: (order) => _openOrder(order, isDriverUser),
         );
       },
     );
@@ -802,7 +1629,11 @@ class _OrdersScreenState extends State<OrdersScreen>
             if (compact) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [info, const SizedBox(height: 12), buttons],
+                children: [
+                  info,
+                  const SizedBox(height: 12),
+                  SizedBox(width: double.infinity, child: buttons),
+                ],
               );
             }
 

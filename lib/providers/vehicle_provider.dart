@@ -52,7 +52,19 @@ class VehicleProvider with ChangeNotifier {
             .toList();
         _error = null;
       } else {
+        final rawBody = utf8.decode(response.bodyBytes);
+        try {
+          final errorData = json.decode(rawBody);
+          _error =
+              errorData['details']?.toString() ??
+              errorData['error']?.toString() ??
+              '';
+        } catch (_) {
+          _error = rawBody.trim();
+        }
+        if ((_error ?? '').trim().isEmpty) {
         _error = 'فشل في جلب السيارات';
+      }
       }
     } catch (e) {
       _error = e.toString();

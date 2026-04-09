@@ -259,53 +259,100 @@ class OrderStatusTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final steps = _getStatusSteps();
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: _getStatusColor(order.status).withOpacity(0.12),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _getStatusColor(order.status).withOpacity(0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'سير حالة الطلب',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(order.status).withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.timeline_rounded,
+                        color: _getStatusColor(order.status),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'سير حالة الطلب',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 4,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
                     color: _getStatusColor(order.status).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _getStatusColor(order.status)),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: _getStatusColor(order.status).withOpacity(0.22),
+                    ),
                   ),
                   child: Text(
                     order.status,
                     style: TextStyle(
                       color: _getStatusColor(order.status),
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
             if (order.customer != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+              Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.infoBlue.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.person_outline,
-                      size: 16,
-                      color: AppColors.infoBlue,
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: AppColors.infoBlue.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.person_outline_rounded,
+                        size: 16,
+                        color: AppColors.infoBlue,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -314,10 +361,18 @@ class OrderStatusTimeline extends StatelessWidget {
                     ),
                     if (order.customer?.code != null) ...[
                       const SizedBox(width: 16),
-                      Icon(
-                        Icons.tag_outlined,
-                        size: 16,
-                        color: AppColors.secondaryTeal,
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: AppColors.secondaryTeal.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.sell_outlined,
+                          size: 15,
+                          color: AppColors.secondaryTeal,
+                        ),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -332,7 +387,7 @@ class OrderStatusTimeline extends StatelessWidget {
                 ),
               ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
 
             // Timeline
             ...steps.asMap().entries.map((entry) {
@@ -349,40 +404,51 @@ class OrderStatusTimeline extends StatelessWidget {
                       // Timeline line and icon
                       Column(
                         children: [
-                          // Icon
                           Container(
-                            width: 36,
-                            height: 36,
+                            width: 42,
+                            height: 42,
                             decoration: BoxDecoration(
-                              color: step.isActive
-                                  ? step.color.withOpacity(0.1)
-                                  : AppColors.backgroundGray,
-                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: step.isActive
+                                    ? [
+                                        step.color.withOpacity(0.16),
+                                        step.color.withOpacity(0.05),
+                                      ]
+                                    : [
+                                        AppColors.backgroundGray,
+                                        Colors.white,
+                                      ],
+                              ),
+                              borderRadius: BorderRadius.circular(15),
                               border: Border.all(
                                 color: step.isActive
                                     ? step.color
                                     : AppColors.lightGray,
-                                width: 2,
+                                width: 1.8,
                               ),
                             ),
                             child: Center(
                               child: Icon(
                                 step.icon,
-                                size: 18,
+                                size: 20,
                                 color: step.isActive
                                     ? step.color
                                     : AppColors.lightGray,
                               ),
                             ),
                           ),
-                          // Vertical line (if not last)
                           if (!isLast)
                             Container(
-                              width: 2,
-                              height: 30,
-                              color: steps[index + 1].isActive
-                                  ? steps[index + 1].color
-                                  : AppColors.lightGray,
+                              width: 3,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: steps[index + 1].isActive
+                                    ? steps[index + 1].color.withOpacity(0.55)
+                                    : AppColors.lightGray.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
                             ),
                         ],
                       ),
@@ -391,158 +457,179 @@ class OrderStatusTimeline extends StatelessWidget {
 
                       // Step details
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  step.title,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: step.isActive
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                    color: step.isActive
-                                        ? AppColors.darkGray
-                                        : AppColors.mediumGray,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: step.isActive
-                                        ? step.color.withOpacity(0.1)
-                                        : AppColors.backgroundGray,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: step.isActive
-                                          ? step.color
-                                          : AppColors.lightGray,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    step.status,
-                                    style: TextStyle(
-                                      color: step.isActive
-                                          ? step.color
-                                          : AppColors.mediumGray,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: step.isActive
+                                ? step.color.withOpacity(0.04)
+                                : AppColors.backgroundGray.withOpacity(0.35),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: step.isActive
+                                  ? step.color.withOpacity(0.10)
+                                  : AppColors.lightGray.withOpacity(0.30),
                             ),
-
-                            // Description
-                            if (step.description != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  step.description!,
-                                  style: TextStyle(
-                                    color: AppColors.mediumGray,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-
-                            // Date
-                            if (step.date != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today,
-                                      size: 12,
-                                      color: AppColors.lightGray,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      DateFormat(
-                                        'yyyy/MM/dd HH:mm',
-                                      ).format(step.date!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      step.title,
                                       style: TextStyle(
-                                        color: AppColors.mediumGray,
-                                        fontSize: 11,
+                                        fontSize: 14.5,
+                                        fontWeight: step.isActive
+                                            ? FontWeight.w800
+                                            : FontWeight.w600,
+                                        color: step.isActive
+                                            ? AppColors.darkGray
+                                            : AppColors.mediumGray,
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: step.isActive
+                                          ? step.color.withOpacity(0.12)
+                                          : AppColors.backgroundGray,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: step.isActive
+                                            ? step.color.withOpacity(0.18)
+                                            : AppColors.lightGray,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      step.status,
+                                      style: TextStyle(
+                                        color: step.isActive
+                                            ? step.color
+                                            : AppColors.mediumGray,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
 
-                            // Overdue warning
-                            if (step.title == 'في انتظار التعيين' &&
-                                order.notificationSentAt != null)
-                              Container(
-                                margin: const EdgeInsets.only(top: 6),
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.errorRed.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.warning_amber_outlined,
-                                      size: 14,
-                                      color: AppColors.errorRed,
+                              if (step.description != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    step.description!,
+                                    style: TextStyle(
+                                      color: AppColors.mediumGray,
+                                      fontSize: 12,
+                                      height: 1.45,
                                     ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        'تم إرسال إشعار تأخير للمسؤولين',
+                                  ),
+                                ),
+
+                              if (step.date != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.silverLight.withOpacity(0.8),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Icon(
+                                          Icons.schedule_rounded,
+                                          size: 12,
+                                          color: AppColors.lightGray,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        DateFormat(
+                                          'yyyy/MM/dd HH:mm',
+                                        ).format(step.date!),
                                         style: TextStyle(
-                                          color: AppColors.errorRed,
+                                          color: AppColors.mediumGray,
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              if (step.title == 'في انتظار التعيين' &&
+                                  order.notificationSentAt != null)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 8),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.errorRed.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.warning_amber_outlined,
+                                        size: 14,
+                                        color: AppColors.errorRed,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'تم إرسال إشعار تأخير للمسؤولين',
+                                          style: TextStyle(
+                                            color: AppColors.errorRed,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              if (step.title == 'تم التحميل' &&
+                                  order.loadingDuration != null)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 8),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.infoBlue.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.timer_outlined,
+                                        size: 14,
+                                        color: AppColors.infoBlue,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'مدة التحميل: ${order.loadingDuration} دقيقة',
+                                        style: TextStyle(
+                                          color: AppColors.infoBlue,
                                           fontSize: 11,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-
-                            // Loading duration info
-                            if (step.title == 'تم التحميل' &&
-                                order.loadingDuration != null)
-                              Container(
-                                margin: const EdgeInsets.only(top: 6),
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.infoBlue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.timer_outlined,
-                                      size: 14,
-                                      color: AppColors.infoBlue,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'مدة التحميل: ${order.loadingDuration} دقيقة',
-                                      style: TextStyle(
-                                        color: AppColors.infoBlue,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
 
-                  // Spacer
                   if (!isLast) const SizedBox(height: 16),
                 ],
               );

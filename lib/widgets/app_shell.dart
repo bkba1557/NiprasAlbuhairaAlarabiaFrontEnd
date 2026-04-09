@@ -5,7 +5,6 @@ import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/providers/chat_provider.dart';
 import 'package:order_tracker/providers/circular_provider.dart';
 import 'package:order_tracker/providers/note_provider.dart';
-import 'package:order_tracker/services/whatsapp_service.dart';
 import 'package:order_tracker/utils/app_navigation.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
@@ -13,7 +12,6 @@ import 'package:order_tracker/utils/role_route_policy.dart';
 import 'package:order_tracker/widgets/chat_floating_button.dart';
 import 'package:order_tracker/widgets/draggable_resizable_panel.dart';
 import 'package:order_tracker/widgets/quick_notes_panel.dart';
-import 'package:order_tracker/widgets/whatsapp_floating_button.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -105,6 +103,8 @@ class _AppShellState extends State<AppShell>
 
     // ---------- حجم لوحة الملاحظات ----------
     _panelSize = const Size(360, 450);
+    _panelOffset = Offset.zero;
+    _notesFabOffset = Offset.zero;
 
     // ---------- تحميل موضع زرّ الملاحظات ----------
     _loadNotesFabPosition().then((_) => setState(() {}));
@@ -345,7 +345,7 @@ class _AppShellState extends State<AppShell>
         // ---------------------------------------------------
         // زرّ الملاحظات (قابل للسحب)
         // ---------------------------------------------------
-        if (canShowQuickNotes)
+        if (canShowQuickNotes && !_showQuickNotesPanel)
           Positioned(
             left: _notesFabOffset.dx,
             top: _notesFabOffset.dy,
@@ -441,11 +441,7 @@ class _AppShellState extends State<AppShell>
                 isRestrictedSingleRouteRole(auth.user?.role);
             final showGlobalChatFab =
                 canShowChat && !restrictToSingleRoute && !hideChatFab;
-            final showGlobalWhatsAppFab = auth.isAuthenticated &&
-                !restrictToSingleRoute &&
-                WhatsAppService.canAccessForRole(auth.user?.role);
-
-            if (!showGlobalChatFab && !showGlobalWhatsAppFab) {
+            if (!showGlobalChatFab) {
               return const SizedBox.shrink();
             }
 
@@ -464,8 +460,6 @@ class _AppShellState extends State<AppShell>
             final safe = MediaQuery.of(context).padding;
             final fabLeft = safe.left + offsetPx;
             final fabBottom = safe.bottom + offsetPx;
-            final fabRight = safe.right + offsetPx;
-
             final isAlreadyInChat = normalizedRoute == AppRoutes.chat ||
                 normalizedRoute == AppRoutes.chatConversation;
 
@@ -486,17 +480,6 @@ class _AppShellState extends State<AppShell>
                       appNavigatorKey.currentState?.pushNamed(AppRoutes.chat);
                     },
                   ),
-                if (showGlobalWhatsAppFab)
-                  WhatsAppFloatingButton(
-                    heroTag: 'global_whatsapp_fab',
-                    draggable: true,
-                    persistKey: 'global_whatsapp_fab_v1',
-                    initialAlignment: Alignment.bottomRight,
-                    initialMargin: EdgeInsets.only(
-                      right: fabRight,
-                      bottom: fabBottom + 72,
-                    ),
-                  ),
               ],
             );
           },
@@ -505,18 +488,60 @@ class _AppShellState extends State<AppShell>
         // ---------------------------------------------------
         // لوحة الملاحظات القابلة للسحب وإعادة التحجيم
         // ---------------------------------------------------
-        if (canShowQuickNotes && _showQuickNotesPanel)
-          Positioned(
-            left: _panelOffset.dx,
-            top: _panelOffset.dy,
-            child: DraggableResizablePanel(
-              initialPosition: _panelOffset,
-              initialSize: _panelSize,
-              onPositionChanged: (newPos) =>
-                  setState(() => _panelOffset = newPos),
-              onSizeChanged: (newSize) =>
-                  setState(() => _panelSize = newSize),
-              child: QuickNotesPanel(onClose: _closeQuickNotesPanel),
+        if (canShowQuickNotes)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !_showQuickNotesPanel,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curved,
+                    child: ScaleTransition(
+                      scale: Tween<double>(
+                        begin: 0.94,
+                        end: 1,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  );
+                },
+                child: _showQuickNotesPanel
+                    ? SizedBox.expand(
+                        key: const ValueKey('quick-notes-open'),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: _closeQuickNotesPanel,
+                              child: const SizedBox.expand(),
+                            ),
+                          ),
+                          DraggableResizablePanel(
+                            title: 'الملاحظات الذكية',
+                            initialPosition: _panelOffset,
+                            initialSize: _panelSize,
+                            onClose: _closeQuickNotesPanel,
+                            onPositionChanged: (newPos) =>
+                                setState(() => _panelOffset = newPos),
+                            onSizeChanged: (newSize) =>
+                                setState(() => _panelSize = newSize),
+                            child: const QuickNotesPanel(),
+                          ),
+                        ],
+                      ),
+                    )
+                    : const SizedBox.shrink(key: ValueKey('quick-notes-closed')),
+              ),
             ),
           ),
 

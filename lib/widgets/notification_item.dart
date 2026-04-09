@@ -494,6 +494,7 @@ class _NotificationUiHelper {
       case 'chat_message':
         return Icons.chat_bubble_outline;
       case 'task_reminder':
+      case 'note_reminder':
       case 'loading_reminder':
       case 'arrival_reminder':
         return Icons.notifications_active_outlined;
@@ -545,6 +546,7 @@ class _NotificationUiHelper {
         return AppColors.errorRed;
       case 'order_updated':
       case 'task_reminder':
+      case 'note_reminder':
       case 'task_extension_requested':
       case 'loading_reminder':
       case 'arrival_reminder':
@@ -612,6 +614,8 @@ class _NotificationUiHelper {
         return 'استقطاع مهمة';
       case 'task_reminder':
         return 'تذكير مهمة';
+      case 'note_reminder':
+        return 'تذكير مذكرة';
       case 'task_overdue':
         return 'مهمة متأخرة';
       case 'chat_message':

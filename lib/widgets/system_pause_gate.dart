@@ -30,14 +30,6 @@ class SystemPauseGate extends StatelessWidget {
         return Stack(
           children: [
             child,
-            if (isLoggedIn && isOwner && (notice?.isActive ?? false))
-              _SystemPauseOwnerBanner(
-                notice: notice!,
-                isRefreshing: systemPause.isLoading,
-                onRefresh: () => systemPause.refresh(),
-                onManage: () =>
-                    Navigator.pushNamed(context, AppRoutes.systemPause),
-              ),
             if (shouldBlock)
               SystemPauseOverlay(
                 notice: notice!,
