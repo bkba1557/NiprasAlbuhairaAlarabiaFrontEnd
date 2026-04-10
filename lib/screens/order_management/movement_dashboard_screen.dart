@@ -578,6 +578,31 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
         order.mergeStatus != 'مدمج';
   }
 
+  bool _canCancelMovementAction(Order order) {
+    if (!order.isMovementOrder || _isOrderCompleted(order)) {
+      return false;
+    }
+    if (_ownerApprovalUser) {
+      return true;
+    }
+    if (!_movementUser) {
+      return false;
+    }
+    if (order.isMovementDirected) {
+      return false;
+    }
+    return (order.mergedWithOrderId ?? '').trim().isEmpty &&
+        order.mergeStatus != 'مدمج';
+  }
+
+  bool _canUndispatchMovementOrder(Order order) {
+    return _ownerApprovalUser &&
+        order.isMovementOrder &&
+        order.orderSource == 'مورد' &&
+        order.isMovementDirected &&
+        !_isOrderCompleted(order);
+  }
+
   String _cancellationApprovalLabel(Order order) {
     if (order.isCancellationPendingOwnerApproval) {
       return 'بانتظار اعتماد المالك';
@@ -1924,6 +1949,53 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return true;
   }
 
+  Future<bool> _undispatchMovementOrder(Order order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('فك التوجيه'),
+        content: Text(
+          'هل تريد فك توجيه الطلب #${order.orderNumber} وإعادته إلى انتظار التوجيه؟',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('فك التوجيه'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return false;
+    }
+
+    setState(() => _busyOrderId = order.id);
+    final success = await context.read<OrderProvider>().undispatchMovementOrder(
+      order.id,
+    );
+    if (!mounted) return false;
+    setState(() => _busyOrderId = null);
+    if (!success) {
+      _snack(
+        context.read<OrderProvider>().error ?? 'تعذر فك توجيه الطلب.',
+        AppColors.errorRed,
+      );
+      return false;
+    }
+
+    _snack(
+      'تم فك التوجيه وإعادة الطلب إلى انتظار التوجيه.',
+      AppColors.successGreen,
+    );
+    await _loadOrders(showLoader: false);
+    return true;
+  }
+
   Future<void> _showCancelledOrdersDialog() async {
     await showDialog<void>(
       context: context,
@@ -1932,29 +2004,38 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
           builder: (context, setDialogState) {
             final cancelledOrders = _cancelledMovementOrders;
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 28,
+              ),
               title: Text('سجل الطلبات الملغية (${cancelledOrders.length})'),
               content: SizedBox(
-                width: 520,
-                height: 420,
+                width: 680,
+                height: 540,
                 child: cancelledOrders.isEmpty
                     ? const Text('لا توجد طلبات ملغية حالياً.')
                     : ListView.separated(
                         shrinkWrap: true,
                         itemCount: cancelledOrders.length,
-                        separatorBuilder: (_, __) => const Divider(height: 18),
+                        separatorBuilder: (_, __) => const SizedBox(height: 14),
                         itemBuilder: (context, index) {
                           final order = cancelledOrders[index];
                           final busy = _busyOrderId == order.id;
                           final approvalColor = _cancellationApprovalColor(order);
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
+                          return AppSurfaceCard(
+                            padding: const EdgeInsets.all(16),
+                            borderRadius: BorderRadius.circular(22),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
                               Row(
                                 children: <Widget>[
                                   Expanded(
                                     child: Text(
                                       order.orderNumber,
                                       style: const TextStyle(
+                                        color: AppColors.primaryDarkBlue,
+                                        fontSize: 17,
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
@@ -1976,32 +2057,14 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                                       style: TextStyle(
                                         color: approvalColor,
                                         fontWeight: FontWeight.w700,
-                                        fontSize: 12,
+                                        fontSize: 11,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              Text('النوع: ${order.orderSource}'),
-                              if ((order.movementCustomerName ?? '').trim().isNotEmpty)
-                                Text('العميل: ${order.movementCustomerName}'),
-                              if (order.supplierName.trim().isNotEmpty)
-                                Text('المورد: ${order.supplierName}'),
-                              if ((order.cancellationReason ?? '').trim().isNotEmpty)
-                                Text('سبب الإلغاء: ${order.cancellationReason}'),
-                              if ((order.cancellationApprovalRequestedByName ?? '')
-                                  .trim()
-                                  .isNotEmpty)
-                                Text(
-                                  'طلب الإلغاء: ${order.cancellationApprovalRequestedByName}',
-                                ),
-                              if (order.cancelledAt != null)
-                                Text('تاريخ الإلغاء: ${_fmt(order.cancelledAt!)}'),
-                              if (order.cancellationApprovalApprovedAt != null)
-                                Text(
-                                  'تاريخ الاعتماد: ${_fmt(order.cancellationApprovalApprovedAt!)}',
-                                ),
+                              const SizedBox(height: 12),
+                              _buildCancelledOrderDetails(order),
                               const SizedBox(height: 10),
                               if (_ownerApprovalUser &&
                                   order.isCancellationPendingOwnerApproval)
@@ -2029,7 +2092,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                                     label: const Text('اعتماد الإلغاء'),
                                   ),
                                 ),
-                            ],
+                              ],
+                            ),
                           );
                         },
                       ),
@@ -2421,7 +2485,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                                         spacing: 8,
                                         runSpacing: 8,
                                         children: <Widget>[
-                                          if (_canCancelMovementOrder(request))
+                                          if (_canCancelMovementAction(request))
                                             OutlinedButton.icon(
                                               onPressed: busy
                                                   ? null
@@ -3661,8 +3725,16 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
-  Widget _buildPendingDriverSchedule(Order order) {
-    if (!order.isMovementPendingDriver) {
+  Widget _buildOrderSchedule(Order order) {
+    final hasLoadingSchedule =
+        order.loadingTime != null &&
+        order.loadingTime!.trim().isNotEmpty;
+    final arrivalDate = order.movementExpectedArrivalDate ?? order.arrivalDate;
+    final hasArrivalSchedule =
+        order.arrivalTime != null &&
+        order.arrivalTime!.trim().isNotEmpty;
+
+    if (!hasLoadingSchedule && !hasArrivalSchedule) {
       return const SizedBox.shrink();
     }
 
@@ -3670,20 +3742,32 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       spacing: 8,
       runSpacing: 8,
       children: <Widget>[
-        _buildScheduleChip(
-          icon: Icons.schedule_rounded,
-          label: 'موعد التحميل',
-          value: _formatScheduleLabel(order.loadingDate, order.loadingTime),
-          color: AppColors.infoBlue,
-        ),
-        _buildScheduleChip(
-          icon: Icons.flag_outlined,
-          label: 'موعد الوصول',
-          value: _formatScheduleLabel(order.arrivalDate, order.arrivalTime),
-          color: AppColors.successGreen,
-        ),
+        if (hasLoadingSchedule)
+          _buildScheduleChip(
+            icon: Icons.schedule_rounded,
+            label: 'موعد التحميل',
+            value: _formatScheduleLabel(order.loadingDate, order.loadingTime),
+            color: AppColors.infoBlue,
+          ),
+        if (hasArrivalSchedule)
+          _buildScheduleChip(
+            icon: Icons.flag_outlined,
+            label: 'موعد الوصول',
+            value: _formatScheduleLabel(arrivalDate, order.arrivalTime),
+            color: AppColors.successGreen,
+          ),
       ],
     );
+  }
+
+  Future<void> _openMovementOrderForEdit(Order order) async {
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.supplierOrderForm,
+      arguments: order,
+    );
+    if (!mounted) return;
+    await _loadOrders(showLoader: false);
   }
 
   Widget _buildDriverReminderBanner(Order order) {
@@ -3746,6 +3830,137 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCancelledOrderDetails(Order order) {
+    final bool hasMovementParties =
+        order.isMovementDirected ||
+        (order.movementCustomerName ?? '').trim().isNotEmpty ||
+        (order.movementMergedOrderNumber ?? '').trim().isNotEmpty ||
+        (order.driverName ?? '').trim().isNotEmpty ||
+        (order.vehicleNumber ?? '').trim().isNotEmpty;
+
+    final arrivalDate = order.movementExpectedArrivalDate ?? order.arrivalDate;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _buildCancelledOrderInfoLine('النوع', order.orderSource),
+        if (order.supplierName.trim().isNotEmpty)
+          _buildCancelledOrderInfoLine('المورد', order.supplierName),
+        if ((order.supplierOrderNumber ?? '').trim().isNotEmpty)
+          _buildCancelledOrderInfoLine(
+            'رقم طلب المورد الخارجي',
+            order.supplierOrderNumber!,
+          ),
+        if ((order.fuelType ?? '').trim().isNotEmpty)
+          _buildCancelledOrderInfoLine('الوقود', order.fuelType!),
+        if (order.quantity != null)
+          _buildCancelledOrderInfoLine(
+            'الكمية',
+            '${order.quantity!.toStringAsFixed(order.quantity! % 1 == 0 ? 0 : 2)} ${order.unit ?? ''}'
+                .trim(),
+          ),
+        _buildCancelledOrderInfoLine(
+          'موعد التحميل',
+          _formatScheduleLabel(order.loadingDate, order.loadingTime),
+        ),
+        _buildCancelledOrderInfoLine(
+          'موعد الوصول',
+          _formatScheduleLabel(arrivalDate, order.arrivalTime),
+        ),
+        if (hasMovementParties) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            'بيانات الأطراف',
+            style: TextStyle(
+              color: AppColors.primaryDarkBlue,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if ((order.movementCustomerName ?? '').trim().isNotEmpty)
+            _buildCancelledOrderInfoLine('العميل', order.movementCustomerName!),
+          if ((order.movementMergedOrderNumber ?? '').trim().isNotEmpty)
+            _buildCancelledOrderInfoLine(
+              'رقم الدمج',
+              order.movementMergedOrderNumber!,
+            ),
+          if ((order.driverName ?? '').trim().isNotEmpty)
+            _buildCancelledOrderInfoLine('السائق', order.driverName!),
+          if ((order.vehicleNumber ?? '').trim().isNotEmpty)
+            _buildCancelledOrderInfoLine('رقم المركبة', order.vehicleNumber!),
+          if ((order.movementDirectedByName ?? '').trim().isNotEmpty)
+            _buildCancelledOrderInfoLine(
+              'تم التوجيه بواسطة',
+              order.movementDirectedByName!,
+            ),
+        ],
+        if ((order.cancellationReason ?? '').trim().isNotEmpty)
+          _buildCancelledOrderInfoLine('سبب الإلغاء', order.cancellationReason!),
+        if ((order.cancellationApprovalRequestedByName ?? '').trim().isNotEmpty)
+          _buildCancelledOrderInfoLine(
+            'طلب الإلغاء',
+            order.cancellationApprovalRequestedByName!,
+          ),
+        if ((order.cancellationApprovalApprovedByName ?? '').trim().isNotEmpty)
+          _buildCancelledOrderInfoLine(
+            'تم الاعتماد بواسطة',
+            order.cancellationApprovalApprovedByName!,
+          ),
+        if (order.cancelledAt != null)
+          _buildCancelledOrderInfoLine(
+            'تاريخ الإلغاء',
+            _fmt(order.cancelledAt!),
+          ),
+        if (order.cancellationApprovalApprovedAt != null)
+          _buildCancelledOrderInfoLine(
+            'تاريخ الاعتماد',
+            _fmt(order.cancellationApprovalApprovedAt!),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCancelledOrderInfoLine(String label, String value) {
+    final normalizedValue = value.trim().isEmpty ? '-' : value.trim();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundGray,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.mediumGray,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            normalizedValue,
+            style: const TextStyle(
+              color: AppColors.primaryDarkBlue,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -5848,9 +6063,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 if (order.movementMergedOrderNumber != null)
                   Text('رقم الدمج: ${order.movementMergedOrderNumber}'),
                 Text('رقم المركبة: ${order.vehicleNumber ?? '-'}'),
-                if (order.isMovementPendingDriver) ...<Widget>[
+                if ((order.loadingTime != null &&
+                        order.loadingTime!.trim().isNotEmpty) ||
+                    (order.arrivalTime != null &&
+                        order.arrivalTime!.trim().isNotEmpty)) ...<Widget>[
                   const SizedBox(height: 10),
-                  _buildPendingDriverSchedule(order),
+                  _buildOrderSchedule(order),
                 ],
                 if (order.hasActiveDriverAssignmentReminder) ...<Widget>[
                   const SizedBox(height: 10),
@@ -5870,6 +6088,14 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                               ? 'اختيار سائق'
                               : 'تغيير السائق',
                         ),
+                      ),
+                    if (_ownerApprovalUser)
+                      OutlinedButton.icon(
+                        onPressed: busy
+                            ? null
+                            : () => _openMovementOrderForEdit(order),
+                        icon: const Icon(Icons.edit_note_rounded),
+                        label: const Text('تعديل الطلب'),
                       ),
                     if (order.isMovementPendingDriver)
                       OutlinedButton.icon(
@@ -5895,6 +6121,14 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         icon: const Icon(Icons.edit_outlined),
                         label: const Text('تعديل التوجيه'),
                       ),
+                    if (_canUndispatchMovementOrder(order))
+                      OutlinedButton.icon(
+                        onPressed: busy
+                            ? null
+                            : () => _undispatchMovementOrder(order),
+                        icon: const Icon(Icons.undo_rounded),
+                        label: const Text('فك التوجيه'),
+                      ),
                     OutlinedButton.icon(
                       onPressed: () {
                         Navigator.push(
@@ -5910,7 +6144,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                       icon: const Icon(Icons.timeline_rounded),
                       label: const Text('متابعة الحركة'),
                     ),
-                    if (_canCancelMovementOrder(order))
+                    if (_canCancelMovementAction(order))
                       OutlinedButton.icon(
                         onPressed: busy
                             ? null
@@ -6308,7 +6542,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                               spacing: 8,
                               runSpacing: 8,
                               children: <Widget>[
-                                if (_canCancelMovementOrder(request))
+                                if (_canCancelMovementAction(request))
                                   OutlinedButton.icon(
                                     onPressed: busy
                                         ? null
@@ -6495,6 +6729,15 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                               ],
                             ),
                             actions: <Widget>[
+                              if (_ownerApprovalUser)
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    Navigator.pop(dialogContext);
+                                    await _openMovementOrderForEdit(order);
+                                  },
+                                  icon: const Icon(Icons.edit_note_rounded),
+                                  label: const Text('تعديل الطلب'),
+                                ),
                               TextButton(
                                 onPressed: () => Navigator.pop(dialogContext),
                                 child: const Text('إلغاء'),

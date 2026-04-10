@@ -692,6 +692,11 @@ class ApiEndpoints {
 
   static String orderById(String id) => '/orders/$id';
   static String orderMovementDispatch(String id) => '/orders/$id/movement/dispatch';
+  static String orderMovementUndispatch(String id) =>
+      '/orders/$id/movement/undispatch';
+  static const String movementArchiveOrders = '/orders/movement/archive/pending';
+  static String orderMovementArchiveComplete(String id) =>
+      '/orders/$id/movement/archive/complete';
   static String orderMovementRequestById(String id) => '/orders/$id/movement/request';
   static String orderCancellationApprove(String id) =>
       '/orders/$id/cancellation/approve';

@@ -334,6 +334,8 @@ class _SystemPauseScreenState extends State<SystemPauseScreen> {
         return 'مدير';
       case 'movement':
         return 'قسم الحركة';
+      case 'archive':
+        return 'الأرشفة';
       case 'driver':
         return 'سائق';
       case 'employee':

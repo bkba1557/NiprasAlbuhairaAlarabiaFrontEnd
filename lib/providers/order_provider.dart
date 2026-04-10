@@ -1204,6 +1204,146 @@ class OrderProvider with ChangeNotifier {
     return false;
   }
 
+  Future<bool> undispatchMovementOrder(
+    String supplierOrderId, {
+    String? reason,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.post(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderMovementUndispatch(supplierOrderId)}',
+        ),
+        headers: ApiService.headers,
+        body: json.encode({
+          if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+        }),
+      );
+
+      final data = ApiService.decodeJson(response);
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data['success'] == true) {
+        _syncOrdersFromResponse(data);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'فشل فك توجيه الطلب';
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<List<Order>> fetchMovementArchiveOrders() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.movementArchiveOrders}',
+        ),
+        headers: ApiService.headers,
+      );
+
+      final data = ApiService.decodeJson(response);
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data['success'] == true) {
+        final orders = _parseOrdersFromPayload(data['data'] ?? data);
+        for (final order in orders) {
+          _ordersCache[order.id] = order;
+        }
+        _isLoading = false;
+        notifyListeners();
+        return orders;
+      }
+
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'تعذر تحميل طلبات أرشفة الحركة';
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return const <Order>[];
+  }
+
+  Future<bool> completeMovementArchiveOrder({
+    required String orderId,
+    required List<PlatformFile> taxInvoiceFiles,
+    required List<PlatformFile> fuelReceiptFiles,
+    String? notes,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final taxInvoiceAttachments = taxInvoiceFiles.isEmpty
+          ? const <Map<String, dynamic>>[]
+          : await _uploadOrderAttachments(
+              '${orderId}_tax_invoice',
+              taxInvoiceFiles,
+            );
+      final fuelReceiptAttachments = fuelReceiptFiles.isEmpty
+          ? const <Map<String, dynamic>>[]
+          : await _uploadOrderAttachments(
+              '${orderId}_fuel_receipt',
+              fuelReceiptFiles,
+            );
+
+      final response = await http.post(
+        Uri.parse(
+          '${ApiEndpoints.baseUrl}${ApiEndpoints.orderMovementArchiveComplete(orderId)}',
+        ),
+        headers: ApiService.headers,
+        body: json.encode({
+          'taxInvoiceAttachments': taxInvoiceAttachments,
+          'fuelReceiptAttachments': fuelReceiptAttachments,
+          if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        }),
+      );
+
+      final data = ApiService.decodeJson(response);
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data['success'] == true) {
+        _syncOrdersFromResponse(data);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      _error =
+          data['error']?.toString() ??
+          data['message']?.toString() ??
+          'تعذر إنهاء أرشفة الطلب';
+    } catch (e) {
+      _error = 'حدث خطأ في الاتصال بالسيرفر: $e';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
   Future<bool> createMovementCustomerRequest({
     required String customerId,
     required String fuelType,
@@ -1366,7 +1506,7 @@ class OrderProvider with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = ApiService.decodeJson(response);
-        _extractSingleOrderFromPayload(data);
+        _syncOrdersFromResponse(data);
 
         _isLoading = false;
         notifyListeners();

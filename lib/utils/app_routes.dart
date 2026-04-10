@@ -36,6 +36,7 @@ import 'package:order_tracker/screens/archive/archive_documents_screen.dart';
 import 'package:order_tracker/screens/archive/archive_document_form_screen.dart';
 import 'package:order_tracker/screens/archive/archive_documents_list_screen.dart';
 import 'package:order_tracker/screens/archive/archive_document_details_screen.dart';
+import 'package:order_tracker/screens/archive/movement_archive_orders_screen.dart';
 import 'package:order_tracker/screens/order/costomer_order/customer_form_screen.dart';
 import 'package:order_tracker/screens/order/costomer_order/customer_order_form.dart';
 import 'package:order_tracker/screens/order/costomer_order/customers_screen.dart';
@@ -248,6 +249,7 @@ class AppRoutes {
   static const String archiveDocumentsCreate = '/archive/documents/create';
   static const String archiveDocumentsList = '/archive/documents/list';
   static const String archiveDocumentDetails = '/archive/documents/details';
+  static const String movementArchiveOrders = '/archive/movement-orders';
 
   static const String fuelStations = '/fuel-stations';
   static const String fuelStationForm = '/fuel-station/form';
@@ -369,6 +371,7 @@ class AppRoutes {
     archiveDocuments: (context) => const ArchiveDocumentsScreen(),
     archiveDocumentsCreate: (context) => const ArchiveDocumentFormScreen(),
     archiveDocumentsList: (context) => const ArchiveDocumentsListScreen(),
+    movementArchiveOrders: (context) => const MovementArchiveOrdersScreen(),
     periodicMaintenance: (context) => const MaintenanceDashboardScreen(),
     maintenanceForm: (context) => const MaintenanceFormScreen(),
     dailyCheck: (context) => DailyCheckScreen(

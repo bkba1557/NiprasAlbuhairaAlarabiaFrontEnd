@@ -226,6 +226,8 @@ String _roleHomeRoute(String? role) {
       return AppRoutes.marketingStations;
     case 'movement':
       return AppRoutes.movement;
+    case 'archive':
+      return AppRoutes.movementArchiveOrders;
     case 'supplier':
       return AppRoutes.supplierPortal;
     case 'finance_manager':

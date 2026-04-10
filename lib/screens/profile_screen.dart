@@ -480,6 +480,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Color _getRoleColor(String role) {
     if (role == 'admin') return Colors.red;
     if (role == 'driver') return AppColors.statusGold;
+    if (role == 'archive') return const Color(0xFF3949AB);
     if (role == 'maintenance') return Colors.blue;
     if (role == 'maintenance_station') return const Color(0xFF1B5E20);
     if (role == 'finance_manager') return const Color(0xFF2E7D32);
@@ -489,6 +490,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _getRoleName(String role) {
     if (role == 'admin') return 'مدير النظام';
     if (role == 'driver') return 'سائق';
+    if (role == 'archive') return 'الأرشفة';
     if (role == 'maintenance') return 'فني صيانة';
     if (role == 'maintenance_station') return 'فني صيانة محطة';
     if (role == 'finance_manager') return 'المدير المالي';

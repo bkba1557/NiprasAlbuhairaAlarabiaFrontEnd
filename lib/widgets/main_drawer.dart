@@ -29,6 +29,8 @@ class MainDrawer extends StatelessWidget {
         user?.hasAnyPermission(['tasks_view', 'tasks_view_all']) ?? false;
     final canViewContracts =
         user?.hasAnyPermission(['contracts_view', 'contracts_manage']) ?? false;
+    final canViewArchive =
+        user?.hasAnyPermission(['archive_view', 'archive_manage']) ?? false;
     final canViewTracking =
         user?.hasAnyPermission(['drivers_view', 'tracking_view']) ?? false;
     final driverHomeRoute = user?.role == 'driver'
@@ -118,6 +120,8 @@ class MainDrawer extends StatelessWidget {
                       context,
                       user?.role == 'driver'
                           ? AppRoutes.driverHome
+                          : user?.role == 'archive'
+                          ? AppRoutes.movementArchiveOrders
                           : user?.role == 'employee'
                           ? AppRoutes.marketingStations
                           : AppRoutes.dashboard,
@@ -222,6 +226,17 @@ class MainDrawer extends StatelessWidget {
                       Navigator.popAndPushNamed(
                         context,
                         AppRoutes.contractsManagement,
+                      );
+                    },
+                  ),
+                if (canViewArchive)
+                  ListTile(
+                    leading: const Icon(Icons.archive_outlined),
+                    title: const Text('أرشفة طلبات الحركة'),
+                    onTap: () {
+                      Navigator.popAndPushNamed(
+                        context,
+                        AppRoutes.movementArchiveOrders,
                       );
                     },
                   ),

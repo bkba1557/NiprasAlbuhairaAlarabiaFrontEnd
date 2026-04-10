@@ -2,6 +2,7 @@ import 'package:order_tracker/utils/app_routes.dart';
 
 const String employeeRoleKey = 'employee';
 const String movementRoleKey = 'movement';
+const String archiveRoleKey = 'archive';
 const String supplierRoleKey = 'supplier';
 
 const Set<String> employeeAllowedRoutePaths = <String>{
@@ -24,6 +25,10 @@ const Set<String> movementAllowedRoutePaths = <String>{
   AppRoutes.supplierPortal,
 };
 
+const Set<String> archiveAllowedRoutePaths = <String>{
+  AppRoutes.movementArchiveOrders,
+};
+
 const Set<String> supplierAllowedRoutePaths = <String>{
   AppRoutes.supplierPortal,
 };
@@ -39,6 +44,8 @@ bool isEmployeeRole(String? role) => normalizeRoleKey(role) == employeeRoleKey;
 
 bool isMovementRole(String? role) => normalizeRoleKey(role) == movementRoleKey;
 
+bool isArchiveRole(String? role) => normalizeRoleKey(role) == archiveRoleKey;
+
 bool isSupplierRole(String? role) => normalizeRoleKey(role) == supplierRoleKey;
 
 Set<String>? _allowedRoutesForRole(String? role) {
@@ -47,6 +54,8 @@ Set<String>? _allowedRoutesForRole(String? role) {
       return employeeAllowedRoutePaths;
     case movementRoleKey:
       return movementAllowedRoutePaths;
+    case archiveRoleKey:
+      return archiveAllowedRoutePaths;
     case supplierRoleKey:
       return supplierAllowedRoutePaths;
     default:
@@ -60,6 +69,8 @@ String? restrictedRoleHomeRoute(String? role) {
       return AppRoutes.marketingStations;
     case movementRoleKey:
       return AppRoutes.movement;
+    case archiveRoleKey:
+      return AppRoutes.movementArchiveOrders;
     case supplierRoleKey:
       return AppRoutes.supplierPortal;
     default:

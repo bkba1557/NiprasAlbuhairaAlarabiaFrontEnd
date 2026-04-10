@@ -32,6 +32,7 @@ const List<String> _roleOptions = [
   'finance_manager',
   'driver',
   'movement',
+  'archive',
   'supplier',
 ];
 
@@ -52,6 +53,7 @@ const Map<String, String> _roleLabels = {
   'finance_manager': 'المدير المالي',
   'driver': 'السائق',
   'movement': 'الحركة',
+  'archive': 'الأرشفة',
   'supplier': 'المورد',
 };
 
@@ -87,6 +89,8 @@ Color _roleColor(String role) {
       return AppColors.statusGold;
     case 'movement':
       return AppColors.appBarBlue;
+    case 'archive':
+      return const Color(0xFF3949AB);
     case 'supplier':
       return const Color(0xFF00695C);
     default:

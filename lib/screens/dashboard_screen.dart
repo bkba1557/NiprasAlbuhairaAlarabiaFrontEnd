@@ -6331,6 +6331,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final archiveChildren = <Widget>[
       if (canViewArchive)
         _buildDesktopFolderItem(
+          icon: Icons.archive_outlined,
+          title: 'أرشفة طلبات الحركة',
+          onTap: () =>
+              Navigator.pushNamed(context, AppRoutes.movementArchiveOrders),
+        ),
+      if (canViewArchive)
+        _buildDesktopFolderItem(
           icon: Icons.inventory_2_outlined,
           title: 'الأرشفة (وارد / صادر)',
           onTap: () => Navigator.pushNamed(context, AppRoutes.archiveDocuments),
