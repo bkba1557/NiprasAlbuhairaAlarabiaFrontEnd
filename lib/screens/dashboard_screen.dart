@@ -1240,11 +1240,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: AppColors.secondaryTeal,
           onTap: () =>
               _navigateFromMobileDrawer(context, AppRoutes.mergeOrders),
-        ), 
+        ),
       if (canViewMovementPage)
         _DashboardDrawerItemData(
           icon: Icons.alt_route_rounded,
-          title: 'الحركة',
+          title: 'سير الحركة ',
           color: AppColors.appBarBlue,
           onTap: () => _navigateFromMobileDrawer(context, AppRoutes.movement),
         ),
@@ -1386,6 +1386,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: AppColors.successGreen,
           onTap: () =>
               _navigateFromMobileDrawer(context, AppRoutes.archiveDocuments),
+        ),
+        _DashboardDrawerItemData(
+          icon: Icons.people_alt_rounded,
+          title: 'فوترة الطلبات',
+          color: AppColors.successGreen,
+          onTap: () =>
+              _navigateFromMobileDrawer(context, AppRoutes.movementArchiveOrders),
         ),
       if (canViewActivities)
         _DashboardDrawerItemData(

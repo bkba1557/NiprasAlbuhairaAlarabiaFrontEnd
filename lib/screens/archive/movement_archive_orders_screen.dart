@@ -198,6 +198,38 @@ class _MovementArchiveOrdersScreenState
                         },
                       ),
                       const SizedBox(height: 14),
+                      _uploadField(
+                        title: 'الكمية المعباة من ارامكو ',
+                        files: fuelReceiptFiles,
+                        onPick: () async {
+                          await _pickFiles(
+                            onPicked: (files) {
+                              setDialogState(() => fuelReceiptFiles = files);
+                            },
+                          );
+                        },
+                      ),
+                      const SizedBox(height:14),
+                        TextField(
+                        minLines: 1,
+                        maxLines: 1,
+                        decoration: const InputDecoration(
+                          labelText: 'عدد اللترات الفعلي',
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                        TextField(
+                        minLines: 1,
+                        maxLines: 1,
+                        decoration: const InputDecoration(
+                          labelText: 'مبلغ الفاتورة',
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
                       TextField(
                         controller: notesController,
                         minLines: 3,
