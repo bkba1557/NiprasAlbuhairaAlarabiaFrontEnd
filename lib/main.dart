@@ -214,7 +214,7 @@ const Set<String> _publicRoutes = <String>{
 };
 
 String _roleHomeRoute(String? role) {
-  switch (role) {
+  switch (normalizeRoleKey(role)) {
     case 'station_boy':
       return AppRoutes.sessionsList;
     case 'maintenance':

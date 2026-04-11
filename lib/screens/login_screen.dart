@@ -392,7 +392,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _homeRouteByRole(String? role) {
-    switch (role) {
+    switch (normalizeRoleKey(role)) {
       case 'station_boy':
         return AppRoutes.sessionsList;
       case 'maintenance':

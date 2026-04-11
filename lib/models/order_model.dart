@@ -136,6 +136,7 @@ class Order {
   final int? transportCapacityLiters;
   final Map<String, dynamic>? pricingSnapshot;
   final Map<String, dynamic>? transportPricingOverride;
+  final Map<String, dynamic>? movementArchive;
 
   final DateTime? mergedAt;
   final DateTime? completedAt;
@@ -262,6 +263,7 @@ class Order {
     this.transportCapacityLiters,
     this.pricingSnapshot,
     this.transportPricingOverride,
+    this.movementArchive,
 
     this.mergedAt,
     this.completedAt,
@@ -710,6 +712,7 @@ class Order {
           : int.tryParse(json['transportCapacityLiters']?.toString() ?? ''),
       pricingSnapshot: _asOrderMap(json['pricingSnapshot']),
       transportPricingOverride: _asOrderMap(json['transportPricingOverride']),
+      movementArchive: _asOrderMap(json['movementArchive']),
 
       mergedAt: DateTime.tryParse(json['mergedAt']?.toString() ?? ''),
       completedAt: DateTime.tryParse(json['completedAt']?.toString() ?? ''),
@@ -865,6 +868,7 @@ class Order {
       'transportCapacityLiters': transportCapacityLiters,
       'pricingSnapshot': pricingSnapshot,
       'transportPricingOverride': transportPricingOverride,
+      'movementArchive': movementArchive,
 
       'mergedAt': mergedAt?.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
@@ -1368,6 +1372,7 @@ class Order {
     int? transportCapacityLiters,
     Map<String, dynamic>? pricingSnapshot,
     Map<String, dynamic>? transportPricingOverride,
+    Map<String, dynamic>? movementArchive,
     DateTime? mergedAt,
     DateTime? completedAt,
     DateTime? cancelledAt,
@@ -1499,6 +1504,7 @@ class Order {
       pricingSnapshot: pricingSnapshot ?? this.pricingSnapshot,
       transportPricingOverride:
           transportPricingOverride ?? this.transportPricingOverride,
+      movementArchive: movementArchive ?? this.movementArchive,
       mergedAt: mergedAt ?? this.mergedAt,
       completedAt: completedAt ?? this.completedAt,
       cancelledAt: cancelledAt ?? this.cancelledAt,

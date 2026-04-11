@@ -1288,7 +1288,15 @@ class OrderProvider with ChangeNotifier {
   Future<bool> completeMovementArchiveOrder({
     required String orderId,
     required List<PlatformFile> taxInvoiceFiles,
+    required List<PlatformFile> systemInvoiceFiles,
     required List<PlatformFile> fuelReceiptFiles,
+    required List<PlatformFile> actualQuantityStatementFiles,
+    required double literPrice,
+    required double saleSubtotal,
+    required double saleVatAmount,
+    required double saleValue,
+    required double transportValue,
+    required bool addAllIncludedVat,
     String? notes,
   }) async {
     _isLoading = true;
@@ -1302,11 +1310,24 @@ class OrderProvider with ChangeNotifier {
               '${orderId}_tax_invoice',
               taxInvoiceFiles,
             );
+      final systemInvoiceAttachments = systemInvoiceFiles.isEmpty
+          ? const <Map<String, dynamic>>[]
+          : await _uploadOrderAttachments(
+              '${orderId}_system_invoice',
+              systemInvoiceFiles,
+            );
       final fuelReceiptAttachments = fuelReceiptFiles.isEmpty
           ? const <Map<String, dynamic>>[]
           : await _uploadOrderAttachments(
               '${orderId}_fuel_receipt',
               fuelReceiptFiles,
+            );
+      final actualQuantityStatementAttachments =
+          actualQuantityStatementFiles.isEmpty
+          ? const <Map<String, dynamic>>[]
+          : await _uploadOrderAttachments(
+              '${orderId}_actual_quantity_statement',
+              actualQuantityStatementFiles,
             );
 
       final response = await http.post(
@@ -1316,7 +1337,16 @@ class OrderProvider with ChangeNotifier {
         headers: ApiService.headers,
         body: json.encode({
           'taxInvoiceAttachments': taxInvoiceAttachments,
+          'systemInvoiceAttachments': systemInvoiceAttachments,
           'fuelReceiptAttachments': fuelReceiptAttachments,
+          'actualQuantityStatementAttachments':
+              actualQuantityStatementAttachments,
+          'literPrice': literPrice,
+          'saleSubtotal': saleSubtotal,
+          'saleVatAmount': saleVatAmount,
+          'saleValue': saleValue,
+          'transportValue': transportValue,
+          'addAllIncludedVat': addAllIncludedVat,
           if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
         }),
       );

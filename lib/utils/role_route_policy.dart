@@ -38,7 +38,17 @@ String normalizeRoutePath(String routeName) {
   return uri?.path ?? routeName;
 }
 
-String normalizeRoleKey(String? role) => role?.trim().toLowerCase() ?? '';
+String normalizeRoleKey(String? role) {
+  final raw = role?.trim() ?? '';
+  if (raw.isEmpty) return '';
+
+  final lower = raw.toLowerCase();
+  // Backward compatibility: some deployments stored Arabic role labels.
+  if (lower == 'الأرشفة' || lower == 'الارشفة' || lower == 'ارشفة') {
+    return archiveRoleKey;
+  }
+  return lower;
+}
 
 bool isEmployeeRole(String? role) => normalizeRoleKey(role) == employeeRoleKey;
 
