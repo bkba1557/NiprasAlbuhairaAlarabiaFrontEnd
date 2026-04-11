@@ -1291,6 +1291,8 @@ class OrderProvider with ChangeNotifier {
     required List<PlatformFile> systemInvoiceFiles,
     required List<PlatformFile> fuelReceiptFiles,
     required List<PlatformFile> actualQuantityStatementFiles,
+    double? actualSupplyQuantity,
+    required String calculationQuantitySource,
     required double literPrice,
     required double saleSubtotal,
     required double saleVatAmount,
@@ -1341,6 +1343,9 @@ class OrderProvider with ChangeNotifier {
           'fuelReceiptAttachments': fuelReceiptAttachments,
           'actualQuantityStatementAttachments':
               actualQuantityStatementAttachments,
+          if (actualSupplyQuantity != null)
+            'actualSupplyQuantity': actualSupplyQuantity,
+          'calculationQuantitySource': calculationQuantitySource,
           'literPrice': literPrice,
           'saleSubtotal': saleSubtotal,
           'saleVatAmount': saleVatAmount,

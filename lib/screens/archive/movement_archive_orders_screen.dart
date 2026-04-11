@@ -116,11 +116,14 @@ class _MovementArchiveOrdersScreenState
   String _moneyText(double value) => value.toStringAsFixed(2);
 
   String _quantityText(Order order) {
-    final quantity = _orderQuantity(order);
+    return _quantityTextFor(order, _orderQuantity(order));
+  }
+
+  String _quantityTextFor(Order order, double quantity) {
     final quantityText = quantity == quantity.roundToDouble()
         ? quantity.toStringAsFixed(0)
         : quantity.toStringAsFixed(2);
-    return '$quantityText ${order.unit ?? 'Ù„ØªØ±'}'.trim();
+    return '$quantityText ${order.unit ?? 'لتر'}'.trim();
   }
 
   String _safeText(String? value) {
@@ -135,180 +138,13 @@ class _MovementArchiveOrdersScreenState
     return _safeText(customerName);
   }
 
-  double _subtotalFromLiterPrice(Order order, double literPrice) {
-    return _orderQuantity(order) * literPrice;
-  }
-
-  Future<PlatformFile> _buildGeneratedTaxInvoiceFile({
-    required Order order,
-    required double literPrice,
-    required double subtotal,
-    required double vatAmount,
-    required double total,
-  }) async {
-    final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Cairo-Regular.ttf'),
-    );
-    final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Cairo-Bold.ttf'),
-    );
-    final invoiceFields = <String, String>{
-      'Ù†ÙˆØ¹ Ø§Ù„ÙˆÙ‚ÙˆØ¯': _safeText(order.fuelType),
-      'Ø§Ù„ÙƒÙ…ÙŠØ©': _quantityText(order),
-      'Ù†ÙˆØ¹ Ø§Ù„Ø·Ù„Ø¨': _safeText(order.effectiveRequestType),
-      'Ø§Ù„Ù…ÙˆØ±Ø¯': _safeText(order.supplierName),
-      'Ø§Ù„Ø¹Ù…ÙŠÙ„': _customerDisplayName(order),
-    };
-    final barcodeData = invoiceFields.entries
-        .map((entry) => '${entry.key}: ${entry.value}')
-        .join(' | ');
-
-    final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(base: regular, bold: bold),
-    );
-
-    pw.Widget row(String label, String value) {
-      return pw.Container(
-        padding: const pw.EdgeInsets.symmetric(vertical: 7, horizontal: 10),
-        decoration: pw.BoxDecoration(
-          border: pw.Border(
-            bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
-          ),
-        ),
-        child: pw.Row(
-          children: <pw.Widget>[
-            pw.Expanded(
-              child: pw.Text(
-                value,
-                textAlign: pw.TextAlign.left,
-                style: pw.TextStyle(
-                  color: PdfColors.blue900,
-                  fontSize: 10.5,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-            ),
-            pw.SizedBox(width: 10),
-            pw.Text(
-              label,
-              style: pw.TextStyle(
-                color: PdfColors.grey700,
-                fontSize: 10,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        textDirection: pw.TextDirection.rtl,
-        margin: const pw.EdgeInsets.all(28),
-        build: (_) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: <pw.Widget>[
-              pw.Container(
-                padding: const pw.EdgeInsets.all(18),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.blue900,
-                  borderRadius: pw.BorderRadius.circular(12),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                  children: <pw.Widget>[
-                    pw.Text(
-                      'ÙØ§ØªÙˆØ±Ø© Ø¶Ø±ÙŠØ¨ÙŠØ©',
-                      textAlign: pw.TextAlign.center,
-                      style: pw.TextStyle(
-                        color: PdfColors.white,
-                        fontSize: 22,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 6),
-                    pw.Text(
-                      order.orderNumber,
-                      textAlign: pw.TextAlign.center,
-                      style: const pw.TextStyle(
-                        color: PdfColors.white,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 18),
-              pw.Container(
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey300, width: 0.8),
-                  borderRadius: pw.BorderRadius.circular(10),
-                ),
-                child: pw.Column(
-                  children: invoiceFields.entries
-                      .map((entry) => row(entry.key, entry.value))
-                      .toList(),
-                ),
-              ),
-              if (false) ...[
-              pw.SizedBox(height: 18),
-              pw.Container(
-                padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.grey100,
-                  borderRadius: pw.BorderRadius.circular(10),
-                ),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: <pw.Widget>[
-                    pw.Text('Ø³Ø¹Ø± Ø§Ù„Ù„ØªØ±: ${_moneyText(literPrice)}'),
-                    pw.Text('Ù‚Ø¨Ù„ Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©: ${_moneyText(subtotal)}'),
-                    pw.Text('Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©: ${_moneyText(vatAmount)}'),
-                    pw.Text('Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ: ${_moneyText(total)}'),
-                  ],
-                ),
-              ),
-              ],
-              pw.Spacer(),
-              pw.Center(
-                child: pw.Container(
-                  padding: const pw.EdgeInsets.all(10),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey400),
-                    borderRadius: pw.BorderRadius.circular(8),
-                  ),
-                  child: pw.BarcodeWidget(
-                    barcode: pw.Barcode.qrCode(),
-                    data: barcodeData,
-                    width: 120,
-                    height: 120,
-                    drawText: false,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    final bytes = await pdf.save();
-    final safeOrderNumber = order.orderNumber.replaceAll(
-      RegExp(r'[^A-Za-z0-9_\-]+'),
-      '_',
-    );
-    return PlatformFile(
-      name: 'tax_invoice_$safeOrderNumber.pdf',
-      size: bytes.length,
-      bytes: Uint8List.fromList(bytes),
-    );
+  double _subtotalFromQuantity(double quantity, double literPrice) {
+    return quantity * literPrice;
   }
 
   Future<PlatformFile> _buildGeneratedTaxInvoiceFileV2({
     required Order order,
+    required double invoiceQuantity,
     required double literPrice,
     required double subtotal,
     required double vatAmount,
@@ -324,22 +160,22 @@ class _MovementArchiveOrdersScreenState
       (await rootBundle.load(AppImages.logo)).buffer.asUint8List(),
     );
     final orderRows = <MapEntry<String, String>>[
-      MapEntry('Ù†ÙˆØ¹ Ø§Ù„ÙˆÙ‚ÙˆØ¯', _safeText(order.fuelType)),
-      MapEntry('Ø§Ù„ÙƒÙ…ÙŠØ©', _quantityText(order)),
-      MapEntry('Ù†ÙˆØ¹ Ø§Ù„Ø·Ù„Ø¨', _safeText(order.effectiveRequestType)),
-      MapEntry('Ø§Ø³Ù… Ø§Ù„Ù…ÙˆØ±Ø¯', _safeText(order.supplierName)),
-      MapEntry('Ø§Ø³Ù… Ø§Ù„Ø¹Ù…ÙŠÙ„', _customerDisplayName(order)),
+      MapEntry('نوع الوقود', _safeText(order.fuelType)),
+      MapEntry('الكمية', _quantityTextFor(order, invoiceQuantity)),
+      MapEntry('نوع الطلب', _safeText(order.effectiveRequestType)),
+      MapEntry('اسم المورد', _safeText(order.supplierName)),
+      MapEntry('اسم العميل', _customerDisplayName(order)),
     ];
     final amountRows = <MapEntry<String, String>>[
-      MapEntry('Ø³Ø¹Ø± Ø§Ù„Ù„ØªØ±', '${_moneyText(literPrice)} Ø±.Ø³'),
+      MapEntry('سعر اللتر', '${_moneyText(literPrice)} ر.س'),
       MapEntry(
-        'Ø§Ù„Ø³Ø¹Ø± Ù‚Ø¨Ù„ Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©',
-        '${_moneyText(subtotal)} Ø±.Ø³',
+        'السعر قبل الضريبة',
+        '${_moneyText(subtotal)} ر.س',
       ),
-      MapEntry('Ù‚ÙŠÙ…Ø© Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©', '${_moneyText(vatAmount)} Ø±.Ø³'),
+      MapEntry('قيمة الضريبة', '${_moneyText(vatAmount)} ر.س'),
       MapEntry(
-        'Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø¨Ø¹Ø¯ Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©',
-        '${_moneyText(total)} Ø±.Ø³',
+        'الإجمالي بعد الضريبة',
+        '${_moneyText(total)} ر.س',
       ),
     ];
     final barcodeData = orderRows
@@ -434,7 +270,7 @@ class _MovementArchiveOrdersScreenState
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: <pw.Widget>[
                           pw.Text(
-                            'Ø´Ø±ÙƒØ© Ø§Ù„Ø¨Ø­ÙŠØ±Ø© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©',
+                            'شركة البحيرة العربية',
                             style: pw.TextStyle(
                               color: PdfColors.white,
                               fontSize: 16,
@@ -443,7 +279,7 @@ class _MovementArchiveOrdersScreenState
                           ),
                           pw.SizedBox(height: 4),
                           pw.Text(
-                            'ÙØ§ØªÙˆØ±Ø© Ø¶Ø±ÙŠØ¨ÙŠØ© ØµØ§Ø¯Ø±Ø© Ù…Ù† Ù†Ø¸Ø§Ù… Ù†Ø¨Ø±Ø§Ø³',
+                            'فاتورة ضريبية صادرة من نظام نبراس',
                             style: const pw.TextStyle(
                               color: PdfColors.white,
                               fontSize: 10,
@@ -456,7 +292,7 @@ class _MovementArchiveOrdersScreenState
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: <pw.Widget>[
                         pw.Text(
-                          'ÙØ§ØªÙˆØ±Ø© Ø¶Ø±ÙŠØ¨ÙŠØ©',
+                          'فاتورة ضريبية',
                           style: pw.TextStyle(
                             color: PdfColors.white,
                             fontSize: 22,
@@ -477,11 +313,11 @@ class _MovementArchiveOrdersScreenState
                 ),
               ),
               pw.SizedBox(height: 18),
-              sectionTitle('Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø·Ù„Ø¨'),
+              sectionTitle('بيانات الطلب'),
               pw.SizedBox(height: 8),
               buildTable(orderRows),
               pw.SizedBox(height: 18),
-              sectionTitle('Ø§Ù„Ù…Ù„Ø®Øµ Ø§Ù„Ù…Ø§Ù„ÙŠ'),
+              sectionTitle('الملخص المالي'),
               pw.SizedBox(height: 8),
               buildTable(amountRows),
               pw.Spacer(),
@@ -511,7 +347,7 @@ class _MovementArchiveOrdersScreenState
                         borderRadius: pw.BorderRadius.circular(8),
                       ),
                       child: pw.Text(
-                        'ØªÙ… Ø¥ØµØ¯Ø§Ø± Ù‡Ø°Ù‡ Ø§Ù„ÙØ§ØªÙˆØ±Ø© Ø¢Ù„ÙŠØ§Ù‹ Ù…Ù† Ù†Ø¸Ø§Ù… Ù†Ø¨Ø±Ø§Ø³. Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ÙŠØ­ØªÙˆÙŠ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø·Ù„Ø¨ Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© Ù„Ù„ØªØ­Ù‚Ù‚ Ø§Ù„Ø³Ø±ÙŠØ¹.',
+                        'تم إصدار هذه الفاتورة آلياً من نظام نبراس. الباركود يحتوي بيانات الطلب الأساسية للتحقق السريع.',
                         style: const pw.TextStyle(
                           color: PdfColors.grey700,
                           fontSize: 9,
@@ -524,7 +360,7 @@ class _MovementArchiveOrdersScreenState
               pw.SizedBox(height: 12),
               pw.Divider(color: PdfColors.grey300),
               pw.Text(
-                'Ø´Ø±ÙƒØ© Ø§Ù„Ø¨Ø­ÙŠØ±Ø© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© - Ù†Ø¸Ø§Ù… Ù†Ø¨Ø±Ø§Ø³ Ù„Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø·Ù„Ø¨Ø§Øª',
+                'شركة البحيرة العربية - نظام نبراس لإدارة الطلبات',
                 textAlign: pw.TextAlign.center,
                 style: const pw.TextStyle(
                   color: PdfColors.grey700,
@@ -580,6 +416,7 @@ class _MovementArchiveOrdersScreenState
 
   Future<void> _showCompletionDialog(Order order) async {
     final notesController = TextEditingController();
+    final actualSupplyQuantityController = TextEditingController();
     final literPriceController = TextEditingController();
     final saleValueController = TextEditingController();
     final transportValueController = TextEditingController();
@@ -589,7 +426,10 @@ class _MovementArchiveOrdersScreenState
     var fuelReceiptFiles = <PlatformFile>[];
     var actualQuantityStatementFiles = <PlatformFile>[];
     var addAllIncludedVat = true;
+    var calculateUsingActualQuantity = false;
     var saving = false;
+    double? actualSupplyQuantity;
+    double calculationQuantity = _orderQuantity(order);
     double? literPrice;
     double subtotal = 0;
     double vatAmount = 0;
@@ -597,15 +437,19 @@ class _MovementArchiveOrdersScreenState
 
     void recalculateSaleValue() {
       final parsedLiterPrice = _parseAmount(literPriceController.text);
+      actualSupplyQuantity = _parseAmount(actualSupplyQuantityController.text);
+      calculationQuantity = calculateUsingActualQuantity
+          ? (actualSupplyQuantity ?? 0)
+          : _orderQuantity(order);
       literPrice = parsedLiterPrice;
-      if (parsedLiterPrice == null || _orderQuantity(order) <= 0) {
+      if (parsedLiterPrice == null || calculationQuantity <= 0) {
         subtotal = 0;
         vatAmount = 0;
         totalAfterVat = 0;
         saleValueController.clear();
         return;
       }
-      subtotal = _subtotalFromLiterPrice(order, parsedLiterPrice);
+      subtotal = _subtotalFromQuantity(calculationQuantity, parsedLiterPrice);
       vatAmount = subtotal * vatRate;
       totalAfterVat = subtotal + vatAmount;
       saleValueController.text = _moneyText(totalAfterVat);
@@ -618,13 +462,14 @@ class _MovementArchiveOrdersScreenState
       recalculateSaleValue();
       if (literPrice == null || totalAfterVat <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ø£Ø¯Ø®Ù„ Ø³Ø¹Ø± Ø§Ù„Ù„ØªØ± Ø£ÙˆÙ„Ø§Ù‹ Ù„ØªÙˆÙ„ÙŠØ¯ Ø§Ù„ÙØ§ØªÙˆØ±Ø©.')),
+          const SnackBar(content: Text('أدخل سعر اللتر أولاً لتوليد الفاتورة.')),
         );
         return;
       }
 
       final file = await _buildGeneratedTaxInvoiceFileV2(
         order: order,
+        invoiceQuantity: calculationQuantity,
         literPrice: literPrice!,
         subtotal: subtotal,
         vatAmount: vatAmount,
@@ -639,7 +484,7 @@ class _MovementArchiveOrdersScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('ØªÙ… ØªÙˆÙ„ÙŠØ¯ Ø§Ù„ÙØ§ØªÙˆØ±Ø© Ø§Ù„Ø¶Ø±ÙŠØ¨ÙŠØ© ÙˆØ¥Ø±ÙØ§Ù‚Ù‡Ø§.'),
+          content: Text('تم توليد الفاتورة الضريبية وإرفاقها.'),
           backgroundColor: AppColors.successGreen,
         ),
       );
@@ -654,12 +499,14 @@ class _MovementArchiveOrdersScreenState
           fuelReceiptFiles.isEmpty ||
           actualQuantityStatementFiles.isEmpty ||
           literPrice == null ||
+          (calculateUsingActualQuantity &&
+              (actualSupplyQuantity == null || actualSupplyQuantity! <= 0)) ||
           saleValue == null ||
           transportValue == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Ø£Ø±ÙÙ‚ Ø§Ù„ÙØ§ØªÙˆØ±Ø© ÙˆØ³Ù†Ø¯ Ø§Ù„Ø§Ø³ØªÙ„Ø§Ù… ÙˆØ³Ù†Ø¯ Ø§Ù„ÙƒÙ…ÙŠØ© Ø§Ù„ÙØ¹Ù„ÙŠØ© ÙˆØ£Ø¯Ø®Ù„ Ø§Ù„Ù‚ÙŠÙ… Ù‚Ø¨Ù„ Ø§Ù„Ø­ÙØ¸.',
+              'أرفق الفاتورة وسند الاستلام وسند الكمية الفعلية وأدخل القيم قبل الحفظ.',
             ),
           ),
         );
@@ -675,6 +522,9 @@ class _MovementArchiveOrdersScreenState
             systemInvoiceFiles: systemInvoiceFiles,
             fuelReceiptFiles: fuelReceiptFiles,
             actualQuantityStatementFiles: actualQuantityStatementFiles,
+            actualSupplyQuantity: actualSupplyQuantity,
+            calculationQuantitySource:
+                calculateUsingActualQuantity ? 'actual' : 'order',
             literPrice: literPrice!,
             saleSubtotal: subtotal,
             saleVatAmount: vatAmount,
@@ -696,7 +546,7 @@ class _MovementArchiveOrdersScreenState
 
       if (!success) {
         final error = context.read<OrderProvider>().error ??
-            'ØªØ¹Ø°Ø± Ø¥Ù†Ù‡Ø§Ø¡ Ø£Ø±Ø´ÙØ© Ø§Ù„Ø·Ù„Ø¨.';
+            'تعذر إنهاء أرشفة الطلب.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error)),
         );
@@ -708,7 +558,7 @@ class _MovementArchiveOrdersScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'ØªÙ… Ø­ÙØ¸ Ù…Ø³ØªÙ†Ø¯Ø§Øª ÙˆÙ‚ÙŠÙ… Ø§Ù„Ø·Ù„Ø¨ ${order.orderNumber} ÙˆØ¥Ù†Ù‡Ø§Ø¡ Ø§Ù„Ø£Ø±Ø´ÙØ©.',
+            'تم حفظ مستندات وقيم الطلب ${order.orderNumber} وإنهاء الأرشفة.',
           ),
           backgroundColor: AppColors.successGreen,
         ),
@@ -721,7 +571,7 @@ class _MovementArchiveOrdersScreenState
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('Ø¥Ù†Ù‡Ø§Ø¡ Ø£Ø±Ø´ÙØ© ${order.orderNumber}'),
+              title: Text('إنهاء أرشفة ${order.orderNumber}'),
               content: SizedBox(
                 width: 620,
                 child: SingleChildScrollView(
@@ -730,7 +580,7 @@ class _MovementArchiveOrdersScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       _uploadField(
-                        title: 'Ø§Ù„ÙØ§ØªÙˆØ±Ø© Ø§Ù„Ø¶Ø±ÙŠØ¨ÙŠØ©',
+                        title: 'الفاتورة الضريبية',
                         files: taxInvoiceFiles,
                         onPick: () async {
                           await _pickFiles(
@@ -741,7 +591,7 @@ class _MovementArchiveOrdersScreenState
                       ),
                       const SizedBox(height: 12),
                       _uploadField(
-                        title: 'Ø³Ù†Ø¯ Ø§Ø³ØªÙ„Ø§Ù… Ø§Ù„Ù…Ø­Ø±ÙˆÙ‚Ø§Øª',
+                        title: 'سند استلام المحروقات',
                         files: fuelReceiptFiles,
                         onPick: () async {
                           await _pickFiles(
@@ -752,7 +602,7 @@ class _MovementArchiveOrdersScreenState
                       ),
                       const SizedBox(height: 12),
                       _uploadField(
-                        title: 'Ø³Ù†Ø¯ Ø§Ù„ÙƒÙ…ÙŠØ© Ø§Ù„ÙØ¹Ù„ÙŠØ©',
+                        title: 'سند الكمية الفعلية',
                         files: actualQuantityStatementFiles,
                         onPick: () async {
                           await _pickFiles(
@@ -763,6 +613,52 @@ class _MovementArchiveOrdersScreenState
                         },
                       ),
                       const SizedBox(height: 14),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: TextField(
+                              controller: actualSupplyQuantityController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              onChanged: (_) =>
+                                  setDialogState(recalculateSaleValue),
+                              decoration: InputDecoration(
+                                labelText: 'كمية التوريد الفعلي',
+                                suffixText: order.unit ?? 'لتر',
+                                border: const OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SegmentedButton<bool>(
+                              segments: const <ButtonSegment<bool>>[
+                                ButtonSegment<bool>(
+                                  value: false,
+                                  label: Text('كمية الطلب'),
+                                  icon: Icon(Icons.receipt_long_outlined),
+                                ),
+                                ButtonSegment<bool>(
+                                  value: true,
+                                  label: Text('الكمية الفعلية'),
+                                  icon: Icon(Icons.scale_outlined),
+                                ),
+                              ],
+                              selected: <bool>{calculateUsingActualQuantity},
+                              onSelectionChanged: (selection) {
+                                setDialogState(() {
+                                  calculateUsingActualQuantity =
+                                      selection.first;
+                                  recalculateSaleValue();
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: literPriceController,
                         keyboardType: const TextInputType.numberWithOptions(
@@ -770,14 +666,17 @@ class _MovementArchiveOrdersScreenState
                         ),
                         onChanged: (_) => setDialogState(recalculateSaleValue),
                         decoration: const InputDecoration(
-                          labelText: 'Ø³Ø¹Ø± Ø§Ù„Ù„ØªØ± Ù‚Ø¨Ù„ Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©',
+                          labelText: 'سعر اللتر قبل الضريبة',
                           suffixIcon: const _RiyalSuffixIcon(),
                           border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 12),
                       _pricingSummary(
-                        quantity: _quantityText(order),
+                        quantity: _quantityTextFor(order, calculationQuantity),
+                        quantitySource: calculateUsingActualQuantity
+                            ? 'الكمية الفعلية'
+                            : 'كمية الطلب',
                         vatRate: vatRate,
                         subtotal: subtotal,
                         vatAmount: vatAmount,
@@ -812,8 +711,8 @@ class _MovementArchiveOrdersScreenState
                                 decimal: true,
                               ),
                               decoration: const InputDecoration(
-                                labelText: 'Ù‚ÙŠÙ…Ø© Ø§Ù„Ø±Ø¯',
-                                suffixText: 'Ø´Ø§Ù…Ù„ Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©',
+                                labelText: 'قيمة الرد',
+                                suffixText: 'شامل الضريبة',
                                 border: OutlineInputBorder(),
                               ),
                             ),
@@ -828,8 +727,8 @@ class _MovementArchiveOrdersScreenState
                               ),
                               onChanged: (_) => setDialogState(() {}),
                               decoration: const InputDecoration(
-                                labelText: 'Ù‚ÙŠÙ…Ø© Ø§Ù„Ù†Ù‚Ù„',
-                                suffixText: 'Ø´Ø§Ù…Ù„ Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©',
+                                labelText: 'قيمة النقل',
+                                suffixText: 'شامل الضريبة',
                                 border: OutlineInputBorder(),
                               ),
                             ),
@@ -848,9 +747,9 @@ class _MovementArchiveOrdersScreenState
                           () => addAllIncludedVat = value ?? true,
                         ),
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Ø¥Ø¶Ø§ÙØ© Ø§Ù„ÙƒÙ„'),
+                        title: const Text('إضافة الكل'),
                         subtitle: const Text(
-                          'Ø§Ù„Ù‚ÙŠÙ… Ø§Ù„Ù…Ø¯Ø®Ù„Ø© ØªØ¹ØªØ¨Ø± Ø´Ø§Ù…Ù„Ø© Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©.',
+                          'القيم المدخلة تعتبر شاملة الضريبة.',
                         ),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
@@ -860,7 +759,7 @@ class _MovementArchiveOrdersScreenState
                         minLines: 3,
                         maxLines: 5,
                         decoration: const InputDecoration(
-                          labelText: 'Ù…Ù„Ø§Ø­Ø¸Ø§Øª',
+                          labelText: 'ملاحظات',
                           border: OutlineInputBorder(),
                           alignLabelWithHint: true,
                         ),
@@ -873,7 +772,7 @@ class _MovementArchiveOrdersScreenState
                 TextButton(
                   onPressed:
                       saving ? null : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Ø¥Ù„ØºØ§Ø¡'),
+                  child: const Text('إلغاء'),
                 ),
                 FilledButton.icon(
                   onPressed: saving ? null : () => submit(setDialogState),
@@ -887,7 +786,7 @@ class _MovementArchiveOrdersScreenState
                           ),
                         )
                       : const Icon(Icons.task_alt_rounded),
-                  label: const Text('Ø­ÙØ¸ ÙˆØ¥Ù†Ù‡Ø§Ø¡'),
+                  label: const Text('حفظ وإنهاء'),
                 ),
               ],
             );
@@ -897,6 +796,7 @@ class _MovementArchiveOrdersScreenState
     );
 
     notesController.dispose();
+    actualSupplyQuantityController.dispose();
     literPriceController.dispose();
     saleValueController.dispose();
     transportValueController.dispose();
@@ -916,6 +816,7 @@ class _MovementArchiveOrdersScreenState
 
   Widget _pricingSummary({
     required String quantity,
+    required String quantitySource,
     required double vatRate,
     required double subtotal,
     required double vatAmount,
@@ -973,10 +874,10 @@ class _MovementArchiveOrdersScreenState
       children: <Widget>[
         Row(
           children: <Widget>[
-            item('Ø§Ù„ÙƒÙ…ÙŠØ©', quantity),
+            item('الكمية ($quantitySource)', quantity),
             const SizedBox(width: 8),
             item(
-              'Ø§Ù„Ø³Ø¹Ø± Ù‚Ø¨Ù„ Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©',
+              'السعر قبل الضريبة',
               _moneyText(subtotal),
               currency: true,
             ),
@@ -986,13 +887,13 @@ class _MovementArchiveOrdersScreenState
         Row(
           children: <Widget>[
             item(
-              'Ø§Ù„Ø¶Ø±ÙŠØ¨Ø© $vatPercent%',
+              'الضريبة $vatPercent%',
               _moneyText(vatAmount),
               currency: true,
             ),
             const SizedBox(width: 8),
             item(
-              'Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø¨Ø¹Ø¯ Ø§Ù„Ø¶Ø±ÙŠØ¨Ø©',
+              'الإجمالي بعد الضريبة',
               _moneyText(totalAfterVat),
               color: AppColors.successGreen,
               currency: true,
@@ -1036,7 +937,7 @@ class _MovementArchiveOrdersScreenState
           const SizedBox(width: 12),
           const Expanded(
             child: Text(
-              'Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ù…Ø·Ù„ÙˆØ¨',
+              'الإجمالي المطلوب',
               style: TextStyle(
                 color: AppColors.primaryDarkBlue,
                 fontWeight: FontWeight.w800,
@@ -1093,13 +994,13 @@ class _MovementArchiveOrdersScreenState
               OutlinedButton.icon(
                 onPressed: onPick,
                 icon: const Icon(Icons.attach_file_rounded),
-                label: const Text('Ø¥Ø±ÙØ§Ù‚'),
+                label: const Text('إرفاق'),
               ),
             ],
           ),
           if (files.isEmpty)
             Text(
-              'Ù„Ù… ÙŠØªÙ… Ø¥Ø±ÙØ§Ù‚ Ù…Ù„ÙØ§Øª Ø¨Ø¹Ø¯',
+              'لم يتم إرفاق ملفات بعد',
               style: TextStyle(color: AppColors.mediumGray),
             )
           else
@@ -1146,7 +1047,7 @@ class _MovementArchiveOrdersScreenState
             children: <Widget>[
               const Expanded(
                 child: Text(
-                  'ÙØ§ØªÙˆØ±Ø© Ù…Ù† Ø¯Ø§Ø®Ù„ Ø§Ù„Ù†Ø¸Ø§Ù…',
+                  'فاتورة من داخل النظام',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     color: AppColors.primaryDarkBlue,
@@ -1156,20 +1057,20 @@ class _MovementArchiveOrdersScreenState
               OutlinedButton.icon(
                 onPressed: onPrint,
                 icon: const Icon(Icons.print_outlined),
-                label: const Text('Ø·Ø¨Ø§Ø¹Ø© ÙÙ‚Ø·'),
+                label: const Text('طباعة فقط'),
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: onGenerate,
                 icon: const Icon(Icons.picture_as_pdf_outlined),
-                label: const Text('ØªÙˆÙ„ÙŠØ¯ ÙˆØ¥Ø±ÙØ§Ù‚'),
+                label: const Text('توليد وإرفاق'),
               ),
             ],
           ),
           const SizedBox(height: 6),
           if (files.isEmpty)
             Text(
-              'Ù‡Ø°Ù‡ ÙØ§ØªÙˆØ±Ø© Ù†Ø¸Ø§Ù… Ù…Ø³ØªÙ‚Ù„Ø© ÙˆÙ„Ø§ ØªÙØ­Ø³Ø¨ Ø¶Ù…Ù† Ø§Ù„ÙØ§ØªÙˆØ±Ø© Ø§Ù„Ø¶Ø±ÙŠØ¨ÙŠØ©.',
+              'هذه فاتورة نظام مستقلة ولا تُحسب ضمن الفاتورة الضريبية.',
               style: TextStyle(color: AppColors.mediumGray),
             )
           else
@@ -1206,10 +1107,10 @@ class _MovementArchiveOrdersScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ø£Ø±Ø´ÙØ© Ø·Ù„Ø¨Ø§Øª Ø§Ù„Ø­Ø±ÙƒØ©'),
+        title: const Text('أرشفة طلبات الحركة'),
         actions: <Widget>[
           IconButton(
-            tooltip: 'ØªØ­Ø¯ÙŠØ«',
+            tooltip: 'تحديث',
             onPressed: _loadOrders,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -1230,10 +1131,10 @@ class _MovementArchiveOrdersScreenState
                       ),
                     ),
                     icon: const Icon(Icons.logout_rounded, size: 18),
-                    label: const Text('ØªØ³Ø¬ÙŠÙ„ Ø®Ø±ÙˆØ¬'),
+                    label: const Text('تسجيل خروج'),
                   )
                 : IconButton(
-                    tooltip: 'ØªØ³Ø¬ÙŠÙ„ Ø®Ø±ÙˆØ¬',
+                    tooltip: 'تسجيل خروج',
                     onPressed: _logout,
                     icon: const Icon(Icons.logout_rounded),
                   ),
@@ -1270,7 +1171,7 @@ class _MovementArchiveOrdersScreenState
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         hintText:
-                            'Ø§Ø¨Ø­Ø« Ø¨Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨ Ø£Ùˆ Ø±Ù‚Ù… Ø·Ù„Ø¨ Ø§Ù„Ù…ÙˆØ±Ø¯ Ø£Ùˆ Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø£Ùˆ Ø§Ù„Ø³Ø§Ø¦Ù‚',
+                            'ابحث برقم الطلب أو رقم طلب المورد أو العميل أو السائق',
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _searchController.text.isEmpty
                             ? null
@@ -1295,7 +1196,7 @@ class _MovementArchiveOrdersScreenState
                           : filteredOrders.isEmpty
                               ? const Center(
                                   child: Text(
-                                    'Ù„Ø§ ØªÙˆØ¬Ø¯ Ø·Ù„Ø¨Ø§Øª Ù…ÙˆØ¬Ù‡Ø© Ø¨Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„Ø£Ø±Ø´ÙØ© Ø­Ø§Ù„ÙŠÙ‹Ø§.',
+                                    'لا توجد طلبات موجهة بانتظار الأرشفة حاليًا.',
                                   ),
                                 )
                               : RefreshIndicator(
@@ -1345,7 +1246,7 @@ class _MovementArchiveOrdersScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const Text(
-            'Ø·Ù„Ø¨Ø§Øª Ø¨Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„Ø¥Ù†Ù‡Ø§Ø¡',
+            'طلبات بانتظار الإنهاء',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
@@ -1354,7 +1255,7 @@ class _MovementArchiveOrdersScreenState
           ),
           const SizedBox(height: 6),
           const Text(
-            'Ø£Ø±ÙÙ‚ Ù…Ø³ØªÙ†Ø¯Ø§Øª Ø§Ù„Ø·Ù„Ø¨ ÙˆØ³Ø¬Ù„ Ø§Ù„Ù‚ÙŠÙ… Ø§Ù„Ù…Ø§Ù„ÙŠØ© Ù„Ø¥Ù†Ù‡Ø§Ø¡ Ø£Ø±Ø´ÙØ© Ø§Ù„Ø­Ø±ÙƒØ©.',
+            'أرفق مستندات الطلب وسجل القيم المالية لإنهاء أرشفة الحركة.',
             style: TextStyle(color: Colors.white70),
           ),
           const SizedBox(height: 16),
@@ -1362,8 +1263,8 @@ class _MovementArchiveOrdersScreenState
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              _statChip('Ø¨Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„Ø£Ø±Ø´ÙØ©', '${_orders.length}'),
-              _statChip('Ø§Ù„Ø¸Ø§Ù‡Ø± Ø§Ù„Ø¢Ù†', '$visibleCount'),
+              _statChip('بانتظار الأرشفة', '${_orders.length}'),
+              _statChip('الظاهر الآن', '$visibleCount'),
             ],
           ),
         ],
@@ -1405,7 +1306,7 @@ class _MovementArchiveOrdersScreenState
                   ),
                 ),
               ),
-              _statusPill('Ø¨Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„Ø¥Ù†Ù‡Ø§Ø¡'),
+              _statusPill('بانتظار الإنهاء'),
             ],
           ),
           const SizedBox(height: 12),
@@ -1413,28 +1314,28 @@ class _MovementArchiveOrdersScreenState
             spacing: 12,
             runSpacing: 10,
             children: <Widget>[
-              _detailChip('Ø§Ù„Ù…ÙˆØ±Ø¯', order.supplierName),
+              _detailChip('المورد', order.supplierName),
               _detailChip(
-                'Ø±Ù‚Ù… Ø·Ù„Ø¨ Ø§Ù„Ù…ÙˆØ±Ø¯ Ø§Ù„Ø®Ø§Ø±Ø¬ÙŠ',
+                'رقم طلب المورد الخارجي',
                 order.supplierOrderNumber ?? '-',
               ),
-              _detailChip('Ø§Ù„Ø¹Ù…ÙŠÙ„', order.movementCustomerName ?? '-'),
-              _detailChip('Ø§Ù„Ø³Ø§Ø¦Ù‚', order.driverName ?? '-'),
-              _detailChip('Ø§Ù„Ù…Ø±ÙƒØ¨Ø©', order.vehicleNumber ?? '-'),
-              _detailChip('Ø§Ù„ÙˆÙ‚ÙˆØ¯', order.fuelType ?? '-'),
+              _detailChip('العميل', order.movementCustomerName ?? '-'),
+              _detailChip('السائق', order.driverName ?? '-'),
+              _detailChip('المركبة', order.vehicleNumber ?? '-'),
+              _detailChip('الوقود', order.fuelType ?? '-'),
               _detailChip(
-                'Ø§Ù„ÙƒÙ…ÙŠØ©',
+                'الكمية',
                 '${order.quantity ?? 0} ${order.unit ?? ''}'.trim(),
               ),
               _detailChip(
-                'Ù…ÙˆØ¹Ø¯ Ø§Ù„ØªØ­Ù…ÙŠÙ„',
+                'موعد التحميل',
                 _formatSchedule(order.loadingDate, order.loadingTime),
               ),
               _detailChip(
-                'Ù…ÙˆØ¹Ø¯ Ø§Ù„ÙˆØµÙˆÙ„',
+                'موعد الوصول',
                 _formatSchedule(arrivalDate, order.arrivalTime),
               ),
-              _detailChip('ØªØ§Ø±ÙŠØ® Ø§Ù„ØªÙˆØ¬ÙŠÙ‡', _formatDate(order.movementDirectedAt)),
+              _detailChip('تاريخ التوجيه', _formatDate(order.movementDirectedAt)),
             ],
           ),
           const SizedBox(height: 16),
@@ -1449,13 +1350,13 @@ class _MovementArchiveOrdersScreenState
                     MaterialPageRoute(
                       builder: (_) => OrderDetailsScreen(
                         orderId: order.id,
-                        screenTitle: 'ØªÙØ§ØµÙŠÙ„ Ø£Ø±Ø´ÙØ© Ø§Ù„Ø·Ù„Ø¨',
+                        screenTitle: 'تفاصيل أرشفة الطلب',
                       ),
                     ),
                   );
                 },
                 icon: const Icon(Icons.visibility_outlined),
-                label: const Text('Ø§Ù„ØªÙØ§ØµÙŠÙ„'),
+                label: const Text('التفاصيل'),
               ),
               FilledButton.icon(
                 onPressed: busy ? null : () => _showCompletionDialog(order),
@@ -1469,7 +1370,7 @@ class _MovementArchiveOrdersScreenState
                         ),
                       )
                     : const Icon(Icons.task_alt_rounded),
-                label: const Text('Ø¥Ù†Ù‡Ø§Ø¡'),
+                label: const Text('إنهاء'),
               ),
             ],
           ),
@@ -1562,3 +1463,4 @@ class _MovementArchiveOrdersScreenState
     );
   }
 }
+
