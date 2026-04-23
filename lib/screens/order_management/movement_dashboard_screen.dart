@@ -108,6 +108,15 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   dynamic _dropzoneController;
   bool _dropActive = false;
 
+  DateTime _monthlyStatsMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    1,
+  );
+  bool _loadingMonthlyStats = false;
+  int _monthlyCompletedOrders = 0;
+  int _monthlyMergedOrders = 0;
+
   String? _newCustomerRequestCustomerId;
   String _newCustomerRequestFuelType =
       _fuelTypes.contains('ديزل') ? 'ديزل' : _fuelTypes.first;
@@ -127,6 +136,14 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   bool get _ownerApprovalUser {
     final role = context.read<AuthProvider>().user?.role;
     return role == 'owner' || role == 'admin';
+  }
+
+  bool _canEditMovementOrder(Order order) {
+    if (_ownerApprovalUser) return true;
+    if (!_movementUser) return false;
+    if (!order.isMovementOrder) return false;
+    if (_isOrderCompleted(order) || order.status == 'ملغي') return false;
+    return order.isMovementPendingDriver || order.isMovementPendingDispatch;
   }
 
   Supplier? get _selectedSupplier {
@@ -191,6 +208,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
           : List<Driver>.from(drivers.drivers);
       _booting = false;
     });
+
+    _loadMonthlyMovementStats();
   }
 
   Future<void> _loadOrders({bool showLoader = true}) async {
@@ -222,6 +241,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       _customerRequests = customerRequests;
       _refreshing = false;
     });
+
+    _loadMonthlyMovementStats();
   }
 
   String _normalizeSearchText(String value) {
@@ -645,6 +666,87 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       DateTime(value.year, value.month, value.day);
 
   DateTime _startOfMonth(DateTime value) => DateTime(value.year, value.month);
+
+  DateTime _endOfMonth(DateTime monthStart) {
+    final start = _startOfMonth(monthStart);
+    final endDay = DateTime(start.year, start.month + 1, 0);
+    return DateTime(endDay.year, endDay.month, endDay.day, 23, 59, 59, 999);
+  }
+
+  String _formatMonthLabel(DateTime monthStart) {
+    final start = _startOfMonth(monthStart);
+    return DateFormat('MMMM yyyy', 'ar').format(start);
+  }
+
+  Map<String, dynamic> _monthArrivalDateFilters(DateTime monthStart) {
+    final start = _startOfMonth(monthStart);
+    final end = _endOfMonth(start);
+    return <String, dynamic>{
+      'dateField': 'arrivalDate',
+      'startDate': start.toIso8601String(),
+      'endDate': end.toIso8601String(),
+    };
+  }
+
+  Future<void> _loadMonthlyMovementStats({bool showErrorSnack = false}) async {
+    if (_loadingMonthlyStats) return;
+    if (!mounted) return;
+    setState(() => _loadingMonthlyStats = true);
+
+    try {
+      final provider = context.read<OrderProvider>();
+      final baseFilters = <String, dynamic>{
+        ..._monthArrivalDateFilters(_monthlyStatsMonth),
+      };
+
+      final results = await Future.wait<int>(<Future<int>>[
+        provider.fetchOrdersCount(
+          filters: {...baseFilters, 'status': 'تم التسليم'},
+        ),
+        provider.fetchOrdersCount(
+          filters: {...baseFilters, 'status': 'تم التنفيذ'},
+        ),
+        provider.fetchOrdersCount(
+          filters: {...baseFilters, 'status': 'مكتمل'},
+        ),
+        provider.fetchOrdersCount(
+          filters: {...baseFilters, 'orderSource': 'مدمج'},
+        ),
+      ]);
+
+      final completed = results[0] + results[1] + results[2];
+      final merged = results[3];
+
+      if (!mounted) return;
+      setState(() {
+        _monthlyCompletedOrders = completed;
+        _monthlyMergedOrders = merged;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (showErrorSnack) {
+        _snack('تعذر تحميل إحصائيات الشهر: $e', AppColors.warningOrange);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingMonthlyStats = false);
+      }
+    }
+  }
+
+  Future<void> _pickMonthlyStatsMonth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _monthlyStatsMonth,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      helpText: 'اختر أي يوم من الشهر المطلوب',
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _monthlyStatsMonth = _startOfMonth(picked));
+    await _loadMonthlyMovementStats(showErrorSnack: true);
+  }
 
   bool _isCustomerRelatedOrder(Order order) {
     final movementCustomerName = (order.movementCustomerName ?? '').trim();
@@ -5283,6 +5385,40 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
+  Widget _summaryText(
+    String label,
+    String value,
+    Color color,
+    IconData icon, {
+    double? width,
+    bool dense = false,
+  }) {
+    final double cardWidth = width ?? _defaultSummaryCardWidth();
+    return SizedBox(
+      width: cardWidth,
+      child: _metricCardText(label, value, color, icon, dense: dense),
+    );
+  }
+
+  Widget _summaryTextAction(
+    String label,
+    String value,
+    Color color,
+    IconData icon,
+    VoidCallback onTap, {
+    double? width,
+    bool dense = false,
+  }) {
+    final double cardWidth = width ?? _defaultSummaryCardWidth();
+    return SizedBox(
+      width: cardWidth,
+      child: GestureDetector(
+        onTap: onTap,
+        child: _metricCardText(label, value, color, icon, dense: dense),
+      ),
+    );
+  }
+
   double _defaultSummaryCardWidth() {
     final double width = MediaQuery.sizeOf(context).width;
     return width >= 1400
@@ -5302,6 +5438,11 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     required DateTime? statementExpiryDate,
   }) {
     final double spacing = isMobile ? 8 : (isWideWeb ? 10 : 12);
+    final monthLabel = _formatMonthLabel(_monthlyStatsMonth);
+    final completedMonthValue =
+        _loadingMonthlyStats ? '...' : _monthlyCompletedOrders.toString();
+    final mergedMonthValue =
+        _loadingMonthlyStats ? '...' : _monthlyMergedOrders.toString();
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -5369,6 +5510,31 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 width: cardWidth,
                 dense: isMobile,
               ),
+              _summaryTextAction(
+                'شهر الإحصائيات',
+                monthLabel,
+                AppColors.primaryBlue,
+                Icons.calendar_month_rounded,
+                _pickMonthlyStatsMonth,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+              _summaryText(
+                'مكتملة (الشهر)',
+                completedMonthValue,
+                AppColors.successGreen,
+                Icons.check_circle_rounded,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+              // _summaryText(
+              //   'مدمجة (الشهر)',
+              //   mergedMonthValue,
+              //   Colors.deepPurple,
+              //   Icons.merge_type_rounded,
+              //   width: cardWidth,
+              //   dense: isMobile,
+              // ),
             ],
           ),
         );
@@ -6089,7 +6255,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                               : 'تغيير السائق',
                         ),
                       ),
-                    if (_ownerApprovalUser)
+                    if (_canEditMovementOrder(order))
                       OutlinedButton.icon(
                         onPressed: busy
                             ? null
@@ -6729,7 +6895,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                               ],
                             ),
                             actions: <Widget>[
-                              if (_ownerApprovalUser)
+                              if (_canEditMovementOrder(order))
                                 TextButton.icon(
                                   onPressed: () async {
                                     Navigator.pop(dialogContext);

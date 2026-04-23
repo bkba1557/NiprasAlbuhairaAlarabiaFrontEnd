@@ -402,7 +402,7 @@ class _WhatsAppComposeDialogState extends State<WhatsAppComposeDialog> {
                       labelText: 'نص الرسالة',
                       alignLabelWithHint: true,
                       helperText:
-                          'سيتم تجهيز نفس الرسالة لكل المستلمين باسم ${WhatsAppService.companyName}',
+                          'سيتم تجهيز نفس الرسالة لكل المستلمين باسم ${AppStrings.appName}',
                     ),
                   ),
                   const SizedBox(height: 12),

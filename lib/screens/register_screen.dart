@@ -170,6 +170,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(color: AppColors.mediumGray),
                             ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'سيتم إنشاء شركتك وتعيين هذا الحساب كمسؤول (Admin).',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.mediumGray),
+                              textAlign: TextAlign.center,
+                            ),
                             const SizedBox(height: 32),
 
                             // Form

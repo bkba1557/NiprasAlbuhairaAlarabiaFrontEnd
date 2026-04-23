@@ -6089,6 +6089,320 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     return lastSegment.isNotEmpty ? lastSegment : 'attachment';
   }
 
+  List<Widget> _buildMovementArchiveSections(Order order, NumberFormat money) {
+    final archive = order.movementArchive;
+    if (archive == null) return const <Widget>[];
+    if ((archive['status'] ?? '').toString() != 'completed') {
+      return const <Widget>[];
+    }
+
+    double? moneyValue(dynamic value) {
+      if (value is num) return value.toDouble();
+      return double.tryParse(value?.toString() ?? '');
+    }
+
+    String textOrDash(dynamic value) {
+      final trimmed = (value?.toString() ?? '').trim();
+      return trimmed.isEmpty ? '-' : trimmed;
+    }
+
+    String moneyOrDash(dynamic value) {
+      final parsed = moneyValue(value);
+      return parsed == null ? '-' : money.format(parsed);
+    }
+
+    final calculationSource = (archive['calculationQuantitySource'] ?? '')
+        .toString();
+    final calculationSourceLabel = calculationSource == 'actual'
+        ? 'الكمية الفعلية'
+        : 'كمية الطلب';
+
+    final taxInvoiceDataRaw = archive['taxInvoiceData'];
+    final taxInvoiceData = taxInvoiceDataRaw is Map
+        ? Map<String, dynamic>.from(taxInvoiceDataRaw as Map)
+        : const <String, dynamic>{};
+
+    List<Attachment> attachmentsFrom(dynamic raw) {
+      if (raw is! List) return const <Attachment>[];
+      return raw
+          .whereType<Map>()
+          .map((item) => Attachment.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    }
+
+    final taxInvoiceAttachments = attachmentsFrom(
+      archive['taxInvoiceAttachments'],
+    );
+    final fuelReceiptAttachments = attachmentsFrom(
+      archive['fuelReceiptAttachments'],
+    );
+    final actualQuantityAttachments = attachmentsFrom(
+      archive['actualQuantityStatementAttachments'],
+    );
+
+    List<Widget> attachmentGroup(String title, List<Attachment> items) {
+      if (items.isEmpty) return const <Widget>[];
+      return <Widget>[
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: AppColors.primaryDarkBlue,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...items.map(_buildOrderAttachmentItem),
+      ];
+    }
+
+    final hasAnyInvoiceField = taxInvoiceData.values.any((v) {
+      if (v == null) return false;
+      final s = v.toString().trim();
+      return s.isNotEmpty && s != '0' && s != '0.0';
+    });
+
+    final detailsChildren = <Widget>[
+      _buildUiDetailRow('حالة الأرشفة', 'مكتملة'),
+      _buildUiDetailRow('مصدر الكمية', calculationSourceLabel),
+      if (archive['actualSupplyQuantity'] != null)
+        _buildUiDetailRow(
+          'كمية التوريد الفعلي',
+          textOrDash(archive['actualSupplyQuantity']),
+        ),
+      _buildUiDetailRow(
+        'سعر اللتر (أرشفة)',
+        moneyOrDash(archive['literPrice']),
+      ),
+      _buildUiDetailRow(
+        'الإجمالي قبل الضريبة (أرشفة)',
+        moneyOrDash(archive['saleSubtotal']),
+      ),
+      _buildUiDetailRow(
+        'قيمة الضريبة (أرشفة)',
+        moneyOrDash(archive['saleVatAmount']),
+      ),
+      _buildUiDetailRow(
+        'قيمة الرد شامل الضريبة (أرشفة)',
+        moneyOrDash(archive['saleValue']),
+      ),
+      _buildUiDetailRow(
+        'قيمة النقل شامل الضريبة (أرشفة)',
+        moneyOrDash(archive['transportValue']),
+      ),
+      _buildUiDetailRow(
+        'الإجمالي شامل الضريبة (أرشفة)',
+        moneyOrDash(archive['totalValueWithVat']),
+      ),
+    ];
+
+    if (hasAnyInvoiceField) {
+      detailsChildren.addAll(<Widget>[
+        const SizedBox(height: 8),
+        Text(
+          'بيانات الفاتورة الضريبية',
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: AppColors.primaryDarkBlue,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildUiDetailRow(
+          'رقم الفاتورة',
+          textOrDash(taxInvoiceData['invoiceNumber']),
+        ),
+        _buildUiDetailRow(
+          'تاريخ الفاتورة',
+          textOrDash(taxInvoiceData['invoiceDateText']),
+        ),
+        _buildUiDetailRow(
+          'اسم المورد/البائع',
+          textOrDash(taxInvoiceData['supplierName']),
+        ),
+        _buildUiDetailRow(
+          'الرقم الضريبي للمورد',
+          textOrDash(taxInvoiceData['supplierVatNumber']),
+        ),
+        if ((taxInvoiceData['supplierAddress'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'عنوان المورد',
+            textOrDash(taxInvoiceData['supplierAddress']),
+          ),
+        if ((taxInvoiceData['supplierPostalCode'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'الرمز البريدي للمورد',
+            textOrDash(taxInvoiceData['supplierPostalCode']),
+          ),
+        if ((taxInvoiceData['supplierBuildingNumber'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'رقم المبنى للمورد',
+            textOrDash(taxInvoiceData['supplierBuildingNumber']),
+          ),
+        if ((taxInvoiceData['supplierCommercialNumber'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'السجل التجاري للمورد',
+            textOrDash(taxInvoiceData['supplierCommercialNumber']),
+          ),
+        _buildUiDetailRow(
+          'اسم العميل/المشتري',
+          textOrDash(taxInvoiceData['customerName']),
+        ),
+        _buildUiDetailRow(
+          'الرقم الضريبي للعميل',
+          textOrDash(taxInvoiceData['customerVatNumber']),
+        ),
+        if ((taxInvoiceData['customerAddress'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'عنوان العميل',
+            textOrDash(taxInvoiceData['customerAddress']),
+          ),
+        if ((taxInvoiceData['customerPostalCode'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'الرمز البريدي للعميل',
+            textOrDash(taxInvoiceData['customerPostalCode']),
+          ),
+        if ((taxInvoiceData['customerBuildingNumber'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'رقم المبنى للعميل',
+            textOrDash(taxInvoiceData['customerBuildingNumber']),
+          ),
+        if ((taxInvoiceData['customerCommercialNumber'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'السجل التجاري للعميل',
+            textOrDash(taxInvoiceData['customerCommercialNumber']),
+          ),
+        if ((taxInvoiceData['referenceNumber'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'رقم مرجع',
+            textOrDash(taxInvoiceData['referenceNumber']),
+          ),
+        if ((taxInvoiceData['transportOrderNumber'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'أمر نقل رقم',
+            textOrDash(taxInvoiceData['transportOrderNumber']),
+          ),
+        if ((taxInvoiceData['itemDescription'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'وصف المادة/الخدمة',
+            textOrDash(taxInvoiceData['itemDescription']),
+          ),
+        if ((taxInvoiceData['fromLocation'] ?? '').toString().trim().isNotEmpty)
+          _buildUiDetailRow(
+            'موقع التحميل',
+            textOrDash(taxInvoiceData['fromLocation']),
+          ),
+        if ((taxInvoiceData['toLocation'] ?? '').toString().trim().isNotEmpty)
+          _buildUiDetailRow(
+            'موقع التنزيل',
+            textOrDash(taxInvoiceData['toLocation']),
+          ),
+        if ((taxInvoiceData['quantity'] ?? '').toString().trim().isNotEmpty)
+          _buildUiDetailRow(
+            'الكمية (من الفاتورة)',
+            textOrDash(taxInvoiceData['quantity']),
+          ),
+        if ((taxInvoiceData['unitPriceBeforeVat'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'سعر الوحدة قبل الضريبة (من الفاتورة)',
+            moneyOrDash(taxInvoiceData['unitPriceBeforeVat']),
+          ),
+        _buildUiDetailRow(
+          'إجمالي قبل الضريبة (من الفاتورة)',
+          moneyOrDash(taxInvoiceData['subtotalBeforeVat']),
+        ),
+        _buildUiDetailRow(
+          'قيمة الضريبة (من الفاتورة)',
+          moneyOrDash(taxInvoiceData['vatAmount']),
+        ),
+        _buildUiDetailRow(
+          'الإجمالي شامل الضريبة (من الفاتورة)',
+          moneyOrDash(taxInvoiceData['totalWithVat']),
+        ),
+        if ((taxInvoiceData['transportValueWithVat'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty)
+          _buildUiDetailRow(
+            'قيمة النقل شامل الضريبة (من الفاتورة)',
+            moneyOrDash(taxInvoiceData['transportValueWithVat']),
+          ),
+      ]);
+    }
+
+    final documentsChildren = <Widget>[
+      ...attachmentGroup(
+        'الفاتورة الضريبية (${taxInvoiceAttachments.length})',
+        taxInvoiceAttachments,
+      ),
+      ...attachmentGroup(
+        'سند استلام المحروقات (${fuelReceiptAttachments.length})',
+        fuelReceiptAttachments,
+      ),
+      ...attachmentGroup(
+        'سند الكمية الفعلية (${actualQuantityAttachments.length})',
+        actualQuantityAttachments,
+      ),
+    ];
+
+    final sections = <Widget>[
+      _buildInfoSection(
+        title: 'أرشفة الحركة',
+        icon: Icons.archive_rounded,
+        color: AppColors.secondaryTeal,
+        children: detailsChildren,
+      ),
+    ];
+
+    if (documentsChildren.isNotEmpty) {
+      sections.addAll(<Widget>[
+        const SizedBox(height: 16),
+        _buildInfoSection(
+          title: 'مستندات الأرشفة',
+          icon: Icons.attach_file_rounded,
+          color: AppColors.infoBlue,
+          children: documentsChildren,
+        ),
+      ]);
+    }
+
+    return sections;
+  }
+
   Widget _buildOrderAttachmentItem(Attachment attachment) {
     final uploadedAt = DateFormat(
       'yyyy/MM/dd HH:mm',
@@ -6481,7 +6795,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                             ],
                           ),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: orderTypeColor.withOpacity(0.16)),
+                          border: Border.all(
+                            color: orderTypeColor.withOpacity(0.16),
+                          ),
                         ),
                         child: Icon(
                           orderType == 'مورد'
@@ -6555,7 +6871,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         color: _getStatusColor(order.status).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: _getStatusColor(order.status).withOpacity(0.25),
+                          color: _getStatusColor(
+                            order.status,
+                          ).withOpacity(0.25),
                         ),
                       ),
                       child: Text(
@@ -6574,7 +6892,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildSummarySideIcon(Icons.person_rounded, orderTypeColor),
+                        _buildSummarySideIcon(
+                          Icons.person_rounded,
+                          orderTypeColor,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
@@ -7001,7 +7322,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               if (order.effectiveRequestType == 'نقل' &&
                   order.effectiveReturnValue != null)
                 _buildUiDetailRow(
-                  order.effectiveReturnMode == 'per_liter' ? 'الرد/لتر' : 'الرد',
+                  order.effectiveReturnMode == 'per_liter'
+                      ? 'الرد/لتر'
+                      : 'الرد',
                   order.effectiveReturnMode == 'per_liter'
                       ? '${money.format(order.effectiveReturnValue!)} / لتر'
                       : money.format(order.effectiveReturnValue!),
@@ -7119,6 +7442,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             ),
 
           const SizedBox(height: 16),
+
+          ..._buildMovementArchiveSections(order, money),
 
           // المرفقات
           if (order.attachments.isNotEmpty)
@@ -7240,10 +7565,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.10),
-            color.withOpacity(0.03),
-          ],
+          colors: [color.withOpacity(0.10), color.withOpacity(0.03)],
         ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: color.withOpacity(0.14)),

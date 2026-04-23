@@ -1,4 +1,4 @@
-﻿import 'dart:typed_data';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -12,9 +12,8 @@ import 'package:order_tracker/providers/order_provider.dart';
 import 'package:order_tracker/screens/order_details_screen.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+import 'package:order_tracker/utils/platform_file_bytes.dart';
+import 'package:order_tracker/utils/tax_invoice_parser.dart';
 import 'package:provider/provider.dart';
 
 class MovementArchiveOrdersScreen extends StatefulWidget {
@@ -142,249 +141,6 @@ class _MovementArchiveOrdersScreenState
     return quantity * literPrice;
   }
 
-  Future<PlatformFile> _buildGeneratedTaxInvoiceFileV2({
-    required Order order,
-    required double invoiceQuantity,
-    required double literPrice,
-    required double subtotal,
-    required double vatAmount,
-    required double total,
-  }) async {
-    final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Cairo-Regular.ttf'),
-    );
-    final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Cairo-Bold.ttf'),
-    );
-    final logo = pw.MemoryImage(
-      (await rootBundle.load(AppImages.logo)).buffer.asUint8List(),
-    );
-    final orderRows = <MapEntry<String, String>>[
-      MapEntry('نوع الوقود', _safeText(order.fuelType)),
-      MapEntry('الكمية', _quantityTextFor(order, invoiceQuantity)),
-      MapEntry('نوع الطلب', _safeText(order.effectiveRequestType)),
-      MapEntry('اسم المورد', _safeText(order.supplierName)),
-      MapEntry('اسم العميل', _customerDisplayName(order)),
-    ];
-    final amountRows = <MapEntry<String, String>>[
-      MapEntry('سعر اللتر', '${_moneyText(literPrice)} ر.س'),
-      MapEntry(
-        'السعر قبل الضريبة',
-        '${_moneyText(subtotal)} ر.س',
-      ),
-      MapEntry('قيمة الضريبة', '${_moneyText(vatAmount)} ر.س'),
-      MapEntry(
-        'الإجمالي بعد الضريبة',
-        '${_moneyText(total)} ر.س',
-      ),
-    ];
-    final barcodeData = orderRows
-        .map((entry) => '${entry.key}: ${entry.value}')
-        .join(' | ');
-    final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(base: regular, bold: bold),
-    );
-
-    pw.Table buildTable(List<MapEntry<String, String>> rows) {
-      return pw.Table(
-        border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.7),
-        columnWidths: const <int, pw.TableColumnWidth>{
-          0: pw.FlexColumnWidth(2.2),
-          1: pw.FlexColumnWidth(1),
-        },
-        children: rows.map((entry) {
-          return pw.TableRow(
-            children: <pw.Widget>[
-              pw.Container(
-                padding: const pw.EdgeInsets.all(10),
-                alignment: pw.Alignment.centerRight,
-                child: pw.Text(
-                  entry.value,
-                  style: pw.TextStyle(
-                    color: PdfColors.blue900,
-                    fontSize: 10.5,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ),
-              pw.Container(
-                padding: const pw.EdgeInsets.all(10),
-                color: PdfColors.grey100,
-                alignment: pw.Alignment.centerRight,
-                child: pw.Text(
-                  entry.key,
-                  style: pw.TextStyle(
-                    color: PdfColors.grey800,
-                    fontSize: 10,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          );
-        }).toList(),
-      );
-    }
-
-    pw.Widget sectionTitle(String title) {
-      return pw.Text(
-        title,
-        style: pw.TextStyle(
-          fontSize: 13,
-          fontWeight: pw.FontWeight.bold,
-          color: PdfColors.blue900,
-        ),
-      );
-    }
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        textDirection: pw.TextDirection.rtl,
-        margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 24),
-        build: (_) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: <pw.Widget>[
-              pw.Container(
-                padding: const pw.EdgeInsets.all(16),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.blue900,
-                  borderRadius: pw.BorderRadius.circular(12),
-                ),
-                child: pw.Row(
-                  children: <pw.Widget>[
-                    pw.Container(
-                      width: 64,
-                      height: 64,
-                      padding: const pw.EdgeInsets.all(6),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColors.white,
-                        borderRadius: pw.BorderRadius.circular(10),
-                      ),
-                      child: pw.Image(logo, fit: pw.BoxFit.contain),
-                    ),
-                    pw.SizedBox(width: 16),
-                    pw.Expanded(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: <pw.Widget>[
-                          pw.Text(
-                            'شركة البحيرة العربية',
-                            style: pw.TextStyle(
-                              color: PdfColors.white,
-                              fontSize: 16,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Text(
-                            'فاتورة ضريبية صادرة من نظام نبراس',
-                            style: const pw.TextStyle(
-                              color: PdfColors.white,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: <pw.Widget>[
-                        pw.Text(
-                          'فاتورة ضريبية',
-                          style: pw.TextStyle(
-                            color: PdfColors.white,
-                            fontSize: 22,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                        ),
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          order.orderNumber,
-                          style: const pw.TextStyle(
-                            color: PdfColors.white,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 18),
-              sectionTitle('بيانات الطلب'),
-              pw.SizedBox(height: 8),
-              buildTable(orderRows),
-              pw.SizedBox(height: 18),
-              sectionTitle('الملخص المالي'),
-              pw.SizedBox(height: 8),
-              buildTable(amountRows),
-              pw.Spacer(),
-              pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: <pw.Widget>[
-                  pw.Container(
-                    padding: const pw.EdgeInsets.all(10),
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(color: PdfColors.grey400),
-                      borderRadius: pw.BorderRadius.circular(8),
-                    ),
-                    child: pw.BarcodeWidget(
-                      barcode: pw.Barcode.qrCode(),
-                      data: barcodeData,
-                      width: 120,
-                      height: 120,
-                      drawText: false,
-                    ),
-                  ),
-                  pw.SizedBox(width: 18),
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(12),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColors.grey100,
-                        borderRadius: pw.BorderRadius.circular(8),
-                      ),
-                      child: pw.Text(
-                        'تم إصدار هذه الفاتورة آلياً من نظام نبراس. الباركود يحتوي بيانات الطلب الأساسية للتحقق السريع.',
-                        style: const pw.TextStyle(
-                          color: PdfColors.grey700,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 12),
-              pw.Divider(color: PdfColors.grey300),
-              pw.Text(
-                'شركة البحيرة العربية - نظام نبراس لإدارة الطلبات',
-                textAlign: pw.TextAlign.center,
-                style: const pw.TextStyle(
-                  color: PdfColors.grey700,
-                  fontSize: 9,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    final bytes = await pdf.save();
-    final safeOrderNumber = order.orderNumber.replaceAll(
-      RegExp(r'[^A-Za-z0-9_\-]+'),
-      '_',
-    );
-    return PlatformFile(
-      name: 'tax_invoice_$safeOrderNumber.pdf',
-      size: bytes.length,
-      bytes: Uint8List.fromList(bytes),
-    );
-  }
-
   List<Order> get _filteredOrders {
     final query = _searchController.text.trim().toLowerCase();
     if (query.isEmpty) return _orders;
@@ -420,20 +176,83 @@ class _MovementArchiveOrdersScreenState
     final literPriceController = TextEditingController();
     final saleValueController = TextEditingController();
     final transportValueController = TextEditingController();
+    final invoiceNumberController = TextEditingController();
+    final invoiceDateController = TextEditingController();
+    final supplierNameController = TextEditingController();
+    final supplierVatController = TextEditingController();
+    final supplierAddressController = TextEditingController();
+    final supplierPostalController = TextEditingController();
+    final supplierBuildingController = TextEditingController();
+    final supplierCommercialController = TextEditingController();
+    final customerNameController = TextEditingController();
+    final customerVatController = TextEditingController();
+    final customerAddressController = TextEditingController();
+    final customerPostalController = TextEditingController();
+    final customerBuildingController = TextEditingController();
+    final customerCommercialController = TextEditingController();
+    final referenceNumberController = TextEditingController();
+    final transportOrderNumberController = TextEditingController();
+    final itemDescriptionController = TextEditingController();
+    final fromLocationController = TextEditingController();
+    final toLocationController = TextEditingController();
+    final invoiceSubtotalController = TextEditingController();
+    final invoiceVatController = TextEditingController();
+    final invoiceTotalController = TextEditingController();
     final vatRate = _vatRateForOrder(order);
     var taxInvoiceFiles = <PlatformFile>[];
-    var systemInvoiceFiles = <PlatformFile>[];
     var fuelReceiptFiles = <PlatformFile>[];
     var actualQuantityStatementFiles = <PlatformFile>[];
     var addAllIncludedVat = true;
     var calculateUsingActualQuantity = false;
     var saving = false;
+    TaxInvoiceData? parsedTaxInvoice;
     double? actualSupplyQuantity;
     double calculationQuantity = _orderQuantity(order);
     double? literPrice;
     double subtotal = 0;
     double vatAmount = 0;
     double totalAfterVat = 0;
+
+    void fillInvoiceMetaFromOrderIfEmpty() {
+      if (invoiceDateController.text.trim().isEmpty) {
+        invoiceDateController.text = _formatDate(DateTime.now());
+      }
+
+      final supplierName =
+          order.supplier?.company ??
+          order.supplierCompany ??
+          order.supplierName ??
+          '';
+      if (supplierNameController.text.trim().isEmpty) {
+        supplierNameController.text = supplierName.trim();
+      }
+      if (supplierVatController.text.trim().isEmpty) {
+        supplierVatController.text = (order.supplier?.taxNumber ?? '').trim();
+      }
+
+      final customerName = (order.movementCustomerName ?? '').trim().isNotEmpty
+          ? order.movementCustomerName!
+          : (order.customer?.name ?? '');
+      if (customerNameController.text.trim().isEmpty) {
+        customerNameController.text = customerName.trim();
+      }
+      if (customerVatController.text.trim().isEmpty) {
+        customerVatController.text = (order.customer?.taxNumber ?? '').trim();
+      }
+    }
+
+    void fillInvoiceTotalsFromCalculationIfEmpty() {
+      if (subtotal <= 0) return;
+      if (invoiceSubtotalController.text.trim().isEmpty) {
+        invoiceSubtotalController.text = _moneyText(subtotal);
+      }
+      if (invoiceVatController.text.trim().isEmpty) {
+        invoiceVatController.text = _moneyText(vatAmount);
+      }
+      if (invoiceTotalController.text.trim().isEmpty) {
+        invoiceTotalController.text = _moneyText(totalAfterVat);
+      }
+    }
 
     void recalculateSaleValue() {
       final parsedLiterPrice = _parseAmount(literPriceController.text);
@@ -453,60 +272,176 @@ class _MovementArchiveOrdersScreenState
       vatAmount = subtotal * vatRate;
       totalAfterVat = subtotal + vatAmount;
       saleValueController.text = _moneyText(totalAfterVat);
+      fillInvoiceMetaFromOrderIfEmpty();
+      fillInvoiceTotalsFromCalculationIfEmpty();
     }
 
-    Future<void> generateSystemInvoice(
-      StateSetter setDialogState, {
-      required bool printOnly,
-    }) async {
-      recalculateSaleValue();
-      if (literPrice == null || totalAfterVat <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('أدخل سعر اللتر أولاً لتوليد الفاتورة.')),
+    fillInvoiceMetaFromOrderIfEmpty();
+    if (literPriceController.text.trim().isEmpty) {
+      final pricing =
+          order.transportPricingOverride ??
+          order.pricingSnapshot ??
+          const <String, dynamic>{};
+      final value =
+          pricing['archiveLiterPrice'] ??
+          pricing['unitPricePerLiter'] ??
+          order.unitPrice ??
+          0;
+      final asDouble = value is num
+          ? value.toDouble()
+          : double.tryParse(value.toString());
+      if (asDouble != null && asDouble > 0) {
+        literPriceController.text = asDouble.toString();
+        recalculateSaleValue();
+      }
+    }
+
+    Future<void> autofillFromTaxInvoice(StateSetter setDialogState) async {
+      if (taxInvoiceFiles.isEmpty) return;
+      final file = taxInvoiceFiles.firstWhere(
+        (item) => (item.extension ?? '').toLowerCase() == 'pdf',
+        orElse: () => taxInvoiceFiles.first,
+      );
+      final ext = (file.extension ?? '').toLowerCase();
+      if (ext != 'pdf') return;
+
+      try {
+        final bytes = await readPlatformFileBytes(file);
+        if (bytes == null || bytes.isEmpty) {
+          throw Exception('تعذر قراءة ملف الفاتورة');
+        }
+
+        final data = TaxInvoiceParser.parse(bytes);
+        parsedTaxInvoice = data;
+
+        if (data.toJson().isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'لم يتم العثور على بيانات قابلة للقراءة داخل ملف الفاتورة (قد يكون نموذج فارغ أو مسح ضوئي). أدخل البيانات يدوياً أو أرفق فاتورة تحتوي نصوص/قيم.',
+              ),
+            ),
+          );
+        }
+
+        void setIfProvided(TextEditingController c, String? v) {
+          final value = (v ?? '').trim();
+          if (value.isEmpty) return;
+          c.text = value;
+        }
+
+        setIfProvided(invoiceNumberController, data.invoiceNumber);
+        setIfProvided(invoiceDateController, data.invoiceDateText);
+        setIfProvided(supplierNameController, data.supplierName);
+        setIfProvided(supplierVatController, data.supplierVatNumber);
+        setIfProvided(supplierAddressController, data.supplierAddress);
+        setIfProvided(supplierPostalController, data.supplierPostalCode);
+        setIfProvided(supplierBuildingController, data.supplierBuildingNumber);
+        setIfProvided(
+          supplierCommercialController,
+          data.supplierCommercialNumber,
         );
-        return;
-      }
+        setIfProvided(customerNameController, data.customerName);
+        setIfProvided(customerVatController, data.customerVatNumber);
+        setIfProvided(customerAddressController, data.customerAddress);
+        setIfProvided(customerPostalController, data.customerPostalCode);
+        setIfProvided(customerBuildingController, data.customerBuildingNumber);
+        setIfProvided(
+          customerCommercialController,
+          data.customerCommercialNumber,
+        );
+        setIfProvided(referenceNumberController, data.referenceNumber);
+        setIfProvided(
+          transportOrderNumberController,
+          data.transportOrderNumber,
+        );
+        setIfProvided(itemDescriptionController, data.itemDescription);
+        setIfProvided(fromLocationController, data.fromLocation);
+        setIfProvided(toLocationController, data.toLocation);
 
-      final file = await _buildGeneratedTaxInvoiceFileV2(
-        order: order,
-        invoiceQuantity: calculationQuantity,
-        literPrice: literPrice!,
-        subtotal: subtotal,
-        vatAmount: vatAmount,
-        total: totalAfterVat,
-      );
-      if (printOnly) {
-        await Printing.layoutPdf(onLayout: (_) async => file.bytes!);
-        return;
-      }
+        if (data.subtotalBeforeVat != null) {
+          invoiceSubtotalController.text = _moneyText(data.subtotalBeforeVat!);
+        }
+        if (data.vatAmount != null) {
+          invoiceVatController.text = _moneyText(data.vatAmount!);
+        }
+        if (data.totalWithVat != null) {
+          invoiceTotalController.text = _moneyText(data.totalWithVat!);
+        }
 
-      setDialogState(() => systemInvoiceFiles = <PlatformFile>[file]);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم توليد الفاتورة الضريبية وإرفاقها.'),
-          backgroundColor: AppColors.successGreen,
-        ),
-      );
+        final invoiceSubtotal = _parseAmount(invoiceSubtotalController.text);
+        final invoiceQuantity = data.quantity != null && data.quantity! > 0
+            ? data.quantity!
+            : _orderQuantity(order);
+        if (invoiceQuantity > 0) {
+          calculateUsingActualQuantity = false;
+          actualSupplyQuantityController.text = invoiceQuantity.toString();
+          if (invoiceSubtotal != null && invoiceSubtotal > 0) {
+            literPriceController.text = (invoiceSubtotal / invoiceQuantity)
+                .toString();
+          }
+        }
+
+        setDialogState(recalculateSaleValue);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر تعبئة بيانات الفاتورة تلقائياً: $e')),
+        );
+      }
     }
 
-    Future<void> submit(StateSetter setDialogState) async {
-      recalculateSaleValue();
-      final saleValue = totalAfterVat > 0 ? totalAfterVat : null;
-      final transportValue = _parseAmount(transportValueController.text);
+    Future<void> submit(
+      StateSetter setDialogState,
+      BuildContext dialogContext,
+    ) async {
+      final invoiceSubtotal = _parseAmount(invoiceSubtotalController.text);
+      final invoiceVat = _parseAmount(invoiceVatController.text);
+      final invoiceTotal = _parseAmount(invoiceTotalController.text);
+
+      final derivedSubtotal =
+          invoiceSubtotal ??
+          (invoiceTotal != null && invoiceVat != null
+              ? (invoiceTotal - invoiceVat)
+              : null);
+
+      final derivedVat =
+          invoiceVat ??
+          (invoiceTotal != null && invoiceSubtotal != null
+              ? (invoiceTotal - invoiceSubtotal)
+              : (derivedSubtotal != null ? (derivedSubtotal * vatRate) : null));
+      final derivedTotal =
+          invoiceTotal ??
+          (derivedSubtotal != null && derivedVat != null
+              ? (derivedSubtotal + derivedVat)
+              : null);
+
+      final usedQuantity =
+          (parsedTaxInvoice?.quantity != null &&
+              parsedTaxInvoice!.quantity! > 0)
+          ? parsedTaxInvoice!.quantity!
+          : _orderQuantity(order);
+
+      final derivedLiterPrice =
+          (derivedSubtotal != null && usedQuantity > 0 && derivedSubtotal > 0)
+          ? (derivedSubtotal / usedQuantity)
+          : null;
+
+      final saleValue = derivedTotal;
+      final transportValue = parsedTaxInvoice?.transportValueWithVat ?? 0;
 
       if (taxInvoiceFiles.isEmpty ||
           fuelReceiptFiles.isEmpty ||
           actualQuantityStatementFiles.isEmpty ||
-          literPrice == null ||
-          (calculateUsingActualQuantity &&
-              (actualSupplyQuantity == null || actualSupplyQuantity! <= 0)) ||
           saleValue == null ||
-          transportValue == null) {
+          derivedSubtotal == null ||
+          derivedVat == null ||
+          derivedLiterPrice == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'أرفق الفاتورة وسند الاستلام وسند الكمية الفعلية وأدخل القيم قبل الحفظ.',
+              'أرفق الفاتورة وسند الاستلام وسند الكمية الفعلية وتأكد من تعبئة إجماليات الفاتورة.',
             ),
           ),
         );
@@ -516,21 +451,81 @@ class _MovementArchiveOrdersScreenState
       setDialogState(() => saving = true);
       setState(() => _busyOrderId = order.id);
 
-      final success = await context.read<OrderProvider>().completeMovementArchiveOrder(
+      final success = await context
+          .read<OrderProvider>()
+          .completeMovementArchiveOrder(
             orderId: order.id,
             taxInvoiceFiles: taxInvoiceFiles,
-            systemInvoiceFiles: systemInvoiceFiles,
             fuelReceiptFiles: fuelReceiptFiles,
             actualQuantityStatementFiles: actualQuantityStatementFiles,
-            actualSupplyQuantity: actualSupplyQuantity,
-            calculationQuantitySource:
-                calculateUsingActualQuantity ? 'actual' : 'order',
-            literPrice: literPrice!,
-            saleSubtotal: subtotal,
-            saleVatAmount: vatAmount,
+            actualSupplyQuantity: null,
+            calculationQuantitySource: 'order',
+            literPrice: derivedLiterPrice,
+            saleSubtotal: derivedSubtotal,
+            saleVatAmount: derivedVat,
             saleValue: saleValue,
             transportValue: transportValue,
             addAllIncludedVat: addAllIncludedVat,
+            taxInvoiceData:
+                parsedTaxInvoice?.toJson() ??
+                <String, dynamic>{
+                  if (invoiceNumberController.text.trim().isNotEmpty)
+                    'invoiceNumber': invoiceNumberController.text.trim(),
+                  if (invoiceDateController.text.trim().isNotEmpty)
+                    'invoiceDateText': invoiceDateController.text.trim(),
+                  if (supplierNameController.text.trim().isNotEmpty)
+                    'supplierName': supplierNameController.text.trim(),
+                  if (supplierVatController.text.trim().isNotEmpty)
+                    'supplierVatNumber': supplierVatController.text.trim(),
+                  if (supplierAddressController.text.trim().isNotEmpty)
+                    'supplierAddress': supplierAddressController.text.trim(),
+                  if (supplierPostalController.text.trim().isNotEmpty)
+                    'supplierPostalCode': supplierPostalController.text.trim(),
+                  if (supplierBuildingController.text.trim().isNotEmpty)
+                    'supplierBuildingNumber': supplierBuildingController.text
+                        .trim(),
+                  if (supplierCommercialController.text.trim().isNotEmpty)
+                    'supplierCommercialNumber': supplierCommercialController
+                        .text
+                        .trim(),
+                  if (customerNameController.text.trim().isNotEmpty)
+                    'customerName': customerNameController.text.trim(),
+                  if (customerVatController.text.trim().isNotEmpty)
+                    'customerVatNumber': customerVatController.text.trim(),
+                  if (customerAddressController.text.trim().isNotEmpty)
+                    'customerAddress': customerAddressController.text.trim(),
+                  if (customerPostalController.text.trim().isNotEmpty)
+                    'customerPostalCode': customerPostalController.text.trim(),
+                  if (customerBuildingController.text.trim().isNotEmpty)
+                    'customerBuildingNumber': customerBuildingController.text
+                        .trim(),
+                  if (customerCommercialController.text.trim().isNotEmpty)
+                    'customerCommercialNumber': customerCommercialController
+                        .text
+                        .trim(),
+                  if (referenceNumberController.text.trim().isNotEmpty)
+                    'referenceNumber': referenceNumberController.text.trim(),
+                  if (transportOrderNumberController.text.trim().isNotEmpty)
+                    'transportOrderNumber': transportOrderNumberController.text
+                        .trim(),
+                  if (itemDescriptionController.text.trim().isNotEmpty)
+                    'itemDescription': itemDescriptionController.text.trim(),
+                  if (fromLocationController.text.trim().isNotEmpty)
+                    'fromLocation': fromLocationController.text.trim(),
+                  if (toLocationController.text.trim().isNotEmpty)
+                    'toLocation': toLocationController.text.trim(),
+                  if (invoiceSubtotalController.text.trim().isNotEmpty)
+                    'subtotalBeforeVat': _parseAmount(
+                      invoiceSubtotalController.text,
+                    ),
+                  if (invoiceVatController.text.trim().isNotEmpty)
+                    'vatAmount': _parseAmount(invoiceVatController.text),
+                  if (invoiceTotalController.text.trim().isNotEmpty)
+                    'totalWithVat': _parseAmount(invoiceTotalController.text),
+                  if (parsedTaxInvoice?.transportValueWithVat != null)
+                    'transportValueWithVat':
+                        parsedTaxInvoice!.transportValueWithVat,
+                },
             notes: notesController.text,
           );
 
@@ -545,15 +540,18 @@ class _MovementArchiveOrdersScreenState
       });
 
       if (!success) {
-        final error = context.read<OrderProvider>().error ??
-            'تعذر إنهاء أرشفة الطلب.';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error)),
-        );
+        final error =
+            context.read<OrderProvider>().error ?? 'تعذر إنهاء أرشفة الطلب.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
         return;
       }
 
-      Navigator.of(context).pop();
+      final dialogElement = dialogContext as Element;
+      if (dialogElement.mounted && Navigator.of(dialogContext).canPop()) {
+        Navigator.of(dialogContext).pop();
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -567,10 +565,13 @@ class _MovementArchiveOrdersScreenState
 
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
+            return WillPopScope(
+              onWillPop: () async => !saving,
+              child: AlertDialog(
               title: Text('إنهاء أرشفة ${order.orderNumber}'),
               content: SizedBox(
                 width: 620,
@@ -587,8 +588,42 @@ class _MovementArchiveOrdersScreenState
                             onPicked: (files) =>
                                 setDialogState(() => taxInvoiceFiles = files),
                           );
+                          if (!mounted) return;
+                          await autofillFromTaxInvoice(setDialogState);
                         },
                       ),
+                      if (taxInvoiceFiles.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 10),
+                        _invoiceDataCard(
+                          invoiceNumberController: invoiceNumberController,
+                          invoiceDateController: invoiceDateController,
+                          supplierNameController: supplierNameController,
+                          supplierVatController: supplierVatController,
+                          supplierAddressController: supplierAddressController,
+                          supplierPostalController: supplierPostalController,
+                          supplierBuildingController:
+                              supplierBuildingController,
+                          supplierCommercialController:
+                              supplierCommercialController,
+                          customerNameController: customerNameController,
+                          customerVatController: customerVatController,
+                          customerAddressController: customerAddressController,
+                          customerPostalController: customerPostalController,
+                          customerBuildingController:
+                              customerBuildingController,
+                          customerCommercialController:
+                              customerCommercialController,
+                          referenceNumberController: referenceNumberController,
+                          transportOrderNumberController:
+                              transportOrderNumberController,
+                          itemDescriptionController: itemDescriptionController,
+                          fromLocationController: fromLocationController,
+                          toLocationController: toLocationController,
+                          invoiceSubtotalController: invoiceSubtotalController,
+                          invoiceVatController: invoiceVatController,
+                          invoiceTotalController: invoiceTotalController,
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       _uploadField(
                         title: 'سند استلام المحروقات',
@@ -612,147 +647,6 @@ class _MovementArchiveOrdersScreenState
                           );
                         },
                       ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: TextField(
-                              controller: actualSupplyQuantityController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              onChanged: (_) =>
-                                  setDialogState(recalculateSaleValue),
-                              decoration: InputDecoration(
-                                labelText: 'كمية التوريد الفعلي',
-                                suffixText: order.unit ?? 'لتر',
-                                border: const OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: SegmentedButton<bool>(
-                              segments: const <ButtonSegment<bool>>[
-                                ButtonSegment<bool>(
-                                  value: false,
-                                  label: Text('كمية الطلب'),
-                                  icon: Icon(Icons.receipt_long_outlined),
-                                ),
-                                ButtonSegment<bool>(
-                                  value: true,
-                                  label: Text('الكمية الفعلية'),
-                                  icon: Icon(Icons.scale_outlined),
-                                ),
-                              ],
-                              selected: <bool>{calculateUsingActualQuantity},
-                              onSelectionChanged: (selection) {
-                                setDialogState(() {
-                                  calculateUsingActualQuantity =
-                                      selection.first;
-                                  recalculateSaleValue();
-                                });
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: literPriceController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        onChanged: (_) => setDialogState(recalculateSaleValue),
-                        decoration: const InputDecoration(
-                          labelText: 'سعر اللتر قبل الضريبة',
-                          suffixIcon: const _RiyalSuffixIcon(),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _pricingSummary(
-                        quantity: _quantityTextFor(order, calculationQuantity),
-                        quantitySource: calculateUsingActualQuantity
-                            ? 'الكمية الفعلية'
-                            : 'كمية الطلب',
-                        vatRate: vatRate,
-                        subtotal: subtotal,
-                        vatAmount: vatAmount,
-                        totalAfterVat: totalAfterVat,
-                      ),
-                      const SizedBox(height: 12),
-                      _systemInvoiceField(
-                        files: systemInvoiceFiles,
-                        onGenerate: saving
-                            ? null
-                            : () => generateSystemInvoice(
-                                  setDialogState,
-                                  printOnly: false,
-                                ),
-                        onPrint: saving
-                            ? null
-                            : () => generateSystemInvoice(
-                                  setDialogState,
-                                  printOnly: true,
-                                ),
-                      ),
-                      const SizedBox(height: 12),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: TextField(
-                              controller: saleValueController,
-                              readOnly: true,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              decoration: const InputDecoration(
-                                labelText: 'قيمة الرد',
-                                suffixText: 'شامل الضريبة',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: transportValueController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              onChanged: (_) => setDialogState(() {}),
-                              decoration: const InputDecoration(
-                                labelText: 'قيمة النقل',
-                                suffixText: 'شامل الضريبة',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _requiredTotalSummary(
-                        totalAfterVat +
-                            (_parseAmount(transportValueController.text) ?? 0),
-                      ),
-                      const SizedBox(height: 10),
-                      CheckboxListTile(
-                        value: addAllIncludedVat,
-                        onChanged: (value) => setDialogState(
-                          () => addAllIncludedVat = value ?? true,
-                        ),
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('إضافة الكل'),
-                        subtitle: const Text(
-                          'القيم المدخلة تعتبر شاملة الضريبة.',
-                        ),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
                       const SizedBox(height: 10),
                       TextField(
                         controller: notesController,
@@ -770,12 +664,15 @@ class _MovementArchiveOrdersScreenState
               ),
               actions: <Widget>[
                 TextButton(
-                  onPressed:
-                      saving ? null : () => Navigator.of(dialogContext).pop(),
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
                   child: const Text('إلغاء'),
                 ),
                 FilledButton.icon(
-                  onPressed: saving ? null : () => submit(setDialogState),
+                  onPressed: saving
+                      ? null
+                      : () => submit(setDialogState, dialogContext),
                   icon: saving
                       ? const SizedBox(
                           width: 16,
@@ -789,7 +686,8 @@ class _MovementArchiveOrdersScreenState
                   label: const Text('حفظ وإنهاء'),
                 ),
               ],
-            );
+            ),
+          );
           },
         );
       },
@@ -800,12 +698,31 @@ class _MovementArchiveOrdersScreenState
     literPriceController.dispose();
     saleValueController.dispose();
     transportValueController.dispose();
+    invoiceNumberController.dispose();
+    invoiceDateController.dispose();
+    supplierNameController.dispose();
+    supplierVatController.dispose();
+    supplierAddressController.dispose();
+    supplierPostalController.dispose();
+    supplierBuildingController.dispose();
+    supplierCommercialController.dispose();
+    customerNameController.dispose();
+    customerVatController.dispose();
+    customerAddressController.dispose();
+    customerPostalController.dispose();
+    customerBuildingController.dispose();
+    customerCommercialController.dispose();
+    referenceNumberController.dispose();
+    transportOrderNumberController.dispose();
+    itemDescriptionController.dispose();
+    fromLocationController.dispose();
+    toLocationController.dispose();
+    invoiceSubtotalController.dispose();
+    invoiceVatController.dispose();
+    invoiceTotalController.dispose();
   }
 
-  Widget _riyalSymbol({
-    required Color color,
-    double size = 14,
-  }) {
+  Widget _riyalSymbol({required Color color, double size = 14}) {
     return SvgPicture.asset(
       _saudiRiyalSymbolAsset,
       width: size,
@@ -822,7 +739,12 @@ class _MovementArchiveOrdersScreenState
     required double vatAmount,
     required double totalAfterVat,
   }) {
-    Widget item(String label, String value, {Color? color, bool currency = false}) {
+    Widget item(
+      String label,
+      String value, {
+      Color? color,
+      bool currency = false,
+    }) {
       final valueStyle = TextStyle(
         color: color ?? AppColors.primaryDarkBlue,
         fontWeight: FontWeight.w900,
@@ -876,21 +798,13 @@ class _MovementArchiveOrdersScreenState
           children: <Widget>[
             item('الكمية ($quantitySource)', quantity),
             const SizedBox(width: 8),
-            item(
-              'السعر قبل الضريبة',
-              _moneyText(subtotal),
-              currency: true,
-            ),
+            item('السعر قبل الضريبة', _moneyText(subtotal), currency: true),
           ],
         ),
         const SizedBox(height: 8),
         Row(
           children: <Widget>[
-            item(
-              'الضريبة $vatPercent%',
-              _moneyText(vatAmount),
-              currency: true,
-            ),
+            item('الضريبة $vatPercent%', _moneyText(vatAmount), currency: true),
             const SizedBox(width: 8),
             item(
               'الإجمالي بعد الضريبة',
@@ -974,7 +888,9 @@ class _MovementArchiveOrdersScreenState
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.16)),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.16),
+        ),
         color: Colors.white,
       ),
       child: Column(
@@ -1027,71 +943,325 @@ class _MovementArchiveOrdersScreenState
     );
   }
 
-  Widget _systemInvoiceField({
-    required List<PlatformFile> files,
-    required VoidCallback? onGenerate,
-    required VoidCallback? onPrint,
+  Widget _invoiceDataCard({
+    required TextEditingController invoiceNumberController,
+    required TextEditingController invoiceDateController,
+    required TextEditingController supplierNameController,
+    required TextEditingController supplierVatController,
+    required TextEditingController supplierAddressController,
+    required TextEditingController supplierPostalController,
+    required TextEditingController supplierBuildingController,
+    required TextEditingController supplierCommercialController,
+    required TextEditingController customerNameController,
+    required TextEditingController customerVatController,
+    required TextEditingController customerAddressController,
+    required TextEditingController customerPostalController,
+    required TextEditingController customerBuildingController,
+    required TextEditingController customerCommercialController,
+    required TextEditingController referenceNumberController,
+    required TextEditingController transportOrderNumberController,
+    required TextEditingController itemDescriptionController,
+    required TextEditingController fromLocationController,
+    required TextEditingController toLocationController,
+    required TextEditingController invoiceSubtotalController,
+    required TextEditingController invoiceVatController,
+    required TextEditingController invoiceTotalController,
   }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.successGreen.withValues(alpha: 0.2)),
-        color: AppColors.successGreen.withValues(alpha: 0.04),
+        border: Border.all(color: AppColors.infoBlue.withValues(alpha: 0.2)),
+        color: AppColors.infoBlue.withValues(alpha: 0.04),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          const Text(
+            'بيانات الفاتورة الضريبية',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: AppColors.primaryDarkBlue,
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: <Widget>[
-              const Expanded(
-                child: Text(
-                  'فاتورة من داخل النظام',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryDarkBlue,
+              Expanded(
+                child: TextField(
+                  controller: invoiceNumberController,
+                  decoration: const InputDecoration(
+                    labelText: 'رقم الفاتورة',
+                    border: OutlineInputBorder(),
                   ),
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: onPrint,
-                icon: const Icon(Icons.print_outlined),
-                label: const Text('طباعة فقط'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: onGenerate,
-                icon: const Icon(Icons.picture_as_pdf_outlined),
-                label: const Text('توليد وإرفاق'),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: invoiceDateController,
+                  decoration: const InputDecoration(
+                    labelText: 'تاريخ الفاتورة',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          if (files.isEmpty)
-            Text(
-              'هذه فاتورة نظام مستقلة ولا تُحسب ضمن الفاتورة الضريبية.',
-              style: TextStyle(color: AppColors.mediumGray),
-            )
-          else
-            ...files.map(
-              (file) => Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Row(
-                  children: <Widget>[
-                    const Icon(Icons.receipt_long_outlined, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        file.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+          const SizedBox(height: 10),
+          const Text(
+            'بيانات الشركة',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: AppColors.primaryDarkBlue,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: supplierNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'الاسم',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: supplierVatController,
+                  decoration: const InputDecoration(
+                    labelText: 'الرقم الضريبي',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'بيانات العميل',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: AppColors.primaryDarkBlue,
             ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: customerNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'الاسم',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: customerVatController,
+                  decoration: const InputDecoration(
+                    labelText: 'الرقم الضريبي',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: const Text(
+              'تفاصيل إضافية (من الفاتورة)',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryDarkBlue,
+              ),
+            ),
+            children: <Widget>[
+              TextField(
+                controller: supplierAddressController,
+                decoration: const InputDecoration(
+                  labelText: 'العنوان',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      controller: supplierPostalController,
+                      decoration: const InputDecoration(
+                        labelText: 'الرمز البريدي',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: supplierBuildingController,
+                      decoration: const InputDecoration(
+                        labelText: 'رقم المبنى',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: supplierCommercialController,
+                decoration: const InputDecoration(
+                  labelText: 'السجل التجاري',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: customerAddressController,
+                decoration: const InputDecoration(
+                  labelText: 'العنوان',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      controller: customerPostalController,
+                      decoration: const InputDecoration(
+                        labelText: 'الرمز البريدي',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: customerBuildingController,
+                      decoration: const InputDecoration(
+                        labelText: 'رقم المبنى',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: customerCommercialController,
+                decoration: const InputDecoration(
+                  labelText: 'السجل التجاري',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      controller: referenceNumberController,
+                      decoration: const InputDecoration(
+                        labelText: 'رقم مرجع ارامكو',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: transportOrderNumberController,
+                      decoration: const InputDecoration(
+                        labelText: 'امر نقل رقم',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: itemDescriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'اسم المادة (DES)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      controller: fromLocationController,
+                      decoration: const InputDecoration(
+                        labelText: 'موقع التحميل (From)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: toLocationController,
+                      decoration: const InputDecoration(
+                        labelText: 'موقع التنزيل (To)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: invoiceSubtotalController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'الإجمالي قبل الضريبة',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: invoiceVatController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'ضريبة القيمة المضافة',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: invoiceTotalController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'الإجمالي شامل الضريبة',
+              border: OutlineInputBorder(),
+            ),
+          ),
         ],
       ),
     );
@@ -1194,27 +1364,22 @@ class _MovementArchiveOrdersScreenState
                       child: _loading
                           ? const Center(child: CircularProgressIndicator())
                           : filteredOrders.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    'لا توجد طلبات موجهة بانتظار الأرشفة حاليًا.',
-                                  ),
-                                )
-                              : RefreshIndicator(
-                                  onRefresh: _loadOrders,
-                                  child: ListView.separated(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      0,
-                                      0,
-                                      0,
-                                      24,
-                                    ),
-                                    itemCount: filteredOrders.length,
-                                    separatorBuilder: (_, _) =>
-                                        const SizedBox(height: 12),
-                                    itemBuilder: (context, index) =>
-                                        _orderCard(filteredOrders[index]),
-                                  ),
-                                ),
+                          ? const Center(
+                              child: Text(
+                                'لا توجد طلبات موجهة بانتظار الأرشفة حاليًا.',
+                              ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _loadOrders,
+                              child: ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(0, 0, 0, 24),
+                                itemCount: filteredOrders.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(height: 12),
+                                itemBuilder: (context, index) =>
+                                    _orderCard(filteredOrders[index]),
+                              ),
+                            ),
                     ),
                   ],
                 ),
@@ -1335,7 +1500,10 @@ class _MovementArchiveOrdersScreenState
                 'موعد الوصول',
                 _formatSchedule(arrivalDate, order.arrivalTime),
               ),
-              _detailChip('تاريخ التوجيه', _formatDate(order.movementDirectedAt)),
+              _detailChip(
+                'تاريخ التوجيه',
+                _formatDate(order.movementDirectedAt),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1463,4 +1631,3 @@ class _MovementArchiveOrdersScreenState
     );
   }
 }
-

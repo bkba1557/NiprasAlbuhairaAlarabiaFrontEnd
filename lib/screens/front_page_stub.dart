@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/device_performance.dart';
 
 class FrontPage extends StatelessWidget {
@@ -185,7 +186,47 @@ class FrontPage extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                   
+                                    SizedBox(height: isPhone ? 10 : 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: isPhone ? 50 : 54,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
+                                          Navigator.pushNamed(
+                                            context,
+                                            AppRoutes.register,
+                                          );
+                                        },
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor:
+                                              const Color(0xFF1F7A6C),
+                                          side: const BorderSide(
+                                            color: Color(0xFF1F7A6C),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                          ),
+                                        ),
+                                        icon: const Icon(
+                                          Icons.person_add_alt_1_rounded,
+                                          size: 22,
+                                        ),
+                                        label: const Text(
+                                          'إنشاء حساب شركة',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontFamily: 'Cairo',
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                     SizedBox(height: isPhone ? 8 : 10),
                                     Text(
                                       'يمكنك تسجيل الدخول للوصول إلى جميع خدمات التطبيق وإدارة العمليات اليومية من حسابك.',

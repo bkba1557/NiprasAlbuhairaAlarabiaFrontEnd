@@ -822,9 +822,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ],
               const SizedBox(height: 8),
-              const Text(
-                'شركة البحيرة العربية © 2026',
-                style: TextStyle(
+              TextButton(
+                onPressed: authProvider.isLoading
+                    ? null
+                    : () => Navigator.pushNamed(context, AppRoutes.register),
+                child: const Text(
+                  'إنشاء حساب شركة جديدة',
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                '${AppStrings.appName} © 2026',
+                style: const TextStyle(
                   color: AppColors.primaryBlue,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,

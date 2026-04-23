@@ -8,6 +8,7 @@ class User {
   final String username;
   final String email;
   final String role;
+  final String? companyId;
   final String company;
   final String? phone;
   final DateTime? createdAt;
@@ -27,6 +28,7 @@ class User {
     this.username = '',
     required this.email,
     required this.role,
+    this.companyId,
     required this.company,
     this.phone,
     this.createdAt,
@@ -109,12 +111,23 @@ class User {
       parsedSupplierId = rawSupplierId.toString();
     }
 
+    String? parsedCompanyId;
+    final rawCompanyId = json['companyId'];
+    if (rawCompanyId is Map) {
+      final companyMap = Map<String, dynamic>.from(rawCompanyId);
+      parsedCompanyId =
+          companyMap['_id']?.toString() ?? companyMap[r'$oid']?.toString();
+    } else if (rawCompanyId != null) {
+      parsedCompanyId = rawCompanyId.toString();
+    }
+
     return User(
       id: (json['_id'] ?? json['id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
       username: (json['username'] ?? '').toString(),
       email: (json['email'] ?? '').toString(),
       role: (json['role'] ?? '').toString(),
+      companyId: parsedCompanyId,
       company: (json['company'] ?? '').toString(),
       phone: json['phone']?.toString(),
       createdAt: json['createdAt'] != null
@@ -142,6 +155,7 @@ class User {
       'username': username,
       'email': email,
       'role': role,
+      'companyId': companyId,
       'company': company,
       'phone': phone,
       'createdAt': createdAt?.toIso8601String(),

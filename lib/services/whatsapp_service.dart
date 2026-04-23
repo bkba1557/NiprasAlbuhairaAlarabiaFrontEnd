@@ -69,7 +69,6 @@ class WhatsAppOutboundMessage {
 }
 
 class WhatsAppService {
-  static const String companyName = 'شركة البحيرة العربية';
   static const String systemName = 'نظام نبراس';
   static const String _defaultCountryCode = '966';
 
@@ -222,10 +221,15 @@ class WhatsAppService {
   static String buildBrandedMessage({
     required String body,
     String? recipientName,
+    String? brandName,
     List<WhatsAppAttachmentShare> attachments = const [],
   }) {
+    final resolvedBrandName = (brandName ?? '').trim().isNotEmpty
+        ? brandName!.trim()
+        : AppStrings.appName;
+
     final buffer = StringBuffer()
-      ..writeln(companyName)
+      ..writeln(resolvedBrandName)
       ..writeln(systemName);
 
     final trimmedRecipient = recipientName?.trim() ?? '';
@@ -256,10 +260,12 @@ class WhatsAppService {
 
   static String buildWelcomeMessage({
     required String customerName,
+    String? brandName,
   }) {
     return buildBrandedMessage(
       recipientName: customerName,
-      body: 'تم إنشاء ملف خاص بكم في نظام نبراس، ويسعدنا خدمتكم عبر شركة البحيرة العربية.',
+      brandName: brandName,
+      body: 'تم إنشاء ملف خاص بكم في نظام نبراس، ويسعدنا خدمتكم.',
     );
   }
 

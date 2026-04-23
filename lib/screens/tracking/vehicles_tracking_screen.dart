@@ -459,13 +459,13 @@ class _VehiclesTrackingScreenState extends State<VehiclesTrackingScreen> {
                         TextFormField(
                           controller: licenseNumberController,
                           decoration: const InputDecoration(
-                            labelText: 'رقم رخصة المركبة',
+                            labelText: 'رقم رخصة سير المركبة',
                             prefixIcon: Icon(Icons.article_outlined),
                           ),
                         ),
                         const SizedBox(height: 12),
                         _buildDialogDateField(
-                          label: 'إصدار رخصة المركبة',
+                          label: 'إصدار رخصة سير المركبة',
                           value: vehicleLicenseIssueDate,
                           onTap: () => pickDate(
                             setDialogState,
@@ -475,7 +475,7 @@ class _VehiclesTrackingScreenState extends State<VehiclesTrackingScreen> {
                         ),
                         const SizedBox(height: 12),
                         _buildDialogDateField(
-                          label: 'انتهاء رخصة المركبة',
+                          label: 'انتهاء رخصة سير المركبة',
                           value: vehicleLicenseExpiry,
                           onTap: () => pickDate(
                             setDialogState,
@@ -515,30 +515,11 @@ class _VehiclesTrackingScreenState extends State<VehiclesTrackingScreen> {
                         TextFormField(
                           controller: registrationNumberController,
                           decoration: const InputDecoration(
-                            labelText: 'رقم الاستمارة',
+                            labelText: 'الرقم التسلسلي',
                             prefixIcon: Icon(Icons.confirmation_number_outlined),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _buildDialogDateField(
-                          label: 'إصدار الاستمارة',
-                          value: vehicleRegistrationIssueDate,
-                          onTap: () => pickDate(
-                            setDialogState,
-                            vehicleRegistrationIssueDate,
-                            (value) => vehicleRegistrationIssueDate = value,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildDialogDateField(
-                          label: 'انتهاء الاستمارة',
-                          value: vehicleRegistrationExpiryDate,
-                          onTap: () => pickDate(
-                            setDialogState,
-                            vehicleRegistrationExpiryDate,
-                            (value) => vehicleRegistrationExpiryDate = value,
-                          ),
-                        ),
+                       
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: insurancePolicyController,

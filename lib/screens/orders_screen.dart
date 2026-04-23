@@ -211,7 +211,7 @@ class _OrdersScreenState extends State<OrdersScreen>
         filters: {...arrivalDateFilters, 'orderSource': 'مدمج'},
       ),
       provider.fetchOrdersCount(
-        filters: {...arrivalDateFilters, 'status': 'تم التحميل'},
+        filters: {...arrivalDateFilters, 'status': 'تم التسليم'},
       ),
       provider.fetchOrdersCount(
         filters: {...arrivalDateFilters, 'status': 'تم التنفيذ'},
@@ -817,7 +817,7 @@ class _OrdersScreenState extends State<OrdersScreen>
       ),
       _OrdersStatCardData(
         title: 'الطلبات المكتملة',
-        value: _summaryCounts['completed'] ?? 0,
+        value: _summaryCounts['merged'] ?? 0,
         icon: Icons.task_alt_outlined,
         color: AppColors.successGreen,
       ),

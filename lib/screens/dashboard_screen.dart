@@ -3586,8 +3586,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _dashboardRequestTypeCategory(Order order) {
     final requestType = order.effectiveRequestType.trim();
-    if (requestType == 'شراء') return 'purchase';
-    if (requestType == 'نقل') return 'transport';
+    if (_isTransportRequestType(requestType)) return 'transport';
+    if (_isPurchaseRequestType(requestType)) return 'purchase';
+    if (order.isSupplierOrder) return 'purchase';
     return '';
   }
 
@@ -7815,17 +7816,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         continue;
       }
       if (_isCompletedStatus(status)) {
-        if (order.isCustomerOrder || order.isMergedOrder) {
-          final requestTypeCategory = _dashboardRequestTypeCategory(order);
-          if (requestTypeCategory == 'transport') {
-            transport++;
-            continue;
-          }
-          if (requestTypeCategory == 'purchase') {
-            purchase++;
-            continue;
-          }
+        completed++;
+        final requestTypeCategory = _dashboardRequestTypeCategory(order);
+        if (requestTypeCategory == 'transport') {
+          transport++;
+          continue;
         }
+        purchase++;
         continue;
       }
 
@@ -7835,8 +7832,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    completed = transport + purchase;
-    final total = completed + transport + purchase + warehouse + canceled;
+    final total = completed + warehouse + canceled;
     if (total == 0) return [];
 
     int percent(int value) => ((value / total) * 100).round();

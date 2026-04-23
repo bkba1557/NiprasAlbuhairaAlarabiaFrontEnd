@@ -23,6 +23,7 @@ const Set<String> employeeAllowedRoutePaths = <String>{
 const Set<String> movementAllowedRoutePaths = <String>{
   AppRoutes.movement,
   AppRoutes.supplierPortal,
+  AppRoutes.supplierOrderForm,
 };
 
 const Set<String> archiveAllowedRoutePaths = <String>{

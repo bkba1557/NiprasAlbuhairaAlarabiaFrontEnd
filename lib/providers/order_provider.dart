@@ -1288,7 +1288,6 @@ class OrderProvider with ChangeNotifier {
   Future<bool> completeMovementArchiveOrder({
     required String orderId,
     required List<PlatformFile> taxInvoiceFiles,
-    required List<PlatformFile> systemInvoiceFiles,
     required List<PlatformFile> fuelReceiptFiles,
     required List<PlatformFile> actualQuantityStatementFiles,
     double? actualSupplyQuantity,
@@ -1299,6 +1298,7 @@ class OrderProvider with ChangeNotifier {
     required double saleValue,
     required double transportValue,
     required bool addAllIncludedVat,
+    Map<String, dynamic>? taxInvoiceData,
     String? notes,
   }) async {
     _isLoading = true;
@@ -1311,12 +1311,6 @@ class OrderProvider with ChangeNotifier {
           : await _uploadOrderAttachments(
               '${orderId}_tax_invoice',
               taxInvoiceFiles,
-            );
-      final systemInvoiceAttachments = systemInvoiceFiles.isEmpty
-          ? const <Map<String, dynamic>>[]
-          : await _uploadOrderAttachments(
-              '${orderId}_system_invoice',
-              systemInvoiceFiles,
             );
       final fuelReceiptAttachments = fuelReceiptFiles.isEmpty
           ? const <Map<String, dynamic>>[]
@@ -1339,10 +1333,10 @@ class OrderProvider with ChangeNotifier {
         headers: ApiService.headers,
         body: json.encode({
           'taxInvoiceAttachments': taxInvoiceAttachments,
-          'systemInvoiceAttachments': systemInvoiceAttachments,
           'fuelReceiptAttachments': fuelReceiptAttachments,
           'actualQuantityStatementAttachments':
               actualQuantityStatementAttachments,
+          if (taxInvoiceData != null) 'taxInvoiceData': taxInvoiceData,
           if (actualSupplyQuantity != null)
             'actualSupplyQuantity': actualSupplyQuantity,
           'calculationQuantitySource': calculationQuantitySource,

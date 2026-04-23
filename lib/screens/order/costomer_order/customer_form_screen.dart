@@ -641,7 +641,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               labelText: 'نص الرسالة',
                               alignLabelWithHint: true,
                               helperText:
-                                  'سيتم إرسال الرسالة باسم ${WhatsAppService.companyName}',
+                                  'سيتم إرسال الرسالة باسم ${AppStrings.appName}',
                             ),
                           ),
                           const SizedBox(height: 12),

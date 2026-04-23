@@ -27,7 +27,7 @@ class SplashScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               const Text(
-                'متابعة طلبات شركة البحيرة العربية',
+                'إدارة وتتبع الطلبات للشركات',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.white70,

@@ -41,7 +41,7 @@ import 'package:order_tracker/services/local_notification_service.dart';
 import 'package:order_tracker/widgets/app_shell.dart';
 import 'package:order_tracker/widgets/system_pause_gate.dart';
 
-import 'package:order_tracker/localization/app_localizations.dart';
+import 'package:order_tracker/localization/app_localizations.dart' as l10n;
 import 'package:order_tracker/utils/app_navigation.dart';
 import 'package:order_tracker/utils/app_routes.dart';
 import 'package:order_tracker/utils/constants.dart';
@@ -141,7 +141,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
-      title: 'نظام نبراس لإدارة وتتبع الطلبات | شركة البحيرة العربية',
+      title: AppStrings.appName,
 
       // 🎨 Theme
       theme: AppThemes.lightTheme,
@@ -150,9 +150,9 @@ class MyApp extends StatelessWidget {
 
       // 🌍 Localization
       locale: languageProvider.locale,
-      supportedLocales: AppLanguage.values.map((e) => e.locale).toList(),
+      supportedLocales: l10n.AppLanguage.values.map((e) => e.locale).toList(),
       localizationsDelegates: const [
-        AppLocalizations.delegate,
+        l10n.AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
