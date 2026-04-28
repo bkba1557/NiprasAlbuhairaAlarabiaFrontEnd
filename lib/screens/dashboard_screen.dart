@@ -1387,13 +1387,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () =>
               _navigateFromMobileDrawer(context, AppRoutes.archiveDocuments),
         ),
-        _DashboardDrawerItemData(
-          icon: Icons.people_alt_rounded,
-          title: 'فوترة الطلبات',
-          color: AppColors.successGreen,
-          onTap: () =>
-              _navigateFromMobileDrawer(context, AppRoutes.movementArchiveOrders),
-        ),
+      _DashboardDrawerItemData(
+        icon: Icons.people_alt_rounded,
+        title: 'فوترة الطلبات',
+        color: AppColors.successGreen,
+        onTap: () =>
+            _navigateFromMobileDrawer(context, AppRoutes.movementArchiveOrders),
+      ),
       if (canViewActivities)
         _DashboardDrawerItemData(
           icon: Icons.local_activity_rounded,
@@ -6104,7 +6104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (canViewCustomers)
         _buildDesktopFolderItem(
           icon: Icons.people_alt_outlined,
-          title: 'حسابات العملاء',
+          title: 'مديونات العملاء',
           onTap: () => Navigator.pushNamed(
             context,
             AppRoutes.orderManagementCustomerAccounts,

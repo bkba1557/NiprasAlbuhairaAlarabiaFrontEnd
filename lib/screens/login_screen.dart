@@ -407,7 +407,9 @@ class _LoginScreenState extends State<LoginScreen> {
       case 'archive':
         return AppRoutes.movementArchiveOrders;
       case 'finance_manager':
-        return AppRoutes.custodyDocuments;
+        return AppRoutes.orderManagementCustomerAccounts;
+      case 'collector':
+        return AppRoutes.customerDebtCollector;
       case 'sales_manager_statiun':
       case 'owner_station':
         return AppRoutes.mainHome;

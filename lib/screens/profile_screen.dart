@@ -484,6 +484,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (role == 'maintenance') return Colors.blue;
     if (role == 'maintenance_station') return const Color(0xFF1B5E20);
     if (role == 'finance_manager') return const Color(0xFF2E7D32);
+    if (role == 'collector') return const Color(0xFF00695C);
     return Colors.green;
   }
 
@@ -493,8 +494,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (role == 'archive') return 'الأرشفة';
     if (role == 'maintenance') return 'فني صيانة';
     if (role == 'maintenance_station') return 'فني صيانة محطة';
-    if (role == 'finance_manager') return 'المدير المالي';
-    return 'مشاهد';
+    if (role == 'finance_manager') return '?????? ??????';
+    if (role == 'collector') return '??????';
+    return '?????';
   }
 
   void _showLogoutDialog() {

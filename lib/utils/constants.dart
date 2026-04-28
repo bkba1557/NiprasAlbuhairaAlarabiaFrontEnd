@@ -662,6 +662,8 @@ class ApiEndpoints {
   static const String statements = '/statements';
   static const String statementRenew = '/statements/renew';
   static String statementRenewalById(String id) => '/statements/renewals/$id';
+  static const String customerDebtLatest = '/customer-debts/latest';
+  static const String customerDebtImport = '/customer-debts/import';
 
   static const String orders = '/orders';
   static const String orderAutofillDocument = '/orders/autofill/document';

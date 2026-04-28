@@ -253,7 +253,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       case 'maintenance_technician':
         return 'صيانة';
       case 'finance_manager':
-        return 'مالي';
+        return '????';
+      case 'collector':
+        return '??????';
       default:
         return 'موظف';
     }

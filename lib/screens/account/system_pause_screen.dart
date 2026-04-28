@@ -343,7 +343,9 @@ class _SystemPauseScreenState extends State<SystemPauseScreen> {
       case 'maintenance':
         return 'صيانة';
       case 'finance_manager':
-        return 'مدير مالي';
+        return '???? ????';
+      case 'collector':
+        return '??????';
       default:
         return role.trim().isEmpty ? 'مستخدم' : role.trim();
     }

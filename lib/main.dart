@@ -231,7 +231,9 @@ String _roleHomeRoute(String? role) {
     case 'supplier':
       return AppRoutes.supplierPortal;
     case 'finance_manager':
-      return AppRoutes.custodyDashboard;
+      return AppRoutes.orderManagementCustomerAccounts;
+    case 'collector':
+      return AppRoutes.customerDebtCollector;
     case 'sales_manager_statiun':
     case 'owner_station':
       return AppRoutes.mainHome;

@@ -60,6 +60,7 @@ import 'package:order_tracker/screens/order_management/supplier_portal_screen.da
 import 'package:order_tracker/screens/order_management/tax_settings_screen.dart';
 import 'package:order_tracker/screens/order_management/transport_orders_screen.dart';
 import 'package:order_tracker/screens/order_management/treasury/customer_accounts_screen.dart';
+import 'package:order_tracker/screens/order_management/treasury/customer_debt_collector_screen.dart';
 import 'package:order_tracker/screens/order_management/treasury/customer_treasury_screen.dart';
 import 'package:order_tracker/screens/order_details_screen.dart';
 import 'package:order_tracker/screens/orders_screen.dart';
@@ -213,6 +214,7 @@ class AppRoutes {
       '/orders/management/reports/customer-liters';
   static const String orderManagementTaxSettings = '/orders/management/tax';
   static const String orderManagementTreasury = '/orders/management/treasury';
+  static const String customerDebtCollector = '/customer-debts/collector';
 
   static const String tasks = '/tasks';
   static const String contractsManagement = '/contracts';
@@ -347,6 +349,7 @@ class AppRoutes {
     movement: (_) => const MovementDashboardScreen(),
     supplierPortal: (_) => const SupplierPortalScreen(),
     orderManagementCustomerAccounts: (_) => const CustomerAccountsScreen(),
+    customerDebtCollector: (_) => const CustomerDebtCollectorScreen(),
     orderManagementFuelPricing: (_) =>
         const CustomerPricingScreen(mode: CustomerPricingMode.fuel),
     orderManagementTransportPricing: (_) =>
