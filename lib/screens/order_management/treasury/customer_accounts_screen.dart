@@ -10,6 +10,7 @@ import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/file_saver.dart';
 import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CustomerAccountsScreen extends StatefulWidget {
   const CustomerAccountsScreen({super.key});
@@ -528,6 +529,7 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
   Future<void> _showDirectReceiptDialog() async {
     final amountController = TextEditingController();
     final notesController = TextEditingController();
+    PlatformFile? receiptFile;
     _DebtCustomer? selectedCustomer =
         _customers.isNotEmpty ? _customers.first : null;
     String paymentMethod = 'cash';
@@ -615,7 +617,7 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
             content: Form(
               key: formKey,
               child: SizedBox(
-                width: 520,
+                width: 480,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -628,9 +630,9 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
                           setModalState(() => selectedCustomer = picked);
                         },
                         child: InputDecorator(
-                          decoration: const InputDecoration(
+                          decoration: _tightInputDecoration(
                             labelText: 'العميل',
-                            prefixIcon: Icon(Icons.person_outline),
+                            prefixIcon: const Icon(Icons.person_outline),
                           ),
                           child: Row(
                             children: [
@@ -651,7 +653,7 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
                       TextFormField(
                         controller: amountController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'المبلغ'),
+                        decoration: _tightInputDecoration(labelText: 'المبلغ'),
                         validator: (value) {
                           final parsed = double.tryParse(value?.trim() ?? '');
                           return (parsed == null || parsed <= 0)
@@ -664,7 +666,7 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
                         initialValue: paymentMethod,
                         isExpanded: true,
                         decoration:
-                            const InputDecoration(labelText: 'طريقة الدفع'),
+                            _tightInputDecoration(labelText: 'طريقة الدفع'),
                         items: const [
                           DropdownMenuItem(value: 'cash', child: Text('نقدي')),
                           DropdownMenuItem(value: 'card', child: Text('شبكة')),
@@ -682,7 +684,7 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
                         DropdownButtonFormField<_BankAccount>(
                           initialValue: selectedBank,
                           isExpanded: true,
-                          decoration: const InputDecoration(
+                          decoration: _tightInputDecoration(
                             labelText: 'الحساب البنكي',
                           ),
                           items: _bankAccounts
@@ -703,10 +705,52 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
                         ),
                       ],
                       const SizedBox(height: 12),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: const [
+                              'pdf',
+                              'png',
+                              'jpg',
+                              'jpeg',
+                            ],
+                            withData: true,
+                          );
+                          if (result == null || result.files.isEmpty) return;
+                          final file = result.files.single;
+                          if (file.bytes == null || file.bytes!.isEmpty) return;
+                          setModalState(() => receiptFile = file);
+                        },
+                        child: InputDecorator(
+                          decoration: _tightInputDecoration(
+                            labelText: 'إرفاق سند القبض',
+                            prefixIcon: const Icon(Icons.attach_file),
+                            suffixIcon: receiptFile == null
+                                ? const Icon(Icons.add_circle_outline)
+                                : IconButton(
+                                    tooltip: 'إزالة المرفق',
+                                    onPressed: () =>
+                                        setModalState(() => receiptFile = null),
+                                    icon: const Icon(Icons.close),
+                                  ),
+                          ),
+                          child: Text(
+                            receiptFile?.name ?? 'اختياري (PDF / صورة)',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: notesController,
                         maxLines: 2,
-                        decoration: const InputDecoration(labelText: 'ملاحظات'),
+                        decoration: _tightInputDecoration(
+                          labelText: 'ملاحظات',
+                          alignLabelWithHint: true,
+                        ),
                       ),
                     ],
                   ),
@@ -725,7 +769,7 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
                     return;
                   }
 
-                  await ApiService.post('/customer-debts/collections', {
+                  final payload = <String, dynamic>{
                     'customerAccountNumber': selectedCustomer!.accountNumber,
                     'amount': double.parse(amountController.text.trim()),
                     'paymentMethod': paymentMethod,
@@ -736,7 +780,37 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
                         ? selectedBank?.bankName
                         : '',
                     'notes': notesController.text.trim(),
-                  });
+                  };
+
+                  if (receiptFile == null) {
+                    await ApiService.post('/customer-debts/collections', payload);
+                  } else {
+                    await ApiService.loadToken();
+                    final request = http.MultipartRequest(
+                      'POST',
+                      Uri.parse('${ApiEndpoints.baseUrl}/customer-debts/collections'),
+                    );
+                    final authorization = ApiService.headers['Authorization'];
+                    if (authorization != null && authorization.isNotEmpty) {
+                      request.headers['Authorization'] = authorization;
+                    }
+                    payload.forEach((key, value) {
+                      if (value == null) return;
+                      request.fields[key] = value.toString();
+                    });
+                    request.files.add(
+                      http.MultipartFile.fromBytes(
+                        'receipt',
+                        receiptFile!.bytes!,
+                        filename: receiptFile!.name,
+                      ),
+                    );
+                    final streamed = await request.send();
+                    final response = await http.Response.fromStream(streamed);
+                    if (response.statusCode < 200 || response.statusCode >= 300) {
+                      throw Exception(_extractHttpMessage(response));
+                    }
+                  }
 
                   if (!mounted || !dialogContext.mounted) return;
                   Navigator.pop(dialogContext);
@@ -1076,9 +1150,41 @@ Widget _buildToolbarAction({
     required double horizontalPadding,
     required List<Widget> children,
   }) {
-    return ListView(
-      padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 24),
-      children: children,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth >= 1100 ? 1180.0 : double.infinity;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                16,
+                horizontalPadding,
+                20,
+              ),
+              children: children,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  InputDecoration _tightInputDecoration({
+    required String labelText,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    bool alignLabelWithHint = false,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      alignLabelWithHint: alignLabelWithHint,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
     );
   }
 
@@ -1653,20 +1759,31 @@ Widget _buildToolbarAction({
                         subtitle: Text(
                           '${item.collectorName} • ${_paymentMethodLabel(item.paymentMethod)} • ${_dateTimeFormat.format(item.createdAt.toLocal())}',
                         ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              _formatMoney(item.amount),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.successGreen,
+                            if (item.hasReceiptAttachment)
+                              IconButton(
+                                tooltip: 'عرض سند القبض',
+                                onPressed: () => _openReceiptAttachment(item),
+                                icon: const Icon(Icons.attach_file),
                               ),
-                            ),
-                            Text(
-                              'متبقي ${_formatMoney(remainingDue)}',
-                              style: const TextStyle(fontSize: 12),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  _formatMoney(item.amount),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.successGreen,
+                                  ),
+                                ),
+                                Text(
+                                  'متبقي ${_formatMoney(remainingDue)}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -1677,6 +1794,32 @@ Widget _buildToolbarAction({
         ),
       ],
     );
+  }
+
+  String _resolveFileUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    if (path.startsWith('/uploads')) {
+      final base = ApiEndpoints.baseUrl.replaceAll(RegExp(r'/+$'), '');
+      return '$base$path';
+    }
+    return '${ApiEndpoints.baseUrl}$path';
+  }
+
+  Future<void> _openReceiptAttachment(_DebtCollection item) async {
+    final receiptPath = item.receiptAttachmentPath.trim();
+    if (receiptPath.isEmpty) return;
+
+    final uri = Uri.tryParse(_resolveFileUrl(receiptPath));
+    if (uri == null) return;
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر فتح المرفق')),
+      );
+    }
   }
 
   Widget _buildReviewsTab(double horizontalPadding) {
@@ -2044,6 +2187,8 @@ class _DebtCollection {
     required this.collectorName,
     required this.remainingAfter,
     required this.createdAt,
+    required this.receiptAttachmentPath,
+    required this.receiptAttachmentName,
   });
 
   final String id;
@@ -2054,8 +2199,16 @@ class _DebtCollection {
   final String collectorName;
   final double remainingAfter;
   final DateTime createdAt;
+  final String receiptAttachmentPath;
+  final String receiptAttachmentName;
+
+  bool get hasReceiptAttachment => receiptAttachmentPath.trim().isNotEmpty;
 
   factory _DebtCollection.fromJson(Map<String, dynamic> json) {
+    final receiptAttachment = json['receiptAttachment'] is Map
+        ? Map<String, dynamic>.from(json['receiptAttachment'])
+        : const <String, dynamic>{};
+
     return _DebtCollection(
       id: json['id']?.toString() ?? '',
       customerAccountNumber: json['customerAccountNumber']?.toString() ?? '',
@@ -2066,6 +2219,8 @@ class _DebtCollection {
       remainingAfter: _asDouble(json['remainingAfter']),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      receiptAttachmentPath: receiptAttachment['path']?.toString() ?? '',
+      receiptAttachmentName: receiptAttachment['filename']?.toString() ?? '',
     );
   }
 }

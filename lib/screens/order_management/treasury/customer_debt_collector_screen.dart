@@ -14,6 +14,7 @@ import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CustomerDebtCollectorScreen extends StatefulWidget {
   const CustomerDebtCollectorScreen({super.key});
@@ -47,6 +48,7 @@ class _CustomerDebtCollectorScreenState
   String? _error;
   DateTime? _selectedDate;
   PlatformFile? _depositAttachment;
+  PlatformFile? _collectionReceiptAttachment;
 
   static const String _collectionsCacheKey =
       'customer_debt_collections_cache_v1';
@@ -429,13 +431,14 @@ Future<void> _submitCollection() async {
     return;
   }
 
- if (bankAmount > 0 && _collectionReferenceController.text.trim().isEmpty) {
-  setState(
-    () => _error = 'ادخل اسم المحول / المرجع للتحويل',
-  );
-  return;
-}
-  await ApiService.post('/customer-debts/collections/split', {
+  if (bankAmount > 0 && _collectionReferenceController.text.trim().isEmpty) {
+   setState(
+     () => _error = 'ادخل اسم المحول / المرجع للتحويل',
+   );
+   return;
+ }
+
+  final payload = <String, dynamic>{
     'customerAccountNumber': _selectedCustomer!.accountNumber,
     'cashAmount': cashAmount,
     'cardAmount': cardAmount,
@@ -444,13 +447,44 @@ Future<void> _submitCollection() async {
     'bankName': bankAmount > 0 ? _selectedBank?.bankName : '',
     'referenceName': _collectionReferenceController.text.trim(),
     'notes': _collectionNotesController.text.trim(),
-  });
+  };
+
+  if (_collectionReceiptAttachment == null) {
+    await ApiService.post('/customer-debts/collections/split', payload);
+  } else {
+    await ApiService.loadToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${ApiEndpoints.baseUrl}/customer-debts/collections/split'),
+    );
+    final authorization = ApiService.headers['Authorization'];
+    if (authorization != null && authorization.isNotEmpty) {
+      request.headers['Authorization'] = authorization;
+    }
+    payload.forEach((key, value) {
+      if (value == null) return;
+      request.fields[key] = value.toString();
+    });
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'receipt',
+        _collectionReceiptAttachment!.bytes!,
+        filename: _collectionReceiptAttachment!.name,
+      ),
+    );
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('فشل تسجيل التحصيل');
+    }
+  }
 
   _cashAmountController.clear();
   _cardAmountController.clear();
   _bankAmountController.clear();
   _collectionReferenceController.clear();
   _collectionNotesController.clear();
+  _collectionReceiptAttachment = null;
 
   await _loadAll();
 }
@@ -522,13 +556,34 @@ double _parseAmount(String raw) {
       );
     }
   }
-Future<void> _pickDepositAttachment() async {
+  Future<void> _pickDepositAttachment() async {
     final result = await FilePicker.platform.pickFiles(
       withData: true,
       type: FileType.image,
     );
     if (result == null || result.files.isEmpty) return;
     setState(() => _depositAttachment = result.files.single);
+  }
+
+  Future<void> _pickCollectionReceiptAttachment() async {
+    final result = await FilePicker.platform.pickFiles(
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'png', 'jpg', 'jpeg'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    if (file.bytes == null || file.bytes!.isEmpty) return;
+    setState(() => _collectionReceiptAttachment = file);
+  }
+
+  Future<void> _previewCollectionReceiptAttachment() async {
+    final file = _collectionReceiptAttachment;
+    if (file?.bytes == null || file!.bytes!.isEmpty) return;
+    await saveAndLaunchFile(
+      file.bytes!,
+      file.name.isNotEmpty ? file.name : 'receipt_attachment',
+    );
   }
 
   Future<void> _submitDeposit() async {
@@ -887,14 +942,39 @@ Future<void> _pickDepositAttachment() async {
     required double horizontalPadding,
     required List<Widget> children,
   }) {
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        horizontalPadding,
-        20,
-        horizontalPadding,
-        24,
-      ),
-      children: children,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth >= 1100 ? 980.0 : double.infinity;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                16,
+                horizontalPadding,
+                20,
+              ),
+              children: children,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  InputDecoration _tightInputDecoration({
+    required String labelText,
+    IconData? prefixIcon,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+      suffixIcon: suffixIcon,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
     );
   }
 
@@ -905,12 +985,12 @@ Future<void> _pickDepositAttachment() async {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(18),
       child: Ink(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: AppColors.primaryBlue.withValues(alpha: 0.14),
           ),
@@ -1002,12 +1082,9 @@ Future<void> _pickDepositAttachment() async {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                 ],
-                decoration: InputDecoration(
+                decoration: _tightInputDecoration(
                   labelText: 'مبلغ الكاش',
-                  prefixIcon: const Icon(Icons.money_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  prefixIcon: Icons.money_outlined,
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -1022,12 +1099,9 @@ Future<void> _pickDepositAttachment() async {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                 ],
-                decoration: InputDecoration(
+                decoration: _tightInputDecoration(
                   labelText: 'مبلغ الشبكة',
-                  prefixIcon: const Icon(Icons.credit_card_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  prefixIcon: Icons.credit_card_outlined,
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -1042,27 +1116,21 @@ Future<void> _pickDepositAttachment() async {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                 ],
-                decoration: InputDecoration(
+                decoration: _tightInputDecoration(
                   labelText: 'مبلغ التحويل البنكي',
-                  prefixIcon: const Icon(Icons.account_balance_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  prefixIcon: Icons.account_balance_outlined,
                 ),
                 onChanged: (_) => setState(() {}),
               ),
 
               if ((double.tryParse(_bankAmountController.text.trim()) ?? 0) >
                   0) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<_BankAccount>(
                   initialValue: _selectedBank,
-                  decoration: InputDecoration(
+                  decoration: _tightInputDecoration(
                     labelText: 'الحساب البنكي',
-                    prefixIcon: const Icon(Icons.account_balance_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    prefixIcon: Icons.account_balance_outlined,
                   ),
                   items: _bankAccounts
                       .map(
@@ -1074,27 +1142,21 @@ Future<void> _pickDepositAttachment() async {
                       .toList(),
                   onChanged: (value) => setState(() => _selectedBank = value),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _collectionReferenceController,
-                  decoration: InputDecoration(
+                  decoration: _tightInputDecoration(
                     labelText: 'اسم المرجع / اسم المحول',
-                    prefixIcon: const Icon(Icons.badge_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    prefixIcon: Icons.badge_outlined,
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _paymentMethod,
-                decoration: InputDecoration(
+                decoration: _tightInputDecoration(
                   labelText: 'طريقة التحصيل',
-                  prefixIcon: const Icon(Icons.tune_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  prefixIcon: Icons.tune_rounded,
                 ),
                 items: const [
                   DropdownMenuItem(value: 'cash', child: Text('كاش')),
@@ -1109,15 +1171,12 @@ Future<void> _pickDepositAttachment() async {
                 },
               ),
               if (_paymentMethod == 'bank_transfer') ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<_BankAccount>(
                   initialValue: _selectedBank,
-                  decoration: InputDecoration(
+                  decoration: _tightInputDecoration(
                     labelText: 'الحساب البنكي',
-                    prefixIcon: const Icon(Icons.account_balance_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    prefixIcon: Icons.account_balance_outlined,
                   ),
                   items: _bankAccounts
                       .map(
@@ -1129,30 +1188,66 @@ Future<void> _pickDepositAttachment() async {
                       .toList(),
                   onChanged: (value) => setState(() => _selectedBank = value),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _collectionReferenceController,
-                  decoration: InputDecoration(
+                  decoration: _tightInputDecoration(
                     labelText: 'اسم المرجع / اسم المحول',
-                    prefixIcon: const Icon(Icons.badge_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    prefixIcon: Icons.badge_outlined,
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _collectionNotesController,
                 maxLines: 2,
-                decoration: InputDecoration(
+                decoration: _tightInputDecoration(
                   labelText: 'ملاحظات',
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
+                ).copyWith(alignLabelWithHint: true),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: _pickCollectionReceiptAttachment,
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'إرفاق سند القبض',
+                    prefixIcon: const Icon(Icons.attach_file),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    suffixIcon: _collectionReceiptAttachment == null
+                        ? const Icon(Icons.add_circle_outline)
+                        : IconButton(
+                            tooltip: 'إزالة المرفق',
+                            onPressed: () =>
+                                setState(() => _collectionReceiptAttachment = null),
+                            icon: const Icon(Icons.close),
+                          ),
+                  ),
+                  child: Text(
+                    _collectionReceiptAttachment?.name ?? 'اختياري (PDF / صورة)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
+              if (_collectionReceiptAttachment != null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _previewCollectionReceiptAttachment,
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('عرض السند'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Wrap(
                 spacing: 12,
@@ -1249,45 +1344,64 @@ Future<void> _pickDepositAttachment() async {
                   ]
                 : _collections
                       .map(
-                        (item) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(item.customerName),
-                          isThreeLine:
-                              item.customerAccountNumber.isNotEmpty &&
-                              balanceByAccount.containsKey(
-                                item.customerAccountNumber,
-                              ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${_paymentMethodLabel(item.paymentMethod)} \u2022 ${_dateTimeFormat.format(item.createdAt.toLocal())}',
-                              ),
-                              if (item.customerAccountNumber.isNotEmpty &&
-                                  balanceByAccount.containsKey(
-                                    item.customerAccountNumber,
-                                  ))
-                                Text(
-                                  '${'\u0627\u0644\u0631\u0635\u064a\u062f \u0627\u0644\u062d\u0627\u0644\u064a'} ${_formatMoney(balanceByAccount[item.customerAccountNumber] ?? 0)}',
-                                  style: TextStyle(
-                                    color: Colors.black.withValues(alpha: 0.58),
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                        (item) {
+                          final currentBalance =
+                              balanceByAccount[item.customerAccountNumber];
+                          final remainingDue = (currentBalance ?? item.remainingAfter) > 0
+                              ? (currentBalance ?? item.remainingAfter)
+                              : 0.0;
+
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(item.customerName),
+                            isThreeLine:
+                                item.customerAccountNumber.isNotEmpty &&
+                                balanceByAccount.containsKey(
+                                  item.customerAccountNumber,
                                 ),
-                            ],
-                          ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              _MoneyValue(text: _formatMoney(item.amount)),
-                              Text(
-                                '${'\u0645\u062a\u0628\u0642\u064a'} ${_formatMoney(item.remainingAfter)}',
-                              ),
-                            ],
-                          ),
-                        ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${_paymentMethodLabel(item.paymentMethod)} \u2022 ${_dateTimeFormat.format(item.createdAt.toLocal())}',
+                                ),
+                                if (item.customerAccountNumber.isNotEmpty &&
+                                    balanceByAccount.containsKey(
+                                      item.customerAccountNumber,
+                                    ))
+                                  Text(
+                                    '${'\u0627\u0644\u0631\u0635\u064a\u062f \u0627\u0644\u062d\u0627\u0644\u064a'} ${_formatMoney(currentBalance ?? 0)}',
+                                    style: TextStyle(
+                                      color: Colors.black.withValues(alpha: 0.58),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (item.hasReceiptAttachment)
+                                  IconButton(
+                                    tooltip: 'عرض سند القبض',
+                                    onPressed: () => _openReceiptAttachment(item),
+                                    icon: const Icon(Icons.attach_file),
+                                  ),
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    _MoneyValue(text: _formatMoney(item.amount)),
+                                    Text(
+                                      '${'\u0645\u062a\u0628\u0642\u064a'} ${_formatMoney(remainingDue)}',
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       )
                       .toList(),
           ),
@@ -1336,7 +1450,18 @@ Future<void> _pickDepositAttachment() async {
                     subtitle: Text(
                       '${_paymentMethodLabel(item.paymentMethod)} • ${item.collectorName} • ${_dateTimeFormat.format(item.createdAt.toLocal())}',
                     ),
-                    trailing: _MoneyValue(text: _formatMoney(item.amount)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (item.hasReceiptAttachment)
+                          IconButton(
+                            tooltip: 'عرض سند القبض',
+                            onPressed: () => _openReceiptAttachment(item),
+                            icon: const Icon(Icons.attach_file),
+                          ),
+                        _MoneyValue(text: _formatMoney(item.amount)),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1345,6 +1470,31 @@ Future<void> _pickDepositAttachment() async {
         ),
       ],
     );
+  }
+
+  String _resolveFileUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    if (path.startsWith('/uploads')) {
+      final base = ApiEndpoints.baseUrl.replaceAll(RegExp(r'/+$'), '');
+      return '$base$path';
+    }
+    return '${ApiEndpoints.baseUrl}$path';
+  }
+
+  Future<void> _openReceiptAttachment(_DebtCollection item) async {
+    final receiptPath = item.receiptAttachmentPath.trim();
+    if (receiptPath.isEmpty) return;
+    final uri = Uri.tryParse(_resolveFileUrl(receiptPath));
+    if (uri == null) return;
+
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر فتح المرفق')),
+      );
+    }
   }
 
   Widget _buildCashTab(double horizontalPadding) {
@@ -1662,6 +1812,8 @@ class _DebtCollection {
     required this.collectorName,
     required this.remainingAfter,
     required this.createdAt,
+    required this.receiptAttachmentPath,
+    required this.receiptAttachmentName,
   });
 
   final String customerAccountNumber;
@@ -1671,11 +1823,19 @@ class _DebtCollection {
   final String collectorName;
   final double remainingAfter;
   final DateTime createdAt;
+  final String receiptAttachmentPath;
+  final String receiptAttachmentName;
+
+  bool get hasReceiptAttachment => receiptAttachmentPath.trim().isNotEmpty;
 
   String get cacheKey =>
       '$customerAccountNumber|$customerName|$amount|$paymentMethod|$collectorName|${createdAt.toIso8601String()}';
 
   factory _DebtCollection.fromJson(Map<String, dynamic> json) {
+    final receiptAttachment = json['receiptAttachment'] is Map
+        ? Map<String, dynamic>.from(json['receiptAttachment'])
+        : const <String, dynamic>{};
+
     return _DebtCollection(
       customerAccountNumber:
           json['customerAccountNumber']?.toString() ??
@@ -1689,6 +1849,8 @@ class _DebtCollection {
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      receiptAttachmentPath: receiptAttachment['path']?.toString() ?? '',
+      receiptAttachmentName: receiptAttachment['filename']?.toString() ?? '',
     );
   }
 
@@ -1701,6 +1863,10 @@ class _DebtCollection {
       'collectorName': collectorName,
       'remainingAfter': remainingAfter,
       'createdAt': createdAt.toIso8601String(),
+      'receiptAttachment': {
+        'path': receiptAttachmentPath,
+        'filename': receiptAttachmentName,
+      },
     };
   }
 }
