@@ -1,12 +1,19 @@
+﻿import 'dart:convert';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:order_tracker/providers/auth_provider.dart';
 import 'package:order_tracker/utils/api_service.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:order_tracker/utils/file_saver.dart';
 import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CustomerDebtCollectorScreen extends StatefulWidget {
   const CustomerDebtCollectorScreen({super.key});
@@ -41,6 +48,9 @@ class _CustomerDebtCollectorScreenState
   DateTime? _selectedDate;
   PlatformFile? _depositAttachment;
 
+  static const String _collectionsCacheKey =
+      'customer_debt_collections_cache_v1';
+
   final TextEditingController _collectionAmountController =
       TextEditingController();
   final TextEditingController _collectionReferenceController =
@@ -54,6 +64,9 @@ class _CustomerDebtCollectorScreenState
       TextEditingController();
   final TextEditingController _settlementNotesController =
       TextEditingController();
+  final TextEditingController _cashAmountController = TextEditingController();
+  final TextEditingController _cardAmountController = TextEditingController();
+  final TextEditingController _bankAmountController = TextEditingController();
 
   @override
   void initState() {
@@ -70,6 +83,9 @@ class _CustomerDebtCollectorScreenState
     _depositNotesController.dispose();
     _settlementAmountController.dispose();
     _settlementNotesController.dispose();
+    _cashAmountController.dispose();
+    _cardAmountController.dispose();
+    _bankAmountController.dispose();
     super.dispose();
   }
 
@@ -140,16 +156,82 @@ class _CustomerDebtCollectorScreenState
   }
 
   Future<void> _loadCollections() async {
-    final decoded = await _getJson(
-      '/customer-debts/collections${_dateQuery()}',
-    );
+    // Always fetch without date filter to keep older collection records visible
+    // even after finance uploads a new statement/snapshot.
+    final decoded = await _getJson('/customer-debts/collections');
     final list = decoded['collections'] as List<dynamic>? ?? const [];
-    _collections = list
+
+    final fetched = list
         .whereType<Map>()
         .map(
           (item) => _DebtCollection.fromJson(Map<String, dynamic>.from(item)),
         )
         .toList();
+
+    final merged = await _mergeCollectionsCache(fetched);
+    merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    if (_selectedDate == null) {
+      _collections = merged;
+      return;
+    }
+
+    final filterDate = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+    );
+
+    _collections = merged.where((item) {
+      final local = item.createdAt.toLocal();
+      final itemDate = DateTime(local.year, local.month, local.day);
+      return itemDate == filterDate;
+    }).toList();
+  }
+
+  Future<List<_DebtCollection>> _mergeCollectionsCache(
+    List<_DebtCollection> fetched,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_collectionsCacheKey) ?? '';
+
+    final cached = <_DebtCollection>[];
+    if (raw.trim().isNotEmpty) {
+      try {
+        final decoded = json.decode(raw);
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map<String, dynamic>) {
+              cached.add(_DebtCollection.fromJson(item));
+            } else if (item is Map) {
+              cached.add(
+                _DebtCollection.fromJson(Map<String, dynamic>.from(item)),
+              );
+            }
+          }
+        }
+      } catch (_) {
+        // Ignore corrupted cache.
+      }
+    }
+
+    final mergedByKey = <String, _DebtCollection>{};
+    for (final item in [...cached, ...fetched]) {
+      mergedByKey[item.cacheKey] = item;
+    }
+
+    final merged = mergedByKey.values.toList();
+
+    // Keep cache reasonably small.
+    merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final trimmed = merged.length > 500 ? merged.take(500).toList() : merged;
+
+    await prefs.setString(
+      _collectionsCacheKey,
+      json.encode(trimmed.map((e) => e.toJson()).toList()),
+    );
+
+    return trimmed;
   }
 
   Future<void> _loadDeposits() async {
@@ -323,35 +405,124 @@ class _CustomerDebtCollectorScreenState
     }
   }
 
-  Future<void> _submitCollection() async {
-    if (_selectedCustomer == null) return;
-    final amount = double.tryParse(_collectionAmountController.text.trim());
-    if (amount == null || amount <= 0) {
-      setState(() => _error = 'أدخل مبلغ تحصيل صحيح');
-      return;
-    }
+Future<void> _submitCollection() async {
+  if (_selectedCustomer == null) return;
 
-    await ApiService.post('/customer-debts/collections', {
-      'customerAccountNumber': _selectedCustomer!.accountNumber,
-      'amount': amount,
-      'paymentMethod': _paymentMethod,
-      'bankAccountId': _paymentMethod == 'bank_transfer'
-          ? _selectedBank?.id
-          : null,
-      'bankName': _paymentMethod == 'bank_transfer'
-          ? _selectedBank?.bankName
-          : '',
-      'referenceName': _collectionReferenceController.text.trim(),
-      'notes': _collectionNotesController.text.trim(),
-    });
+  final cashAmount = _parseAmount(_cashAmountController.text);
+  final cardAmount = _parseAmount(_cardAmountController.text);
+  final bankAmount = _parseAmount(_bankAmountController.text);
 
-    _collectionAmountController.clear();
-    _collectionReferenceController.clear();
-    _collectionNotesController.clear();
-    await _loadAll();
+  if (cashAmount < 0 || cardAmount < 0 || bankAmount < 0) {
+    setState(() => _error = 'لا يمكن إدخال مبلغ بالسالب');
+    return;
   }
 
-  Future<void> _pickDepositAttachment() async {
+  final totalAmount = cashAmount + cardAmount + bankAmount;
+
+  if (totalAmount <= 0) {
+    setState(() => _error = 'أدخل مبلغ تحصيل واحد على الأقل');
+    return;
+  }
+
+  if (bankAmount > 0 && _selectedBank == null) {
+    setState(() => _error = 'اختر الحساب البنكي للتحويل');
+    return;
+  }
+
+ if (bankAmount > 0 && _collectionReferenceController.text.trim().isEmpty) {
+  setState(
+    () => _error = 'ادخل اسم المحول / المرجع للتحويل',
+  );
+  return;
+}
+  await ApiService.post('/customer-debts/collections/split', {
+    'customerAccountNumber': _selectedCustomer!.accountNumber,
+    'cashAmount': cashAmount,
+    'cardAmount': cardAmount,
+    'bankTransferAmount': bankAmount,
+    'bankAccountId': bankAmount > 0 ? _selectedBank?.id : null,
+    'bankName': bankAmount > 0 ? _selectedBank?.bankName : '',
+    'referenceName': _collectionReferenceController.text.trim(),
+    'notes': _collectionNotesController.text.trim(),
+  });
+
+  _cashAmountController.clear();
+  _cardAmountController.clear();
+  _bankAmountController.clear();
+  _collectionReferenceController.clear();
+  _collectionNotesController.clear();
+
+  await _loadAll();
+}
+
+double _parseAmount(String raw) {
+  final normalized = raw.trim().replaceAll(',', '.');
+  if (normalized.isEmpty) return 0;
+  return double.tryParse(normalized) ?? 0;
+}
+
+    Future<void> _exportCollections({required String format}) async {
+    try {
+      final date = _selectedDate ?? DateTime.now();
+      final dateOnly = DateFormat('yyyy-MM-dd').format(date);
+
+      final query =
+          'reportType=customer_debt_collections&startDate=$dateOnly&endDate=$dateOnly';
+      final endpoint = format == 'pdf'
+          ? '/reports/export/pdf?$query'
+          : '/reports/export/excel?$query';
+
+      final response = await ApiService.download(endpoint);
+      final fileStamp = DateTime.now().millisecondsSinceEpoch;
+      final ext = format == 'pdf' ? 'pdf' : 'xlsx';
+      await saveAndLaunchFile(
+        response.bodyBytes,
+        'collections_${dateOnly}_$fileStamp.$ext',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تصدير الملف')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+
+  Future<void> _exportCustomerLedger({required String format}) async {
+    try {
+      final customer = _selectedCustomer;
+      if (customer == null) return;
+
+      final query =
+          'reportType=customer_debt_ledger&customerAccountNumber=${Uri.encodeComponent(customer.accountNumber)}';
+      final endpoint = format == 'pdf'
+          ? '/reports/export/pdf?$query'
+          : '/reports/export/excel?$query';
+
+      final response = await ApiService.download(endpoint);
+      final fileStamp = DateTime.now().millisecondsSinceEpoch;
+      final ext = format == 'pdf' ? 'pdf' : 'xlsx';
+      await saveAndLaunchFile(
+        response.bodyBytes,
+        'ledger_${customer.accountNumber}_$fileStamp.$ext',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تصدير الملف')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+Future<void> _pickDepositAttachment() async {
     final result = await FilePicker.platform.pickFiles(
       withData: true,
       type: FileType.image,
@@ -433,139 +604,197 @@ class _CustomerDebtCollectorScreenState
     return DefaultTabController(
       length: 4,
       child: Scaffold(
-        appBar: AppBar(
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          backgroundColor: AppColors.primaryBlue,
-          foregroundColor: Colors.white,
-          toolbarHeight: isWideScreen ? 62 : 54,
-          title: Text(
-            'التحصيل',
-            style: TextStyle(
-              fontSize: isWideScreen ? 24 : 19,
-              fontWeight: FontWeight.w900,
+      appBar: AppBar(
+  centerTitle: true,
+  elevation: 0,
+  scrolledUnderElevation: 0,
+  backgroundColor: AppColors.primaryBlue,
+  foregroundColor: Colors.white,
+  toolbarHeight: isWideScreen ? 62 : 54,
+
+  title: Text(
+    'التحصيل',
+    style: TextStyle(
+      fontSize: isWideScreen ? 24 : 19,
+      fontWeight: FontWeight.w900,
+    ),
+  ),
+
+  // ✅ زر تسجيل الخروج
+  actions: [
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert),
+        onSelected: (value) async {
+          if (value == 'logout') {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('تسجيل الخروج'),
+                content: const Text('هل أنت متأكد أنك تريد تسجيل الخروج؟'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('إلغاء'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text(
+                      'تسجيل الخروج',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (confirm == true) {
+              // 👇 استدعاء اللوج أوت الحقيقي من AuthProvider
+              final auth = context.read<AuthProvider>();
+              await auth.logout();
+
+              if (!context.mounted) return;
+
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/login',
+                (route) => false,
+              );
+            }
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: 'logout',
+            child: Row(
+              children: [
+                Icon(Icons.logout_rounded, color: Colors.red),
+                SizedBox(width: 8),
+                Text('تسجيل الخروج'),
+              ],
             ),
           ),
-          bottom: PreferredSize(
-            preferredSize: Size.fromHeight(isWideScreen ? 108 : 96),
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                8,
-                horizontalPadding,
-                10,
+        ],
+      ),
+    ),
+  ],
+
+  bottom: PreferredSize(
+    preferredSize: Size.fromHeight(isWideScreen ? 108 : 96),
+    child: Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        8,
+        horizontalPadding,
+        10,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(26),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              _buildToolbarAction(
+                icon: Icons.refresh_rounded,
+                label: 'تحديث',
+                onTap: _loading ? null : _loadAll,
               ),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.95),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(26),
-                ),
+              _buildToolbarAction(
+                icon: Icons.calendar_month_rounded,
+                label: 'تاريخ السجلات',
+                onTap: _pickDate,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: isWideScreen ? 50 : 44,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: AppColors.primaryBlue.withValues(alpha: 0.10),
+              ),
+            ),
+            child: TabBar(
+              isScrollable: false,
+              indicatorSize: TabBarIndicatorSize.tab,
+              splashBorderRadius: BorderRadius.circular(15),
+              labelColor: AppColors.primaryBlue,
+              unselectedLabelColor: Colors.black54,
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 10,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+              ),
+              dividerColor: Colors.transparent,
+              indicator: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
+                    color: AppColors.primaryBlue.withValues(alpha: 0.14),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 10,
-                    runSpacing: 8,
-                    children: [
-                      _buildToolbarAction(
-                        icon: Icons.refresh_rounded,
-                        label: 'تحديث',
-                        onTap: _loading ? null : _loadAll,
-                      ),
-                      _buildToolbarAction(
-                        icon: Icons.calendar_month_rounded,
-                        label: 'تاريخ السجلات',
-                        onTap: _pickDate,
-                      ),
-                    ],
+              tabs: const [
+                Tab(
+                  height: 38,
+                  iconMargin: EdgeInsets.only(bottom: 1),
+                  icon: Icon(Icons.payments_outlined, size: 17),
+                  text: 'تحصيل',
+                ),
+                Tab(
+                  height: 38,
+                  iconMargin: EdgeInsets.only(bottom: 1),
+                  icon: Icon(Icons.receipt_long_outlined, size: 17),
+                  text: 'السجلات',
+                ),
+                Tab(
+                  height: 38,
+                  iconMargin: EdgeInsets.only(bottom: 1),
+                  icon: Icon(Icons.manage_search_rounded, size: 17),
+                  text: 'استعلام',
+                ),
+                Tab(
+                  height: 38,
+                  iconMargin: EdgeInsets.only(bottom: 1),
+                  icon: Icon(
+                    Icons.account_balance_wallet_outlined,
+                    size: 17,
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    height: isWideScreen ? 50 : 44,
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                      ),
-                    ),
-                    child: TabBar(
-                      isScrollable: false,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      splashBorderRadius: BorderRadius.circular(15),
-                      labelColor: AppColors.primaryBlue,
-                      unselectedLabelColor: Colors.black54,
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 10,
-                      ),
-                      unselectedLabelStyle: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10,
-                      ),
-                      dividerColor: Colors.transparent,
-                      indicator: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryBlue.withValues(
-                              alpha: 0.14,
-                            ),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      tabs: const [
-                        Tab(
-                          height: 38,
-                          iconMargin: EdgeInsets.only(bottom: 1),
-                          icon: Icon(Icons.payments_outlined, size: 17),
-                          text: 'تحصيل',
-                        ),
-                        Tab(
-                          height: 38,
-                          iconMargin: EdgeInsets.only(bottom: 1),
-                          icon: Icon(Icons.receipt_long_outlined, size: 17),
-                          text: 'السجلات',
-                        ),
-                        Tab(
-                          height: 38,
-                          iconMargin: EdgeInsets.only(bottom: 1),
-                          icon: Icon(Icons.manage_search_rounded, size: 17),
-                          text: 'استعلام',
-                        ),
-                        Tab(
-                          height: 38,
-                          iconMargin: EdgeInsets.only(bottom: 1),
-                          icon: Icon(
-                            Icons.account_balance_wallet_outlined,
-                            size: 17,
-                          ),
-                          text: 'الإيداع',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                  text: 'الإيداع',
+                ),
+              ],
             ),
           ),
-        ),
-
+        ],
+      ),
+    ),
+  ),
+),
         body: Stack(
           children: [
             const AppSoftBackground(),
@@ -739,8 +968,10 @@ class _CustomerDebtCollectorScreenState
   Widget _buildCollectTab(double horizontalPadding) {
     final currentCustomer = _selectedCustomer;
     final currentBalance = currentCustomer?.currentBalance ?? 0;
-    final amount =
-        double.tryParse(_collectionAmountController.text.trim()) ?? 0;
+    final cashAmount = double.tryParse(_cashAmountController.text.trim()) ?? 0;
+    final cardAmount = double.tryParse(_cardAmountController.text.trim()) ?? 0;
+    final bankAmount = double.tryParse(_bankAmountController.text.trim()) ?? 0;
+    final amount = cashAmount + cardAmount + bankAmount;
     final remaining = currentBalance - amount;
 
     return _buildResponsiveListView(
@@ -764,17 +995,97 @@ class _CustomerDebtCollectorScreenState
               ),
               const SizedBox(height: 16),
               TextFormField(
-                controller: _collectionAmountController,
-                keyboardType: TextInputType.number,
+                controller: _cashAmountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                ],
                 decoration: InputDecoration(
-                  labelText: 'مبلغ التحصيل',
-                  prefixIcon: const Icon(Icons.payments_outlined),
+                  labelText: 'مبلغ الكاش',
+                  prefixIcon: const Icon(Icons.money_outlined),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                 ),
                 onChanged: (_) => setState(() {}),
               ),
+
+              const SizedBox(height: 16),
+
+              TextFormField(
+                controller: _cardAmountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                ],
+                decoration: InputDecoration(
+                  labelText: 'مبلغ الشبكة',
+                  prefixIcon: const Icon(Icons.credit_card_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+
+              const SizedBox(height: 16),
+
+              TextFormField(
+                controller: _bankAmountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                ],
+                decoration: InputDecoration(
+                  labelText: 'مبلغ التحويل البنكي',
+                  prefixIcon: const Icon(Icons.account_balance_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+
+              if ((double.tryParse(_bankAmountController.text.trim()) ?? 0) >
+                  0) ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<_BankAccount>(
+                  initialValue: _selectedBank,
+                  decoration: InputDecoration(
+                    labelText: 'الحساب البنكي',
+                    prefixIcon: const Icon(Icons.account_balance_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  items: _bankAccounts
+                      .map(
+                        (item) => DropdownMenuItem<_BankAccount>(
+                          value: item,
+                          child: Text(item.displayName),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => _selectedBank = value),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _collectionReferenceController,
+                  decoration: InputDecoration(
+                    labelText: 'اسم المرجع / اسم المحول',
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 initialValue: _paymentMethod,
@@ -878,6 +1189,10 @@ class _CustomerDebtCollectorScreenState
       _CollectionTotals.zero(),
       (acc, item) => acc.add(item),
     );
+    final balanceByAccount = <String, double>{
+      for (final customer in _customers)
+        customer.accountNumber: customer.currentBalance,
+    };
 
     return _buildResponsiveListView(
       horizontalPadding: horizontalPadding,
@@ -890,6 +1205,35 @@ class _CustomerDebtCollectorScreenState
             _summaryCard('نقدي', _formatMoney(totals.cash)),
             _summaryCard('شبكة', _formatMoney(totals.card)),
             _summaryCard('تحويل بنكي', _formatMoney(totals.bankTransfer)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.icon(
+              onPressed: () => _exportCollections(format: 'pdf'),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('تصدير PDF'),
+            ),
+            FilledButton.icon(
+              onPressed: () => _exportCollections(format: 'excel'),
+              icon: const Icon(Icons.table_chart_outlined),
+              label: const Text('تصدير Excel'),
+            ),
+            if (_selectedCustomer != null)
+              OutlinedButton.icon(
+                onPressed: () => _exportCustomerLedger(format: 'pdf'),
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('حركة العميل PDF'),
+              ),
+            if (_selectedCustomer != null)
+              OutlinedButton.icon(
+                onPressed: () => _exportCustomerLedger(format: 'excel'),
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('حركة العميل Excel'),
+              ),
           ],
         ),
         const SizedBox(height: 16),
@@ -908,8 +1252,30 @@ class _CustomerDebtCollectorScreenState
                         (item) => ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: Text(item.customerName),
-                          subtitle: Text(
-                            '${_paymentMethodLabel(item.paymentMethod)} • ${_dateTimeFormat.format(item.createdAt.toLocal())}',
+                          isThreeLine:
+                              item.customerAccountNumber.isNotEmpty &&
+                              balanceByAccount.containsKey(
+                                item.customerAccountNumber,
+                              ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${_paymentMethodLabel(item.paymentMethod)} \u2022 ${_dateTimeFormat.format(item.createdAt.toLocal())}',
+                              ),
+                              if (item.customerAccountNumber.isNotEmpty &&
+                                  balanceByAccount.containsKey(
+                                    item.customerAccountNumber,
+                                  ))
+                                Text(
+                                  '${'\u0627\u0644\u0631\u0635\u064a\u062f \u0627\u0644\u062d\u0627\u0644\u064a'} ${_formatMoney(balanceByAccount[item.customerAccountNumber] ?? 0)}',
+                                  style: TextStyle(
+                                    color: Colors.black.withValues(alpha: 0.58),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                            ],
                           ),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -917,7 +1283,7 @@ class _CustomerDebtCollectorScreenState
                             children: [
                               _MoneyValue(text: _formatMoney(item.amount)),
                               Text(
-                                'متبقي ${_formatMoney(item.remainingAfter)}',
+                                '${'\u0645\u062a\u0628\u0642\u064a'} ${_formatMoney(item.remainingAfter)}',
                               ),
                             ],
                           ),
@@ -1289,6 +1655,7 @@ class _BankAccount {
 
 class _DebtCollection {
   _DebtCollection({
+    required this.customerAccountNumber,
     required this.customerName,
     required this.amount,
     required this.paymentMethod,
@@ -1297,6 +1664,7 @@ class _DebtCollection {
     required this.createdAt,
   });
 
+  final String customerAccountNumber;
   final String customerName;
   final double amount;
   final String paymentMethod;
@@ -1304,8 +1672,15 @@ class _DebtCollection {
   final double remainingAfter;
   final DateTime createdAt;
 
+  String get cacheKey =>
+      '$customerAccountNumber|$customerName|$amount|$paymentMethod|$collectorName|${createdAt.toIso8601String()}';
+
   factory _DebtCollection.fromJson(Map<String, dynamic> json) {
     return _DebtCollection(
+      customerAccountNumber:
+          json['customerAccountNumber']?.toString() ??
+          json['accountNumber']?.toString() ??
+          '',
       customerName: json['customerName']?.toString() ?? '',
       amount: _asDouble(json['amount']),
       paymentMethod: json['paymentMethod']?.toString() ?? '',
@@ -1315,6 +1690,18 @@ class _DebtCollection {
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'customerAccountNumber': customerAccountNumber,
+      'customerName': customerName,
+      'amount': amount,
+      'paymentMethod': paymentMethod,
+      'collectorName': collectorName,
+      'remainingAfter': remainingAfter,
+      'createdAt': createdAt.toIso8601String(),
+    };
   }
 }
 
@@ -1476,3 +1863,4 @@ double _asDouble(dynamic value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '') ?? 0;
 }
+

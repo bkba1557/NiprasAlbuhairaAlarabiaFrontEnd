@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:order_tracker/utils/api_service.dart';
 import 'package:order_tracker/utils/constants.dart';
+import 'package:order_tracker/utils/file_saver.dart';
 import 'package:order_tracker/widgets/app_soft_background.dart';
 import 'package:order_tracker/widgets/app_surface_card.dart';
 
@@ -43,6 +44,8 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
   String _snapshotSearchQuery = '';
   Set<String> _snapshotSelectedAccounts = <String>{};
   _SnapshotBalanceFilter _snapshotBalanceFilter = _SnapshotBalanceFilter.all;
+  String _depositStatusFilter = 'pending';
+  String _settlementStatusFilter = 'pending';
 
   @override
   void dispose() {
@@ -89,6 +92,79 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
 
   String _dateQuery() =>
       _selectedDate == null ? '' : '?date=${DateFormat('yyyy-MM-dd').format(_selectedDate!)}';
+
+  String _reportDateOnly() =>
+      DateFormat('yyyy-MM-dd').format(_selectedDate ?? DateTime.now());
+
+  String? _selectedAccountForExport() {
+    if (_snapshotSelectedAccounts.isEmpty) return null;
+    if (_snapshotSelectedAccounts.length == 1) {
+      return _snapshotSelectedAccounts.first;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('اختر عميل واحد للتصدير أو اترك الاختيار فارغ (الكل)'),
+      ),
+    );
+    return null;
+  }
+
+  Future<void> _exportDebtCollections({required String format}) async {
+    try {
+      final dateOnly = _reportDateOnly();
+      final selectedAccount = _selectedAccountForExport();
+
+      final baseQuery =
+          'reportType=customer_debt_collections&startDate=$dateOnly&endDate=$dateOnly';
+      final query = selectedAccount == null
+          ? baseQuery
+          : '$baseQuery&customerAccountNumber=${Uri.encodeComponent(selectedAccount)}';
+
+      final endpoint = format == 'pdf'
+          ? '/reports/export/pdf?$query'
+          : '/reports/export/excel?$query';
+
+      final response = await ApiService.download(endpoint);
+      final fileStamp = DateTime.now().millisecondsSinceEpoch;
+      final ext = format == 'pdf' ? 'pdf' : 'xlsx';
+      await saveAndLaunchFile(
+        response.bodyBytes,
+        'finance_collections_${dateOnly}_$fileStamp.$ext',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+
+  Future<void> _exportDebtLedger({required String format}) async {
+    try {
+      final selectedAccount = _selectedAccountForExport();
+      if (selectedAccount == null) return;
+
+      final query =
+          'reportType=customer_debt_ledger&customerAccountNumber=${Uri.encodeComponent(selectedAccount)}';
+      final endpoint = format == 'pdf'
+          ? '/reports/export/pdf?$query'
+          : '/reports/export/excel?$query';
+
+      final response = await ApiService.download(endpoint);
+      final fileStamp = DateTime.now().millisecondsSinceEpoch;
+      final ext = format == 'pdf' ? 'pdf' : 'xlsx';
+      await saveAndLaunchFile(
+        response.bodyBytes,
+        'finance_ledger_${selectedAccount}_$fileStamp.$ext',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
 
   Future<void> _loadSnapshot() async {
     final decoded = await _getJson(ApiEndpoints.customerDebtLatest);
@@ -143,7 +219,9 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
   }
 
   Future<void> _loadDeposits() async {
-    final decoded = await _getJson('/customer-debts/deposits?status=pending');
+    final statusQuery =
+        _depositStatusFilter == 'all' ? '' : '?status=$_depositStatusFilter';
+    final decoded = await _getJson('/customer-debts/deposits$statusQuery');
     final list = decoded['deposits'] as List<dynamic>? ?? const [];
     _deposits = list
         .whereType<Map>()
@@ -152,7 +230,10 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
   }
 
   Future<void> _loadSettlements() async {
-    final decoded = await _getJson('/customer-debts/settlements?status=pending');
+    final statusQuery = _settlementStatusFilter == 'all'
+        ? ''
+        : '?status=$_settlementStatusFilter';
+    final decoded = await _getJson('/customer-debts/settlements$statusQuery');
     final list = decoded['settlements'] as List<dynamic>? ?? const [];
     _settlements = list
         .whereType<Map>()
@@ -454,118 +535,222 @@ class _CustomerAccountsScreenState extends State<CustomerAccountsScreen> {
         _bankAccounts.isNotEmpty ? _bankAccounts.first : null;
     final formKey = GlobalKey<FormState>();
 
+    Future<_DebtCustomer?> pickCustomer() async {
+      final searchController = TextEditingController();
+      try {
+        return await showDialog<_DebtCustomer>(
+          context: context,
+          builder: (context) => StatefulBuilder(
+            builder: (context, setState) {
+              final query = searchController.text.trim().toLowerCase();
+              final filtered = query.isEmpty
+                  ? _customers
+                  : _customers.where((c) {
+                      final haystack =
+                          '${c.customerName} ${c.accountNumber}'.toLowerCase();
+                      return haystack.contains(query);
+                    }).toList();
+
+              return AlertDialog(
+                title: const Text('اختيار العميل'),
+                content: SizedBox(
+                  width: 520,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: searchController,
+                        decoration: const InputDecoration(
+                          labelText: 'بحث بالاسم أو رقم الحساب',
+                          prefixIcon: Icon(Icons.search),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 420),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final item = filtered[index];
+                            return ListTile(
+                              title: Text(
+                                item.customerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(item.accountNumber),
+                              onTap: () => Navigator.pop(context, item),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('إلغاء'),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      } finally {
+        searchController.dispose();
+      }
+    }
+
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          title: const Text('سند قبض من العميل'),
-          content: Form(
-            key: formKey,
-            child: SizedBox(
-              width: 480,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<_DebtCustomer>(
-                    initialValue: selectedCustomer,
-                    decoration: const InputDecoration(labelText: 'العميل'),
-                    items: _customers
-                        .map(
-                          (item) => DropdownMenuItem<_DebtCustomer>(
-                            value: item,
-                            child: Text(item.displayName),
+        builder: (context, setModalState) {
+          return AlertDialog(
+            title: const Text('سند قبض من العميل'),
+            content: Form(
+              key: formKey,
+              child: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () async {
+                          final picked = await pickCustomer();
+                          if (picked == null) return;
+                          setModalState(() => selectedCustomer = picked);
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'العميل',
+                            prefixIcon: Icon(Icons.person_outline),
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setModalState(() {
-                      selectedCustomer = value;
-                    }),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: amountController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'المبلغ'),
-                    validator: (value) {
-                      final parsed = double.tryParse(value?.trim() ?? '');
-                      return (parsed == null || parsed <= 0) ? 'مبلغ غير صالح' : null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: paymentMethod,
-                    decoration: const InputDecoration(labelText: 'طريقة الدفع'),
-                    items: const [
-                      DropdownMenuItem(value: 'cash', child: Text('نقدي')),
-                      DropdownMenuItem(value: 'card', child: Text('شبكة')),
-                      DropdownMenuItem(
-                        value: 'bank_transfer',
-                        child: Text('تحويل بنكي'),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  selectedCustomer?.displayName ?? 'اختر العميل',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: amountController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'المبلغ'),
+                        validator: (value) {
+                          final parsed = double.tryParse(value?.trim() ?? '');
+                          return (parsed == null || parsed <= 0)
+                              ? 'مبلغ غير صالح'
+                              : null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: paymentMethod,
+                        isExpanded: true,
+                        decoration:
+                            const InputDecoration(labelText: 'طريقة الدفع'),
+                        items: const [
+                          DropdownMenuItem(value: 'cash', child: Text('نقدي')),
+                          DropdownMenuItem(value: 'card', child: Text('شبكة')),
+                          DropdownMenuItem(
+                            value: 'bank_transfer',
+                            child: Text('تحويل بنكي'),
+                          ),
+                        ],
+                        onChanged: (value) => setModalState(() {
+                          paymentMethod = value ?? 'cash';
+                        }),
+                      ),
+                      if (paymentMethod == 'bank_transfer') ...[
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<_BankAccount>(
+                          initialValue: selectedBank,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'الحساب البنكي',
+                          ),
+                          items: _bankAccounts
+                              .map(
+                                (item) => DropdownMenuItem<_BankAccount>(
+                                  value: item,
+                                  child: Text(
+                                    item.displayName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) => setModalState(() {
+                            selectedBank = value;
+                          }),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: notesController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(labelText: 'ملاحظات'),
                       ),
                     ],
-                    onChanged: (value) => setModalState(() {
-                      paymentMethod = value ?? 'cash';
-                    }),
                   ),
-                  if (paymentMethod == 'bank_transfer') ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<_BankAccount>(
-                      initialValue: selectedBank,
-                      decoration: const InputDecoration(labelText: 'الحساب البنكي'),
-                      items: _bankAccounts
-                          .map(
-                            (item) => DropdownMenuItem<_BankAccount>(
-                              value: item,
-                              child: Text(item.displayName),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) => setModalState(() {
-                        selectedBank = value;
-                      }),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: notesController,
-                    maxLines: 2,
-                    decoration: const InputDecoration(labelText: 'ملاحظات'),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('إلغاء'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate() || selectedCustomer == null) {
-                  return;
-                }
-                await ApiService.post('/customer-debts/collections', {
-                  'customerAccountNumber': selectedCustomer!.accountNumber,
-                  'amount': double.parse(amountController.text.trim()),
-                  'paymentMethod': paymentMethod,
-                  'bankAccountId':
-                      paymentMethod == 'bank_transfer' ? selectedBank?.id : null,
-                  'bankName':
-                      paymentMethod == 'bank_transfer' ? selectedBank?.bankName : '',
-                  'notes': notesController.text.trim(),
-                });
-                if (!mounted || !dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-                await _loadAll();
-              },
-              child: const Text('تسجيل'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('إلغاء'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  if (!formKey.currentState!.validate() ||
+                      selectedCustomer == null) {
+                    return;
+                  }
+
+                  await ApiService.post('/customer-debts/collections', {
+                    'customerAccountNumber': selectedCustomer!.accountNumber,
+                    'amount': double.parse(amountController.text.trim()),
+                    'paymentMethod': paymentMethod,
+                    'bankAccountId': paymentMethod == 'bank_transfer'
+                        ? selectedBank?.id
+                        : null,
+                    'bankName': paymentMethod == 'bank_transfer'
+                        ? selectedBank?.bankName
+                        : '',
+                    'notes': notesController.text.trim(),
+                  });
+
+                  if (!mounted || !dialogContext.mounted) return;
+                  Navigator.pop(dialogContext);
+                  await _loadAll();
+                },
+                child: const Text('تسجيل'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+
 
   Future<void> _reviewDeposit(_DepositRequest item, String status) async {
     await ApiService.patch('/customer-debts/deposits/${item.id}/review', {
@@ -1255,6 +1440,7 @@ Widget _buildToolbarAction({
               );
             },
           ),
+          const SizedBox(height: 12),
           const SizedBox(height: 16),
           Wrap(
             spacing: 12,
@@ -1313,6 +1499,33 @@ Widget _buildToolbarAction({
               _moneyCard('نقدي', _formatMoney(dashboard.cash), Icons.money_outlined),
               _moneyCard('شبكة', _formatMoney(dashboard.card), Icons.credit_card_outlined),
               _moneyCard('تحويل', _formatMoney(dashboard.bankTransfer), Icons.account_balance_outlined),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: () => _exportDebtCollections(format: 'pdf'),
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('تصدير التحصيلات PDF'),
+              ),
+              FilledButton.icon(
+                onPressed: () => _exportDebtCollections(format: 'excel'),
+                icon: const Icon(Icons.table_chart_outlined),
+                label: const Text('تصدير التحصيلات Excel'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _exportDebtLedger(format: 'pdf'),
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('حركة عميل PDF'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _exportDebtLedger(format: 'excel'),
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('حركة عميل Excel'),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1392,6 +1605,10 @@ Widget _buildToolbarAction({
       _CollectionTotals.zero(),
       (acc, item) => acc.add(item),
     );
+    final balanceByAccount = <String, double>{
+      for (final row in (_snapshot?.rows ?? const <_DebtSnapshotRow>[]))
+        row.accountNumber: row.currentBalance,
+    };
 
     return _buildResponsiveListView(
       horizontalPadding: horizontalPadding,
@@ -1423,8 +1640,14 @@ Widget _buildToolbarAction({
             children: _collections.isEmpty
                 ? const [Padding(padding: EdgeInsets.all(24), child: Text('لا توجد تحصيلات'))]
                 : _collections
-                    .map(
-                      (item) => ListTile(
+                    .map((item) {
+                      final double remaining =
+                          (balanceByAccount[item.customerAccountNumber] ??
+                                  item.remainingAfter)
+                              .toDouble();
+                      final double remainingDue = remaining > 0 ? remaining : 0;
+
+                      return ListTile(
                         contentPadding: EdgeInsets.zero,
                         title: Text(item.customerName),
                         subtitle: Text(
@@ -1442,13 +1665,13 @@ Widget _buildToolbarAction({
                               ),
                             ),
                             Text(
-                              'متبقي ${_formatMoney(item.remainingAfter)}',
+                              'متبقي ${_formatMoney(remainingDue)}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ],
                         ),
-                      ),
-                    )
+                      );
+                    })
                     .toList(),
           ),
         ),
@@ -1573,32 +1796,43 @@ Widget _buildToolbarAction({
 
   Widget _moneyCard(String title, String value, IconData icon) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 230, maxWidth: 300),
+      constraints: const BoxConstraints(minWidth: 250, maxWidth: 250),
       child: AppSurfaceCard(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          height: 74,
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: AppColors.primaryBlue),
               ),
-              child: Icon(icon, color: AppColors.primaryBlue),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  _MoneyValue(text: value),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      title,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: _MoneyValue(text: value),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1606,23 +1840,32 @@ Widget _buildToolbarAction({
 
   Widget _statusCard(String title, String value, Color color) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 280),
+      constraints: const BoxConstraints(minWidth: 250, maxWidth: 250),
       child: AppSurfaceCard(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: color,
+        child: SizedBox(
+          height: 74,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                title,
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                value,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1794,6 +2037,7 @@ class _DebtCustomer {
 class _DebtCollection {
   _DebtCollection({
     required this.id,
+    required this.customerAccountNumber,
     required this.customerName,
     required this.amount,
     required this.paymentMethod,
@@ -1803,6 +2047,7 @@ class _DebtCollection {
   });
 
   final String id;
+  final String customerAccountNumber;
   final String customerName;
   final double amount;
   final String paymentMethod;
@@ -1813,6 +2058,7 @@ class _DebtCollection {
   factory _DebtCollection.fromJson(Map<String, dynamic> json) {
     return _DebtCollection(
       id: json['id']?.toString() ?? '',
+      customerAccountNumber: json['customerAccountNumber']?.toString() ?? '',
       customerName: json['customerName']?.toString() ?? '',
       amount: _asDouble(json['amount']),
       paymentMethod: json['paymentMethod']?.toString() ?? '',

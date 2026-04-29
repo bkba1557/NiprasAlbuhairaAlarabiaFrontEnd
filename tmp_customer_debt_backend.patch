@@ -1,0 +1,258 @@
+diff --git a/routes/customerDebtRoutes.js b/routes/customerDebtRoutes.js
+--- a/routes/customerDebtRoutes.js
++++ b/routes/customerDebtRoutes.js
+@@ -9,6 +9,7 @@ router.use(authMiddleware);
+ router.get('/latest', customerDebtController.getLatestCustomerDebtSnapshot);
+ router.get('/customers', customerDebtController.listCustomers);
+ router.get('/customers/:accountNumber/ledger', customerDebtController.getCustomerLedger);
+ router.get('/collections', customerDebtController.listCollections);
++router.post('/collections/split', customerDebtController.createSplitCollection);
+ router.post('/collections', customerDebtController.createCollection);
+ router.get('/collector/dashboard', customerDebtController.getCollectorDashboard);
+ router.get('/finance/dashboard', customerDebtController.getFinanceDashboard);
+diff --git a/controllers/customerDebtController.js b/controllers/customerDebtController.js
+--- a/controllers/customerDebtController.js
++++ b/controllers/customerDebtController.js
+@@ -1,3 +1,4 @@
++/* eslint-disable no-param-reassign */
+ const fs = require('fs');
+ const path = require('path');
+ 
+@@ -159,13 +160,25 @@ const getLatestSnapshot = () =>
+   CustomerDebtSnapshot.findOne({}).sort({ importedAt: -1 });
+ 
+-const buildPaymentsMap = async (snapshotId) => {
+-  const collections = await CustomerDebtCollection.find({ snapshotId }).lean();
+-
+-  const totalsMap = new Map();
+-  for (const item of collections) {
+-    const key = String(item.customerAccountNumber || '').trim();
+-    if (!key) continue;
+-    totalsMap.set(key, (totalsMap.get(key) || 0) + Number(item.amount || 0));
+-  }
+-  return totalsMap;
+-};
++// Sum collections across *all* snapshots so balances don't reset when finance
++// imports a new customer statement.
++const buildPaymentsMapForAccounts = async (accountNumbers) => {
++  const accounts = [...new Set((accountNumbers || [])
++    .map((v) => String(v || '').trim())
++    .filter(Boolean))];
++
++  const totalsMap = new Map();
++  if (!accounts.length) return totalsMap;
++
++  const rows = await CustomerDebtCollection.aggregate([
++    { $match: { customerAccountNumber: { $in: accounts } } },
++    { $group: { _id: '$customerAccountNumber', total: { $sum: '$amount' } } },
++  ]);
++
++  for (const row of rows) {
++    const key = String(row._id || '').trim();
++    if (!key) continue;
++    totalsMap.set(key, Number(row.total || 0));
++  }
++
++  return totalsMap;
++};
+@@ -324,6 +343,5 @@ const calculateCurrentBalance = async (snapshot, accountNumber) => {
+     {
+       $match: {
+-        snapshotId: snapshot._id,
+         customerAccountNumber: accountNumber,
+       },
+     },
+@@ -444,8 +462,8 @@ exports.getLatestCustomerDebtSnapshot = async (req, res) => {
+     if (!snapshot) {
+       return res.json({ success: true, snapshot: null });
+     }
+ 
+-    const paymentsMap = await buildPaymentsMap(snapshot._id);
++    const paymentsMap = await buildPaymentsMapForAccounts(snapshot.rows.map((row) => row.accountNumber));
+     const rows = snapshot.rows.map((row) => {
+       const paid = Number(paymentsMap.get(row.accountNumber) || 0);
+       return {
+@@ -491,6 +509,6 @@ exports.listCustomers = async (req, res) => {
+ 
+     const search = normalizeText(req.query.search).toLowerCase();
+-    const paymentsMap = await buildPaymentsMap(snapshot._id);
++    const paymentsMap = await buildPaymentsMapForAccounts(snapshot.rows.map((row) => row.accountNumber));
+ 
+     const customers = snapshot.rows
+       .map((row) => {
+@@ -579,14 +597,156 @@ exports.createCollection = async (req, res) => {
+   }
+ };
+ 
++exports.createSplitCollection = async (req, res) => {
++  try {
++    if (!isCollectorUser(req.user) && !isFinanceUser(req.user)) {
++      return res.status(403).json({ success: false, error: 'غير مصرح بالتحصيل' });
++    }
++
++    const snapshot = await getLatestSnapshot();
++    if (!snapshot) {
++      return res.status(400).json({ success: false, error: 'لا يوجد كشف مديونيات مستورد' });
++    }
++
++    const customerAccountNumber = String(req.body.customerAccountNumber || '').trim();
++    const cashAmount = Number(req.body.cashAmount || 0);
++    const cardAmount = Number(req.body.cardAmount || 0);
++    const bankTransferAmount = Number(req.body.bankTransferAmount || 0);
++    const bankAccountId = String(req.body.bankAccountId || '').trim() || null;
++    const bankName = normalizeText(req.body.bankName);
++    const referenceName = normalizeText(req.body.referenceName);
++    const notes = normalizeText(req.body.notes);
++
++    if (!customerAccountNumber) {
++      return res.status(400).json({ success: false, error: 'بيانات التحصيل غير مكتملة' });
++    }
++
++    const amounts = [cashAmount, cardAmount, bankTransferAmount];
++    if (amounts.some((value) => !Number.isFinite(value) || value < 0)) {
++      return res.status(400).json({ success: false, error: 'قيم المبالغ غير صالحة' });
++    }
++
++    const totalAmount = cashAmount + cardAmount + bankTransferAmount;
++    if (totalAmount <= 0) {
++      return res.status(400).json({ success: false, error: 'أدخل مبلغ تحصيل واحد على الأقل' });
++    }
++
++    const snapshotRow = snapshot.rows.find((row) => row.accountNumber === customerAccountNumber);
++    if (!snapshotRow) {
++      return res.status(404).json({ success: false, error: 'العميل غير موجود في آخر كشف' });
++    }
++
++    let bankAccount = null;
++    if (bankTransferAmount > 0) {
++      if (bankAccountId) {
++        bankAccount = await CustomerDebtBankAccount.findById(bankAccountId);
++      }
++      if (!bankAccount && !bankName) {
++        return res.status(400).json({ success: false, error: 'يجب تحديد البنك للتحويل البنكي' });
++      }
++      if (!referenceName) {
++        return res.status(400).json({ success: false, error: 'ادخل اسم المحول / المرجع للتحويل' });
++      }
++    }
++
++    const balanceInfo = await calculateCurrentBalance(snapshot, customerAccountNumber);
++
++    const collectorId = isCollectorUser(req.user)
++      ? req.user._id
++      : (req.body.collectorId || req.user._id);
++    const collectorUser = await User.findById(collectorId).select('name role company');
++    if (!collectorUser) {
++      return res.status(400).json({ success: false, error: 'المحصل المحدد غير موجود' });
++    }
++
++    const now = new Date();
++    const batchId = `${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`;
++
++    let remaining = balanceInfo.remaining;
++    const docsToCreate = [];
++
++    const pushDoc = (paymentMethod, amount) => {
++      if (!amount || amount <= 0) return;
++      const remainingAfter = remaining - amount;
++      docsToCreate.push({
++        snapshotId: snapshot._id,
++        customerAccountNumber,
++        customerName: snapshotRow.customerName,
++        amount,
++        paymentMethod,
++        bankAccountId: paymentMethod === 'bank_transfer' ? (bankAccount?._id || null) : null,
++        bankName: paymentMethod === 'bank_transfer' ? (bankAccount?.bankName || bankName) : '',
++        referenceName: paymentMethod === 'bank_transfer' ? referenceName : '',
++        notes,
++        remainingBefore: remaining,
++        remainingAfter,
++        collectorId: collectorUser._id,
++        collectorName: collectorUser.name,
++        createdBy: req.user._id,
++        createdByName: req.user.name,
++        source: isFinanceUser(req.user) ? 'finance' : 'collector',
++        createdAt: now,
++        updatedAt: now,
++        batchId,
++      });
++      remaining = remainingAfter;
++    };
++
++    pushDoc('cash', cashAmount);
++    pushDoc('card', cardAmount);
++    pushDoc('bank_transfer', bankTransferAmount);
++
++    const created = await CustomerDebtCollection.insertMany(docsToCreate, { ordered: true });
++
++    await Activity.create({
++      activityType: 'إضافة',
++      description: `تم تسجيل تحصيل مجمع للعميل ${snapshotRow.customerName}`,
++      performedBy: req.user._id,
++      performedByName: req.user.name,
++      changes: {
++        customer: snapshotRow.customerName,
++        accountNumber: customerAccountNumber,
++        amount: String(totalAmount),
++        remainingAfter: String(remaining),
++      },
++    });
++
++    await notifyFinanceAndStakeholders({
++      company: req.user.company,
++      title: `تحصيل جديد للعميل ${snapshotRow.customerName}`,
++      message: `تم تسجيل تحصيل بمبلغ ${totalAmount} من العميل ${snapshotRow.customerName} والمتبقي ${remaining}.`,
++      data: {
++        actorName: req.user.name,
++        note: notes,
++        changes: {
++          'اسم العميل': snapshotRow.customerName,
++          'رقم الحساب': customerAccountNumber,
++          'المبلغ': totalAmount,
++          'المتبقي': remaining,
++          'المحصل': collectorUser.name,
++        },
++      },
++      createdBy: req.user._id,
++    });
++
++    res.status(201).json({
++      success: true,
++      message: 'تم تسجيل التحصيل بنجاح',
++      collections: created.map(serializeCollection),
++    });
++  } catch (error) {
++    console.error('CUSTOMER DEBT SPLIT COLLECTION ERROR:', error);
++    res.status(500).json({ success: false, error: 'فشل تسجيل التحصيل' });
++  }
++};
++
+ exports.listCollections = async (req, res) => {
+   try {
+     const query = {};
+-    const snapshot = await getLatestSnapshot();
+-    if (snapshot) {
+-      query.snapshotId = snapshot._id;
+-    }
++    if (req.query.snapshotId) {
++      query.snapshotId = req.query.snapshotId;
++    }
+ 
+     if (req.query.customerAccountNumber) {
+       query.customerAccountNumber = String(req.query.customerAccountNumber).trim();
+     }
+diff --git a/models/CustomerDebtCollection.js b/models/CustomerDebtCollection.js
+--- a/models/CustomerDebtCollection.js
++++ b/models/CustomerDebtCollection.js
+@@ -82,6 +82,11 @@ const customerDebtCollectionSchema = new mongoose.Schema({
+   source: {
+     type: String,
+     enum: ['collector', 'finance'],
+     default: 'collector',
+   },
++  batchId: {
++    type: String,
++    trim: true,
++    default: '',
++  },
+ }, { timestamps: true });

@@ -120,9 +120,11 @@ class ApiService {
       throw UnauthenticatedException();
     }
 
-    throw Exception(
-      'Download failed: ${response.statusCode} - ${response.body}',
-    );
+    final message = _extractErrorMessage(response);
+    if (message == null || message.isEmpty) {
+      throw Exception('Download failed: ${response.statusCode}');
+    }
+    throw Exception('Download failed: ${response.statusCode} - $message');
   }
 
   static Future<Map<String, dynamic>> hrGet(String endpoint) async {
