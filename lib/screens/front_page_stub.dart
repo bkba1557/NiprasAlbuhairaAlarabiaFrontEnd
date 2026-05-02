@@ -9,6 +9,12 @@ class FrontPage extends StatelessWidget {
 
   const FrontPage({super.key, required this.onEmployeeLogin});
 
+  static const Color navy = Color(0xFF071A2F);
+  static const Color darkBlue = Color(0xFF0B2E55);
+  static const Color royalBlue = Color(0xFF145DA0);
+  static const Color gold = Color(0xFFD9A441);
+  static const Color softGold = Color(0xFFFFD98A);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -26,52 +32,69 @@ class FrontPage extends StatelessWidget {
                 return SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(
-                    isPhone ? 14 : 24,
-                    isPhone ? 12 : 24,
-                    isPhone ? 14 : 24,
-                    isPhone ? 18 : 24,
+                    isPhone ? 16 : 28,
+                    isPhone ? 16 : 28,
+                    isPhone ? 16 : 28,
+                    isPhone ? 20 : 28,
                   ),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight - (isPhone ? 24 : 48),
+                      minHeight: constraints.maxHeight - (isPhone ? 32 : 56),
                     ),
-                    child: Align(
-                      alignment: isPhone
-                          ? Alignment.topCenter
-                          : Alignment.center,
+                    child: Center(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          maxWidth: isPhone ? 430 : 540,
+                          maxWidth: isPhone ? 440 : 560,
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(isPhone ? 24 : 26),
+                          borderRadius: BorderRadius.circular(
+                            isPhone ? 28 : 34,
+                          ),
                           child: BackdropFilter(
                             filter: ImageFilter.blur(
-                              sigmaX: reduceEffects ? 0 : 18,
-                              sigmaY: reduceEffects ? 0 : 18,
+                              sigmaX: reduceEffects ? 0 : 22,
+                              sigmaY: reduceEffects ? 0 : 22,
                             ),
                             child: Container(
                               padding: EdgeInsets.symmetric(
-                                horizontal: isPhone ? 18 : 28,
-                                vertical: isPhone ? 20 : 30,
+                                horizontal: isPhone ? 18 : 30,
+                                vertical: isPhone ? 22 : 32,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.80),
                                 borderRadius: BorderRadius.circular(
-                                  isPhone ? 24 : 26,
+                                  isPhone ? 28 : 34,
+                                ),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.18),
+                                    Colors.white.withValues(alpha: 0.08),
+                                    const Color(
+                                      0xFF061526,
+                                    ).withValues(alpha: 0.30),
+                                  ],
                                 ),
                                 border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.55),
+                                  color: Colors.white.withValues(alpha: 0.28),
+                                  width: 1.2,
                                 ),
                                 boxShadow: reduceEffects
                                     ? null
                                     : [
                                         BoxShadow(
                                           color: Colors.black.withValues(
-                                            alpha: 0.18,
+                                            alpha: 0.35,
                                           ),
-                                          blurRadius: isPhone ? 18 : 24,
-                                          offset: const Offset(0, 10),
+                                          blurRadius: 35,
+                                          offset: const Offset(0, 18),
+                                        ),
+                                        BoxShadow(
+                                          color: softGold.withValues(
+                                            alpha: 0.10,
+                                          ),
+                                          blurRadius: 40,
+                                          offset: const Offset(0, -8),
                                         ),
                                       ],
                               ),
@@ -79,57 +102,50 @@ class FrontPage extends StatelessWidget {
                                 textDirection: TextDirection.rtl,
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     _FrontPageHeader(
                                       theme: theme,
                                       isPhone: isPhone,
                                     ),
-                                    SizedBox(height: isPhone ? 14 : 18),
+                                    SizedBox(height: isPhone ? 16 : 20),
+
                                     Text(
-                                      'منصة موحدة تساعد على إدارة المحطات ومتابعة التشغيل اليومي والمبيعات والمخزون والتقارير من واجهة واضحة وسريعة.',
-                                      textAlign: isPhone
-                                          ? TextAlign.center
-                                          : TextAlign.start,
+                                      'منصة تشغيل ذكية لإدارة المحطات، الطلبات، المخزون، التقارير، والعمليات اليومية من لوحة واحدة أنيقة وسريعة.',
+                                      textAlign: TextAlign.center,
                                       style: theme.textTheme.bodyLarge
                                           ?.copyWith(
-                                            fontSize: isPhone ? 13.5 : 17,
-                                            color: const Color(0xFF314744),
-                                            height: isPhone ? 1.65 : 1.75,
+                                            fontSize: isPhone ? 13.8 : 17,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.86,
+                                            ),
+                                            height: 1.75,
+                                            fontFamily: 'Cairo',
+                                            fontWeight: FontWeight.w500,
                                           ),
                                     ),
-                                    SizedBox(height: isPhone ? 14 : 18),
+
+                                    SizedBox(height: isPhone ? 18 : 22),
+
                                     Wrap(
-                                      spacing: isPhone ? 8 : 10,
-                                      runSpacing: isPhone ? 8 : 10,
-                                      alignment: isPhone
-                                          ? WrapAlignment.center
-                                          : WrapAlignment.start,
-                                      children: [
-                                        _FrontPageChip(
-                                          label: 'إدارة المحطات',
-                                          compact: isPhone,
-                                        ),
-                                        _FrontPageChip(
-                                          label: 'المخزون والجرد',
-                                          compact: isPhone,
-                                        ),
-                                        _FrontPageChip(
-                                          label: 'المهام والإشعارات',
-                                          compact: isPhone,
-                                        ),
-                                        _FrontPageChip(
-                                          label: 'التقارير والمتابعة',
-                                          compact: isPhone,
-                                        ),
+                                      spacing: 9,
+                                      runSpacing: 9,
+                                      alignment: WrapAlignment.center,
+                                      children: const [
+                                        _FrontPageChip(label: 'إدارة المحطات'),
+                                        _FrontPageChip(label: 'المخزون والجرد'),
+                                        _FrontPageChip(label: 'التقارير'),
+                                        _FrontPageChip(label: 'المهام'),
                                       ],
                                     ),
-                                    SizedBox(height: isPhone ? 14 : 18),
+
+                                    SizedBox(height: isPhone ? 18 : 22),
+
                                     _FrontPageFeature(
                                       icon: Icons.local_gas_station_rounded,
                                       title: 'تشغيل المحطات',
                                       description:
-                                          'متابعة المحطات والمضخات والجلسات اليومية ومراقبة حركة المبيعات بشكل مباشر.',
+                                          'متابعة الجلسات اليومية والمضخات وحركة المبيعات بشكل مباشر.',
                                       compact: isPhone,
                                     ),
                                     SizedBox(height: isPhone ? 10 : 12),
@@ -137,35 +153,35 @@ class FrontPage extends StatelessWidget {
                                       icon: Icons.inventory_2_rounded,
                                       title: 'مخزون وجرد الوقود',
                                       description:
-                                          'عرض الأرصدة اليومية والجرد والتوريد مع قراءة أوضح لحالة الوقود داخل المحطة.',
+                                          'عرض الأرصدة والتوريدات والجرد اليومي بطريقة واضحة وسريعة.',
                                       compact: isPhone,
                                     ),
                                     SizedBox(height: isPhone ? 10 : 12),
                                     _FrontPageFeature(
                                       icon: Icons.analytics_rounded,
-                                      title: 'تقارير وقرارات أسرع',
+                                      title: 'تقارير احترافية',
                                       description:
-                                          'لوحات مختصرة للتقارير والإحصائيات والتنبيهات لدعم الإدارة في اتخاذ القرار.',
+                                          'إحصائيات وتنبيهات تساعد الإدارة على اتخاذ قرارات أدق.',
                                       compact: isPhone,
                                     ),
-                                    SizedBox(height: isPhone ? 18 : 22),
-                                 SizedBox(
+
+                                    SizedBox(height: isPhone ? 22 : 26),
+
+                                    SizedBox(
                                       width: double.infinity,
-                                      height: isPhone ? 50 : 54,
+                                      height: isPhone ? 52 : 56,
                                       child: ElevatedButton.icon(
                                         onPressed: onEmployeeLogin,
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(
-                                            0xFF1F7A6C,
-                                          ),
-                                          foregroundColor: Colors.white,
+                                          backgroundColor: gold,
+                                          foregroundColor: navy,
                                           elevation: 0,
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 12,
+                                          shadowColor: gold.withValues(
+                                            alpha: 0.30,
                                           ),
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(
-                                              16,
+                                              18,
                                             ),
                                           ),
                                         ),
@@ -173,23 +189,23 @@ class FrontPage extends StatelessWidget {
                                           Icons.login_rounded,
                                           size: 22,
                                         ),
-                                        label: Text(
+                                        label: const Text(
                                           'تسجيل الدخول',
-                                          textAlign: TextAlign.center,
                                           style: TextStyle(
-                                            fontFamily: 'Cairo', // 🔥 مهم جدا
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            height:
-                                                1.2, // ✅ يمنع الحروف تنزل لتحت
+                                            fontFamily: 'Cairo',
+                                            fontSize: 15.5,
+                                            fontWeight: FontWeight.w900,
+                                            height: 1.2,
                                           ),
                                         ),
                                       ),
                                     ),
-                                    SizedBox(height: isPhone ? 10 : 12),
+
+                                    SizedBox(height: isPhone ? 11 : 13),
+
                                     SizedBox(
                                       width: double.infinity,
-                                      height: isPhone ? 50 : 54,
+                                      height: isPhone ? 52 : 56,
                                       child: OutlinedButton.icon(
                                         onPressed: () {
                                           Navigator.pushNamed(
@@ -198,17 +214,19 @@ class FrontPage extends StatelessWidget {
                                           );
                                         },
                                         style: OutlinedButton.styleFrom(
-                                          foregroundColor:
-                                              const Color(0xFF1F7A6C),
-                                          side: const BorderSide(
-                                            color: Color(0xFF1F7A6C),
+                                          foregroundColor: Colors.white,
+                                          side: BorderSide(
+                                            color: softGold.withValues(
+                                              alpha: 0.75,
+                                            ),
+                                            width: 1.2,
                                           ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                          ),
+                                          backgroundColor: Colors.white
+                                              .withValues(alpha: 0.07),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(16),
+                                            borderRadius: BorderRadius.circular(
+                                              18,
+                                            ),
                                           ),
                                         ),
                                         icon: const Icon(
@@ -217,27 +235,29 @@ class FrontPage extends StatelessWidget {
                                         ),
                                         label: const Text(
                                           'إنشاء حساب شركة',
-                                          textAlign: TextAlign.center,
                                           style: TextStyle(
                                             fontFamily: 'Cairo',
                                             fontSize: 15,
-                                            fontWeight: FontWeight.w700,
+                                            fontWeight: FontWeight.w800,
                                             height: 1.2,
                                           ),
                                         ),
                                       ),
                                     ),
-                                    SizedBox(height: isPhone ? 8 : 10),
+
+                                    SizedBox(height: isPhone ? 12 : 14),
+
                                     Text(
-                                      'يمكنك تسجيل الدخول للوصول إلى جميع خدمات التطبيق وإدارة العمليات اليومية من حسابك.',
-                                      textAlign: isPhone
-                                          ? TextAlign.center
-                                          : TextAlign.start,
+                                      'سجّل الدخول للوصول إلى خدمات التطبيق وإدارة العمليات اليومية من حسابك.',
+                                      textAlign: TextAlign.center,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                             fontSize: isPhone ? 11.5 : 12.5,
-                                            color: Colors.black54,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.62,
+                                            ),
                                             height: 1.6,
+                                            fontFamily: 'Cairo',
                                           ),
                                     ),
                                   ],
@@ -267,84 +287,77 @@ class _FrontPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logo = Container(
-      width: isPhone ? 66 : 76,
-      height: isPhone ? 66 : 76,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.70),
-        borderRadius: BorderRadius.circular(isPhone ? 18 : 20),
-      ),
-      child: Center(
-        child: Image.asset(
-          'assets/images/logo.png',
-          width: isPhone ? 80 : 54,
-          height: isPhone ? 70 : 54,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.local_gas_station_rounded,
-            size: isPhone ? 30 : 34,
-            color: const Color(0xFF1F7A6C),
+    return Column(
+      children: [
+        Container(
+          width: isPhone ? 78 : 92,
+          height: isPhone ? 78 : 92,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.24),
+                Colors.white.withValues(alpha: 0.08),
+              ],
+            ),
+            border: Border.all(
+              color: FrontPage.softGold.withValues(alpha: 0.65),
+              width: 1.3,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: FrontPage.gold.withValues(alpha: 0.22),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Image.asset(
+            'assets/images/logo.png',
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.local_gas_station_rounded,
+              color: FrontPage.gold,
+              size: 38,
+            ),
           ),
         ),
-      ),
-    );
-
-    final badge = Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isPhone ? 10 : 12,
-        vertical: isPhone ? 5 : 6,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1F7A6C).withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        'بوابة التطبيق',
-        style: theme.textTheme.labelMedium?.copyWith(
-          fontSize: isPhone ? 11 : 12,
-          color: const Color(0xFF0B4F4A),
-          fontFamily: 'Cairo', 
-          fontWeight: FontWeight.w800,
+        const SizedBox(height: 14),
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isPhone ? 13 : 15,
+            vertical: isPhone ? 6 : 7,
+          ),
+          decoration: BoxDecoration(
+            color: FrontPage.gold.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: FrontPage.softGold.withValues(alpha: 0.40),
+            ),
+          ),
+          child: Text(
+            'بوابة التطبيق',
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontSize: isPhone ? 11.5 : 12.5,
+              color: FrontPage.softGold,
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
-      ),
-    );
-
-    final title = Text(
-      'نظام متابعة طلبات الوقود',
-      textAlign: isPhone ? TextAlign.center : TextAlign.start,
-      style: theme.textTheme.headlineSmall?.copyWith(
-        fontSize: isPhone ? 18 : 30,
-        fontWeight: FontWeight.w900,
-        color: const Color(0xFF0F2F2B),
-        height: 1.15,
-      ),
-    );
-
-    if (isPhone) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Center(child: logo),
-          const SizedBox(height: 10),
-          Center(child: badge),
-          const SizedBox(height: 10),
-          title,
-        ],
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        logo,
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              badge,
-              const SizedBox(height: 10),
-              title,
-            ],
+        const SizedBox(height: 12),
+        Text(
+          'نظام متابعة طلبات الوقود',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontSize: isPhone ? 22 : 32,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+            height: 1.2,
+            fontFamily: 'Cairo',
           ),
         ),
       ],
@@ -354,29 +367,26 @@ class _FrontPageHeader extends StatelessWidget {
 
 class _FrontPageChip extends StatelessWidget {
   final String label;
-  final bool compact;
 
-  const _FrontPageChip({required this.label, required this.compact});
+  const _FrontPageChip({required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 12 : 14,
-        vertical: compact ? 8 : 9,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.56),
+        color: Colors.white.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.52)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontSize: compact ? 12.5 : 14,
-              color: const Color(0xFF164C44),
-              fontWeight: FontWeight.w700,
-            ),
+          fontSize: 12.5,
+          color: Colors.white.withValues(alpha: 0.86),
+          fontWeight: FontWeight.w700,
+          fontFamily: 'Cairo',
+        ),
       ),
     );
   }
@@ -400,29 +410,32 @@ class _FrontPageFeature extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      padding: EdgeInsets.all(compact ? 12 : 14),
+      padding: EdgeInsets.all(compact ? 13 : 15),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.48),
-        borderRadius: BorderRadius.circular(compact ? 16 : 18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.42)),
+        color: Colors.white.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(compact ? 18 : 20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: compact ? 38 : 44,
-            height: compact ? 38 : 44,
+            width: compact ? 40 : 46,
+            height: compact ? 40 : 46,
             decoration: BoxDecoration(
-              color: const Color(0xFF1F7A6C).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(compact ? 12 : 14),
+              color: FrontPage.gold.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(compact ? 13 : 15),
+              border: Border.all(
+                color: FrontPage.softGold.withValues(alpha: 0.28),
+              ),
             ),
             child: Icon(
               icon,
-              color: const Color(0xFF1F7A6C),
-              size: compact ? 20 : 24,
+              color: FrontPage.softGold,
+              size: compact ? 21 : 24,
             ),
           ),
-          SizedBox(width: compact ? 10 : 12),
+          SizedBox(width: compact ? 11 : 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,18 +443,20 @@ class _FrontPageFeature extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontSize: compact ? 16 : 18,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF113531),
+                    fontSize: compact ? 15.5 : 18,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    fontFamily: 'Cairo',
                   ),
                 ),
-                SizedBox(height: compact ? 3 : 4),
+                const SizedBox(height: 4),
                 Text(
                   description,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: compact ? 12.5 : 14,
-                    height: compact ? 1.55 : 1.65,
-                    color: const Color(0xFF4B5B58),
+                    height: 1.6,
+                    color: Colors.white.withValues(alpha: 0.68),
+                    fontFamily: 'Cairo',
                   ),
                 ),
               ],
@@ -462,31 +477,35 @@ class _FrontPageBackground extends StatelessWidget {
       children: [
         Container(
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF0B4F4A),
-                Color(0xFF1F7A6C),
-                Color(0xFF1E3A5F),
-              ],
+            gradient: RadialGradient(
+              center: Alignment.topRight,
+              radius: 1.25,
+              colors: [Color(0xFF145DA0), Color(0xFF0B2E55), Color(0xFF071A2F)],
             ),
           ),
         ),
         Positioned(
-          top: -60,
-          right: -40,
+          top: -90,
+          right: -70,
           child: _GlowCircle(
-            size: 220,
-            color: Colors.amber.withValues(alpha: 0.25),
+            size: 260,
+            color: FrontPage.gold.withValues(alpha: 0.24),
           ),
         ),
         Positioned(
-          bottom: -90,
-          left: -60,
+          bottom: -110,
+          left: -80,
           child: _GlowCircle(
-            size: 260,
-            color: Colors.tealAccent.withValues(alpha: 0.18),
+            size: 300,
+            color: FrontPage.royalBlue.withValues(alpha: 0.35),
+          ),
+        ),
+        Positioned(
+          top: 220,
+          left: -45,
+          child: _GlowCircle(
+            size: 150,
+            color: Colors.white.withValues(alpha: 0.08),
           ),
         ),
       ],
@@ -502,13 +521,17 @@ class _GlowCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-        boxShadow: [BoxShadow(color: color, blurRadius: 60, spreadRadius: 10)],
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+          boxShadow: [
+            BoxShadow(color: color, blurRadius: 90, spreadRadius: 25),
+          ],
+        ),
       ),
     );
   }
