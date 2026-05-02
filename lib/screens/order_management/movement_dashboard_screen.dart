@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,6 +33,8 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:order_tracker/widgets/web_dropzone.dart';
 
+
+enum MovementStatsPeriodType { day, month, year }
 class MovementDashboardScreen extends StatefulWidget {
   const MovementDashboardScreen({super.key});
 
@@ -107,6 +111,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   String? _busyOrderId;
   dynamic _dropzoneController;
   bool _dropActive = false;
+  Timer? _autoRefreshTimer;
 
   DateTime _monthlyStatsMonth = DateTime(
     DateTime.now().year,
@@ -130,6 +135,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
         (_) => DateTime.now(),
       ).asBroadcastStream();
 
+
+
+
+MovementStatsPeriodType _statsPeriodType = MovementStatsPeriodType.month;
+DateTime _statsSelectedDate = DateTime.now();
+
   bool get _movementUser =>
       context.read<AuthProvider>().user?.role == 'movement';
 
@@ -137,6 +148,27 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     final role = context.read<AuthProvider>().user?.role;
     return role == 'owner' || role == 'admin';
   }
+ bool _isInSelectedStatsPeriod(DateTime date) {
+  switch (_statsPeriodType) {
+    case MovementStatsPeriodType.day:
+      return date.year == _statsSelectedDate.year &&
+          date.month == _statsSelectedDate.month &&
+          date.day == _statsSelectedDate.day;
+
+    case MovementStatsPeriodType.month:
+      return date.year == _statsSelectedDate.year &&
+          date.month == _statsSelectedDate.month;
+
+    case MovementStatsPeriodType.year:
+      return date.year == _statsSelectedDate.year;
+  }
+}
+List<Order> get _monthlyOrders {
+  return _orders.where((order) {
+    final date = order.movementExpectedArrivalDate ?? order.arrivalDate;
+    return _isInSelectedStatsPeriod(date);
+  }).toList();
+}
 
   bool _canEditMovementOrder(Order order) {
     if (_ownerApprovalUser) return true;
@@ -165,14 +197,21 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return items;
   }
 
-  @override
+@override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+
+    _autoRefreshTimer = Timer.periodic(
+      const Duration(minutes: 10),
+      (_) => _autoRefreshDashboard(),
+    );
   }
 
-  @override
+@override
   void dispose() {
+    _autoRefreshTimer?.cancel();
+
     _supplierOrderNumber.dispose();
     _quantity.dispose();
     _notes.dispose();
@@ -182,67 +221,104 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     _arrivalTime.dispose();
     _historySearchController.dispose();
     _customerRequestsSearchController.dispose();
+
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
-    final suppliers = context.read<SupplierProvider>();
-    final customers = context.read<CustomerProvider>();
-    final drivers = context.read<DriverProvider>();
-    final statements = context.read<StatementProvider>();
+Future<void> _bootstrap() async {
+    try {
+      final suppliers = context.read<SupplierProvider>();
+      final customers = context.read<CustomerProvider>();
+      final drivers = context.read<DriverProvider>();
+      final statements = context.read<StatementProvider>();
 
-    await Future.wait(<Future<void>>[
-      suppliers.fetchSuppliers(filters: <String, dynamic>{'isActive': 'true'}),
-      customers.fetchCustomers(fetchAll: true),
-      statements.fetchStatement(silent: true),
-    ]);
-    final activeDrivers = await drivers.fetchActiveDrivers();
-    await _loadOrders(showLoader: false);
+      await Future.wait(<Future<void>>[
+        suppliers.fetchSuppliers(
+          filters: <String, dynamic>{'isActive': 'true'},
+        ),
+        customers.fetchCustomers(fetchAll: true),
+        statements.fetchStatement(silent: true),
+      ]).timeout(const Duration(seconds: 20));
 
-    if (!mounted) return;
-    setState(() {
-      _suppliers = List<Supplier>.from(suppliers.suppliers);
-      _customers = List<Customer>.from(customers.customers);
-      _drivers = activeDrivers.isNotEmpty
-          ? activeDrivers
-          : List<Driver>.from(drivers.drivers);
-      _booting = false;
-    });
+      final activeDrivers = await drivers.fetchActiveDrivers().timeout(
+        const Duration(seconds: 20),
+      );
 
-    _loadMonthlyMovementStats();
+      await _loadOrders(showLoader: false).timeout(const Duration(seconds: 20));
+
+      if (!mounted) return;
+
+      setState(() {
+        _suppliers = List<Supplier>.from(suppliers.suppliers);
+        _customers = List<Customer>.from(customers.customers);
+        _drivers = activeDrivers.isNotEmpty
+            ? activeDrivers
+            : List<Driver>.from(drivers.drivers);
+      });
+
+      _loadMonthlyMovementStats();
+    } catch (e) {
+      if (!mounted) return;
+      _snack('تعذر تحميل بيانات صفحة الحركة: $e', AppColors.errorRed);
+    } finally {
+      if (mounted) {
+        setState(() => _booting = false);
+      }
+    }
   }
+  Future<void> _autoRefreshDashboard() async {
+  if (!mounted) return;
 
-  Future<void> _loadOrders({bool showLoader = true}) async {
+  // لا تحدث أثناء الحفظ أو قراءة ملف أو إرسال بيانات
+  if (_submitting || _autofilling || _refreshing) return;
+
+  // تحديث البيانات فقط بدون لمس الحقول
+  await _loadOrders(showLoader: false);
+}
+
+Future<void> _loadOrders({bool showLoader = true}) async {
     if (showLoader && mounted) {
       setState(() => _refreshing = true);
     }
-    final provider = context.read<OrderProvider>();
-    final responses = await Future.wait<List<Order>>(<Future<List<Order>>>[
-      provider.fetchOrdersSnapshot(
-        filters: <String, dynamic>{
-          'entryChannel': 'movement',
-          'orderSource': 'مورد',
-        },
-      ),
-      provider.fetchOrdersSnapshot(
-        filters: <String, dynamic>{
-          'entryChannel': 'movement',
-          'orderSource': 'عميل',
-        },
-      ),
-    ]);
-    final orders = responses.first.toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final customerRequests = responses.last.toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    if (!mounted) return;
-    setState(() {
-      _orders = orders;
-      _customerRequests = customerRequests;
-      _refreshing = false;
-    });
 
-    _loadMonthlyMovementStats();
+    try {
+      final provider = context.read<OrderProvider>();
+      final responses = await Future.wait<List<Order>>(<Future<List<Order>>>[
+        provider.fetchOrdersSnapshot(
+          filters: <String, dynamic>{
+            'entryChannel': 'movement',
+            'orderSource': 'مورد',
+          },
+        ),
+        provider.fetchOrdersSnapshot(
+          filters: <String, dynamic>{
+            'entryChannel': 'movement',
+            'orderSource': 'عميل',
+          },
+        ),
+      ]).timeout(const Duration(seconds: 20));
+
+      final orders = responses.first.toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      final customerRequests = responses.last.toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      if (!mounted) return;
+      setState(() {
+        _orders = orders;
+        _customerRequests = customerRequests;
+      });
+
+      _loadMonthlyMovementStats();
+    } catch (e) {
+      if (!mounted) return;
+      _snack('تعذر تحميل طلبات الحركة: $e', AppColors.errorRed);
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
+    }
   }
 
   String _normalizeSearchText(String value) {
@@ -734,19 +810,123 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     }
   }
 
-  Future<void> _pickMonthlyStatsMonth() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _monthlyStatsMonth,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-      helpText: 'اختر أي يوم من الشهر المطلوب',
-    );
-    if (picked == null || !mounted) return;
+Future<void> _pickStatsPeriod() async {
+  MovementStatsPeriodType tempType = _statsPeriodType;
+  DateTime tempDate = _statsSelectedDate;
 
-    setState(() => _monthlyStatsMonth = _startOfMonth(picked));
-    await _loadMonthlyMovementStats(showErrorSnack: true);
-  }
+  final result = await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('اختيار فترة الإحصائيات'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<MovementStatsPeriodType>(
+                    value: tempType,
+                    decoration: const InputDecoration(
+                      labelText: 'نوع الفترة',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: MovementStatsPeriodType.day,
+                        child: Text('يوم محدد'),
+                      ),
+                      DropdownMenuItem(
+                        value: MovementStatsPeriodType.month,
+                        child: Text('شهر محدد'),
+                      ),
+                      DropdownMenuItem(
+                        value: MovementStatsPeriodType.year,
+                        child: Text('سنة محددة'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() => tempType = value);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.20),
+                      ),
+                    ),
+                    title: const Text('التاريخ المحدد'),
+                    subtitle: Text(
+                      tempType == MovementStatsPeriodType.day
+                          ? DateFormat('yyyy/MM/dd', 'ar').format(tempDate)
+                          : tempType == MovementStatsPeriodType.month
+                              ? DateFormat('MMMM yyyy', 'ar').format(tempDate)
+                              : DateFormat('yyyy', 'ar').format(tempDate),
+                    ),
+                    trailing: const Icon(Icons.calendar_month_rounded),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: dialogContext,
+                        initialDate: tempDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                        helpText: tempType == MovementStatsPeriodType.day
+                            ? 'اختر اليوم'
+                            : tempType == MovementStatsPeriodType.month
+                                ? 'اختر أي يوم من الشهر المطلوب'
+                                : 'اختر أي يوم من السنة المطلوبة',
+                      );
+
+                      if (picked == null) return;
+
+                      setDialogState(() {
+                        tempDate = picked;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('إلغاء'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext, {
+                    'type': tempType,
+                    'date': tempDate,
+                  });
+                },
+                child: const Text('تطبيق'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  if (result == null || !mounted) return;
+
+  setState(() {
+    _statsPeriodType = result['type'] as MovementStatsPeriodType;
+    _statsSelectedDate = result['date'] as DateTime;
+
+    _monthlyStatsMonth = DateTime(
+      _statsSelectedDate.year,
+      _statsSelectedDate.month,
+      1,
+    );
+  });
+
+  await _loadMonthlyMovementStats(showErrorSnack: true);
+}
 
   bool _isCustomerRelatedOrder(Order order) {
     final movementCustomerName = (order.movementCustomerName ?? '').trim();
@@ -1086,6 +1266,19 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       document.dispose();
     }
   }
+
+  String _statsPeriodLabel() {
+  switch (_statsPeriodType) {
+    case MovementStatsPeriodType.day:
+      return DateFormat('yyyy/MM/dd', 'ar').format(_statsSelectedDate);
+
+    case MovementStatsPeriodType.month:
+      return DateFormat('MMMM yyyy', 'ar').format(_statsSelectedDate);
+
+    case MovementStatsPeriodType.year:
+      return DateFormat('yyyy', 'ar').format(_statsSelectedDate);
+  }
+}
 
   Map<String, String?> _extractTimesFromText(String? text) {
     if (text == null || text.trim().isEmpty) {
@@ -1979,6 +2172,12 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     controller.dispose();
     return result;
   }
+  List<Order> get _monthlyCancelledOrders {
+  return _cancelledMovementOrders.where((order) {
+    final date = order.cancelledAt ?? order.updatedAt;
+    return _isInSelectedStatsPeriod(date);
+  }).toList();
+}
 
   Future<bool> _cancelMovementOrder(
     Order order, {
@@ -2098,24 +2297,31 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     return true;
   }
 
-  Future<void> _showCancelledOrdersDialog() async {
+Future<void> _showCancelledOrdersDialog() async {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final cancelledOrders = _cancelledMovementOrders;
+            final cancelledOrders = _monthlyCancelledOrders;
+
             return AlertDialog(
               insetPadding: const EdgeInsets.symmetric(
                 horizontal: 24,
                 vertical: 28,
               ),
-              title: Text('سجل الطلبات الملغية (${cancelledOrders.length})'),
+              title: Text(
+                'سجل الطلبات الملغية - ${_formatMonthLabel(_monthlyStatsMonth)} (${cancelledOrders.length})',
+              ),
               content: SizedBox(
                 width: 680,
                 height: 540,
                 child: cancelledOrders.isEmpty
-                    ? const Text('لا توجد طلبات ملغية حالياً.')
+                    ? Center(
+                        child: Text(
+                          'لا توجد طلبات ملغية في ${_formatMonthLabel(_monthlyStatsMonth)}.',
+                        ),
+                      )
                     : ListView.separated(
                         shrinkWrap: true,
                         itemCount: cancelledOrders.length,
@@ -2123,77 +2329,88 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                         itemBuilder: (context, index) {
                           final order = cancelledOrders[index];
                           final busy = _busyOrderId == order.id;
-                          final approvalColor = _cancellationApprovalColor(order);
+                          final approvalColor = _cancellationApprovalColor(
+                            order,
+                          );
+
                           return AppSurfaceCard(
                             padding: const EdgeInsets.all(16),
                             borderRadius: BorderRadius.circular(22),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  Expanded(
-                                    child: Text(
-                                      order.orderNumber,
-                                      style: const TextStyle(
-                                        color: AppColors.primaryDarkBlue,
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800,
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: Text(
+                                        order.orderNumber,
+                                        style: const TextStyle(
+                                          color: AppColors.primaryDarkBlue,
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: approvalColor.withValues(alpha: 0.10),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: approvalColor.withValues(alpha: 0.28),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: approvalColor.withValues(
+                                          alpha: 0.10,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                        border: Border.all(
+                                          color: approvalColor.withValues(
+                                            alpha: 0.28,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        _cancellationApprovalLabel(order),
+                                        style: TextStyle(
+                                          color: approvalColor,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 11,
+                                        ),
                                       ),
                                     ),
-                                    child: Text(
-                                      _cancellationApprovalLabel(order),
-                                      style: TextStyle(
-                                        color: approvalColor,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              _buildCancelledOrderDetails(order),
-                              const SizedBox(height: 10),
-                              if (_ownerApprovalUser &&
-                                  order.isCancellationPendingOwnerApproval)
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: FilledButton.icon(
-                                    onPressed: busy
-                                        ? null
-                                        : () async {
-                                            final success =
-                                                await _approveCancellation(order);
-                                            if (success && mounted) {
-                                              setDialogState(() {});
-                                            }
-                                          },
-                                    icon: busy
-                                        ? const SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.verified_rounded),
-                                    label: const Text('اعتماد الإلغاء'),
-                                  ),
+                                  ],
                                 ),
+                                const SizedBox(height: 12),
+                                _buildCancelledOrderDetails(order),
+                                const SizedBox(height: 10),
+                                if (_ownerApprovalUser &&
+                                    order.isCancellationPendingOwnerApproval)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: FilledButton.icon(
+                                      onPressed: busy
+                                          ? null
+                                          : () async {
+                                              final success =
+                                                  await _approveCancellation(
+                                                    order,
+                                                  );
+                                              if (success && mounted) {
+                                                setDialogState(() {});
+                                              }
+                                            },
+                                      icon: busy
+                                          ? const SizedBox(
+                                              width: 14,
+                                              height: 14,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(Icons.verified_rounded),
+                                      label: const Text('اعتماد الإلغاء'),
+                                    ),
+                                  ),
                               ],
                             ),
                           );
@@ -5428,7 +5645,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
         : 220;
   }
 
-  Widget _summaryMetricsSection({
+Widget _summaryMetricsSection({
     required bool isMobile,
     required bool isWideWeb,
     required int pendingCustomerRequests,
@@ -5438,18 +5655,42 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     required DateTime? statementExpiryDate,
   }) {
     final double spacing = isMobile ? 8 : (isWideWeb ? 10 : 12);
-    final monthLabel = _formatMonthLabel(_monthlyStatsMonth);
-    final completedMonthValue =
-        _loadingMonthlyStats ? '...' : _monthlyCompletedOrders.toString();
-    final mergedMonthValue =
-        _loadingMonthlyStats ? '...' : _monthlyMergedOrders.toString();
+
+final monthLabel = _formatMonthLabel(_monthlyStatsMonth);
+    final completedMonthValue = _loadingMonthlyStats
+        ? '...'
+        : _monthlyCompletedOrders.toString();
+
+    final mergedMonthValue = _loadingMonthlyStats
+        ? '...'
+        : _monthlyMergedOrders.toString();
+
+    // ✅ كل الحسابات من الشهر
+    final monthlyOrders = _monthlyOrders;
+
+    final total = monthlyOrders.length;
+
+    final monthlyPendingDriver = monthlyOrders
+        .where((o) => o.isMovementPendingDriver)
+        .length;
+
+    final monthlyPendingDispatch = monthlyOrders
+        .where((o) => o.isMovementPendingDispatch)
+        .length;
+
+    final monthlyDirected = monthlyOrders
+        .where((o) => o.isMovementDirected)
+        .length;
+
+    final cancelled = _monthlyCancelledOrders.length;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double cardWidth;
+
         if (isMobile) {
-          final double availableWidth =
-              constraints.maxWidth - (spacing * 2);
+          final double availableWidth = constraints.maxWidth - (spacing * 2);
+
           cardWidth = availableWidth > 0
               ? availableWidth / 3
               : constraints.maxWidth / 3;
@@ -5464,6 +5705,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             runSpacing: spacing,
             alignment: WrapAlignment.end,
             children: <Widget>[
+              // 👇 طلبات العملاء (زي ما هي)
               _summaryAction(
                 'طلبات العملاء',
                 pendingCustomerRequests,
@@ -5473,52 +5715,77 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 width: cardWidth,
                 dense: isMobile,
               ),
+
+              // 👇 إجمالي الشهر
               _summary(
                 'إجمالي',
-                _orders.length,
+                total,
                 AppColors.primaryBlue,
                 Icons.inventory_2_rounded,
                 width: cardWidth,
                 dense: isMobile,
               ),
+
+              // 👇 انتظار سائق
               _summary(
                 'بانتظار سائق',
-                pendingDriver,
+                monthlyPendingDriver,
                 AppColors.warningOrange,
                 Icons.drive_eta_rounded,
                 width: cardWidth,
                 dense: isMobile,
               ),
+
+              // 👇 انتظار التوجيه
               _summary(
                 'بانتظار التوجيه',
-                pendingDispatch,
+                monthlyPendingDispatch,
                 AppColors.infoBlue,
                 Icons.near_me_rounded,
                 width: cardWidth,
                 dense: isMobile,
               ),
+
+              // 👇 موجه
               _summary(
                 'موجه',
-                directed,
+                monthlyDirected,
                 AppColors.successGreen,
                 Icons.task_alt_rounded,
                 width: cardWidth,
                 dense: isMobile,
               ),
+
+              // 🔥 👇 الملغاة (الجديد)
+              _summaryAction(
+                'الملغاة',
+                cancelled,
+                AppColors.errorRed,
+                Icons.cancel_outlined,
+                _showCancelledOrdersDialog,
+                width: cardWidth,
+                dense: isMobile,
+              ),
+
+              // 👇 انتهاء البيان
               _statementCountdownSummary(
                 expiryDate: statementExpiryDate,
                 width: cardWidth,
                 dense: isMobile,
               ),
+
+              // 👇 اختيار الشهر
               _summaryTextAction(
-                'شهر الإحصائيات',
+                'فترة الإحصائيات',
                 monthLabel,
                 AppColors.primaryBlue,
                 Icons.calendar_month_rounded,
-                _pickMonthlyStatsMonth,
+                _pickStatsPeriod,
                 width: cardWidth,
                 dense: isMobile,
               ),
+
+              // 👇 المكتملة
               _summaryText(
                 'مكتملة (الشهر)',
                 completedMonthValue,
@@ -5527,6 +5794,8 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 width: cardWidth,
                 dense: isMobile,
               ),
+
+              // (اختياري)
               // _summaryText(
               //   'مدمجة (الشهر)',
               //   mergedMonthValue,
@@ -5542,7 +5811,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     );
   }
 
-  Widget _dashboardScrollHeader({
+Widget _dashboardScrollHeader({
     required bool compact,
     required bool isMobile,
     required bool isWideWeb,
@@ -5553,6 +5822,22 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
     required int pendingCustomerRequests,
     required DateTime? statementExpiryDate,
   }) {
+    final monthlyOrders = _monthlyOrders;
+
+    final monthlyPendingDriver = monthlyOrders
+        .where((o) => o.isMovementPendingDriver)
+        .length;
+
+    final monthlyPendingDispatch = monthlyOrders
+        .where((o) => o.isMovementPendingDispatch)
+        .length;
+
+    final monthlyDirected = monthlyOrders
+        .where((o) => o.isMovementDirected)
+        .length;
+
+    final monthlyCancelled = _monthlyCancelledOrders.length;
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
         compact ? 14 : (isWideWeb ? 16 : 18),
@@ -5563,11 +5848,11 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       child: Column(
         children: <Widget>[
           _heroSection(
-            total: _orders.length,
-            pendingDriver: pendingDriver,
-            pendingDispatch: pendingDispatch,
-            directed: directed,
-            cancelled: cancelled,
+            total: monthlyOrders.length,
+            pendingDriver: monthlyPendingDriver,
+            pendingDispatch: monthlyPendingDispatch,
+            directed: monthlyDirected,
+            cancelled: monthlyCancelled,
             compact: compact,
           ),
           SizedBox(height: isWideWeb ? 14 : 16),
@@ -5587,9 +5872,9 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             isMobile: isMobile,
             isWideWeb: isWideWeb,
             pendingCustomerRequests: pendingCustomerRequests,
-            pendingDriver: pendingDriver,
-            pendingDispatch: pendingDispatch,
-            directed: directed,
+            pendingDriver: monthlyPendingDriver,
+            pendingDispatch: monthlyPendingDispatch,
+            directed: monthlyDirected,
             statementExpiryDate: statementExpiryDate,
           ),
           SizedBox(height: isWideWeb ? 12 : 14),
@@ -5598,7 +5883,6 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
       ),
     );
   }
-
   Widget _exportReportButton({required bool isWideWeb}) {
     final buttonChild = _exportingReport
         ? SizedBox(

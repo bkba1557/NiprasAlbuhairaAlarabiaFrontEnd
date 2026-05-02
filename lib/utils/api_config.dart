@@ -4,7 +4,7 @@ import 'package:order_tracker/utils/web_env.dart';
 class ApiConfig {
   static const String productionBaseUrl =
       'https://system-albuhairaalarabia.cloud/api';
-  static const String devLanBaseUrl = 'http://192.168.8.235:6030/api';
+  static const String devLanBaseUrl = 'http://192.168.8.243:6030/api';
   static const String _envKey = 'API_BASE_URL';
   static String get baseUrl {
     const override = String.fromEnvironment(_envKey, defaultValue: '');

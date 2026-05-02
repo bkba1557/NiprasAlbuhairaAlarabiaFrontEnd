@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -15,6 +16,8 @@ import 'package:order_tracker/utils/constants.dart';
 import 'package:order_tracker/utils/platform_file_bytes.dart';
 import 'package:order_tracker/utils/tax_invoice_parser.dart';
 import 'package:provider/provider.dart';
+import 'package:order_tracker/models/models.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MovementArchiveOrdersScreen extends StatefulWidget {
   const MovementArchiveOrdersScreen({super.key});
@@ -78,6 +81,28 @@ class _MovementArchiveOrdersScreenState
     });
   }
 
+  Future<void> _openAttachment(Attachment attachment) async {
+    final rawUrl = attachment.path.trim();
+
+    if (rawUrl.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('رابط المرفق غير متوفر')));
+      return;
+    }
+
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) return;
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تعذر فتح المرفق')));
+    }
+  }
+
   Future<void> _logout() async {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
@@ -128,6 +153,18 @@ class _MovementArchiveOrdersScreenState
   String _safeText(String? value) {
     final trimmed = (value ?? '').trim();
     return trimmed.isEmpty ? '-' : trimmed;
+  }
+
+  String _fileSizeText(PlatformFile file) {
+    final size = file.size;
+    if (size <= 0) return '';
+    if (size >= 1024 * 1024) {
+      return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    if (size >= 1024) {
+      return '${(size / 1024).toStringAsFixed(1)} KB';
+    }
+    return '$size B';
   }
 
   String _customerDisplayName(Order order) {
@@ -199,11 +236,15 @@ class _MovementArchiveOrdersScreenState
     final invoiceVatController = TextEditingController();
     final invoiceTotalController = TextEditingController();
     final vatRate = _vatRateForOrder(order);
+    final driverActualQuantity = order.actualLoadedLiters;
+    final hasDriverActualQuantity =
+        driverActualQuantity != null && driverActualQuantity > 0;
+    final existingOrderAttachments = List<Attachment>.from(order.attachments);
     var taxInvoiceFiles = <PlatformFile>[];
     var fuelReceiptFiles = <PlatformFile>[];
     var actualQuantityStatementFiles = <PlatformFile>[];
     var addAllIncludedVat = true;
-    var calculateUsingActualQuantity = false;
+    var calculateUsingActualQuantity = hasDriverActualQuantity;
     var saving = false;
     TaxInvoiceData? parsedTaxInvoice;
     double? actualSupplyQuantity;
@@ -239,6 +280,10 @@ class _MovementArchiveOrdersScreenState
       if (customerVatController.text.trim().isEmpty) {
         customerVatController.text = (order.customer?.taxNumber ?? '').trim();
       }
+    }
+
+    if (hasDriverActualQuantity) {
+      actualSupplyQuantityController.text = driverActualQuantity.toString();
     }
 
     void fillInvoiceTotalsFromCalculationIfEmpty() {
@@ -417,11 +462,14 @@ class _MovementArchiveOrdersScreenState
               ? (derivedSubtotal + derivedVat)
               : null);
 
-      final usedQuantity =
-          (parsedTaxInvoice?.quantity != null &&
-              parsedTaxInvoice!.quantity! > 0)
-          ? parsedTaxInvoice!.quantity!
-          : _orderQuantity(order);
+      final usedQuantity = calculateUsingActualQuantity
+          ? (_parseAmount(actualSupplyQuantityController.text) ??
+              driverActualQuantity ??
+              0)
+          : ((parsedTaxInvoice?.quantity != null &&
+                  parsedTaxInvoice!.quantity! > 0)
+              ? parsedTaxInvoice!.quantity!
+              : _orderQuantity(order));
 
       final derivedLiterPrice =
           (derivedSubtotal != null && usedQuantity > 0 && derivedSubtotal > 0)
@@ -458,8 +506,12 @@ class _MovementArchiveOrdersScreenState
             taxInvoiceFiles: taxInvoiceFiles,
             fuelReceiptFiles: fuelReceiptFiles,
             actualQuantityStatementFiles: actualQuantityStatementFiles,
-            actualSupplyQuantity: null,
-            calculationQuantitySource: 'order',
+            actualSupplyQuantity: calculateUsingActualQuantity
+                ? _parseAmount(actualSupplyQuantityController.text)
+                : null,
+            calculationQuantitySource: calculateUsingActualQuantity
+                ? 'actual'
+                : 'order',
             literPrice: derivedLiterPrice,
             saleSubtotal: derivedSubtotal,
             saleVatAmount: derivedVat,
@@ -563,136 +615,353 @@ class _MovementArchiveOrdersScreenState
       );
     }
 
-    await showDialog<void>(
+   await showDialog<void>(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
       builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return WillPopScope(
-              onWillPop: () async => !saving,
-              child: AlertDialog(
-              title: Text('إنهاء أرشفة ${order.orderNumber}'),
-              content: SizedBox(
-                width: 620,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      _uploadField(
-                        title: 'الفاتورة الضريبية',
-                        files: taxInvoiceFiles,
-                        onPick: () async {
-                          await _pickFiles(
-                            onPicked: (files) =>
-                                setDialogState(() => taxInvoiceFiles = files),
-                          );
-                          if (!mounted) return;
-                          await autofillFromTaxInvoice(setDialogState);
-                        },
-                      ),
-                      if (taxInvoiceFiles.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: 10),
-                        _invoiceDataCard(
-                          invoiceNumberController: invoiceNumberController,
-                          invoiceDateController: invoiceDateController,
-                          supplierNameController: supplierNameController,
-                          supplierVatController: supplierVatController,
-                          supplierAddressController: supplierAddressController,
-                          supplierPostalController: supplierPostalController,
-                          supplierBuildingController:
-                              supplierBuildingController,
-                          supplierCommercialController:
-                              supplierCommercialController,
-                          customerNameController: customerNameController,
-                          customerVatController: customerVatController,
-                          customerAddressController: customerAddressController,
-                          customerPostalController: customerPostalController,
-                          customerBuildingController:
-                              customerBuildingController,
-                          customerCommercialController:
-                              customerCommercialController,
-                          referenceNumberController: referenceNumberController,
-                          transportOrderNumberController:
-                              transportOrderNumberController,
-                          itemDescriptionController: itemDescriptionController,
-                          fromLocationController: fromLocationController,
-                          toLocationController: toLocationController,
-                          invoiceSubtotalController: invoiceSubtotalController,
-                          invoiceVatController: invoiceVatController,
-                          invoiceTotalController: invoiceTotalController,
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return WillPopScope(
+                onWillPop: () async => !saving,
+                child: Dialog(
+                  backgroundColor: Colors.transparent,
+                  insetPadding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 24,
+                  ),
+                  child: Container(
+                    width: 720,
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.90,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 35,
+                          offset: const Offset(0, 18),
                         ),
                       ],
-                      const SizedBox(height: 12),
-                      _uploadField(
-                        title: 'سند استلام المحروقات',
-                        files: fuelReceiptFiles,
-                        onPick: () async {
-                          await _pickFiles(
-                            onPicked: (files) =>
-                                setDialogState(() => fuelReceiptFiles = files),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _uploadField(
-                        title: 'سند الكمية الفعلية',
-                        files: actualQuantityStatementFiles,
-                        onPick: () async {
-                          await _pickFiles(
-                            onPicked: (files) => setDialogState(
-                              () => actualQuantityStatementFiles = files,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                          decoration: const BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(28),
                             ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: notesController,
-                        minLines: 3,
-                        maxLines: 5,
-                        decoration: const InputDecoration(
-                          labelText: 'ملاحظات',
-                          border: OutlineInputBorder(),
-                          alignLabelWithHint: true,
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              const Icon(
+                                Icons.archive_rounded,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'إنهاء أرشفة ${order.orderNumber}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: saving
+                                    ? null
+                                    : () => Navigator.of(dialogContext).pop(),
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        Flexible(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                if (hasDriverActualQuantity ||
+                                    order.driverLoadingSubmittedAt != null ||
+                                    existingOrderAttachments
+                                        .isNotEmpty) ...<Widget>[
+                                  _existingOrderDataCard(
+                                    order: order,
+                                    attachments: existingOrderAttachments,
+                                  ),
+                                  const SizedBox(height: 14),
+                                ],
+                                _uploadField(
+                                  title: 'الفاتورة الضريبية',
+                                  files: taxInvoiceFiles,
+                                  onPick: () async {
+                                    await _pickFiles(
+                                      onPicked: (files) => setDialogState(
+                                        () => taxInvoiceFiles = files,
+                                      ),
+                                    );
+                                    if (!mounted) return;
+                                    await autofillFromTaxInvoice(
+                                      setDialogState,
+                                    );
+                                  },
+                                ),
+                                if (taxInvoiceFiles.isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 12),
+                                  _invoiceDataCard(
+                                    invoiceNumberController:
+                                        invoiceNumberController,
+                                    invoiceDateController:
+                                        invoiceDateController,
+                                    supplierNameController:
+                                        supplierNameController,
+                                    supplierVatController:
+                                        supplierVatController,
+                                    supplierAddressController:
+                                        supplierAddressController,
+                                    supplierPostalController:
+                                        supplierPostalController,
+                                    supplierBuildingController:
+                                        supplierBuildingController,
+                                    supplierCommercialController:
+                                        supplierCommercialController,
+                                    customerNameController:
+                                        customerNameController,
+                                    customerVatController:
+                                        customerVatController,
+                                    customerAddressController:
+                                        customerAddressController,
+                                    customerPostalController:
+                                        customerPostalController,
+                                    customerBuildingController:
+                                        customerBuildingController,
+                                    customerCommercialController:
+                                        customerCommercialController,
+                                    referenceNumberController:
+                                        referenceNumberController,
+                                    transportOrderNumberController:
+                                        transportOrderNumberController,
+                                    itemDescriptionController:
+                                        itemDescriptionController,
+                                    fromLocationController:
+                                        fromLocationController,
+                                    toLocationController: toLocationController,
+                                    invoiceSubtotalController:
+                                        invoiceSubtotalController,
+                                    invoiceVatController: invoiceVatController,
+                                    invoiceTotalController:
+                                        invoiceTotalController,
+                                  ),
+                                ],
+                                const SizedBox(height: 14),
+                                _uploadField(
+                                  title: 'سند استلام المحروقات',
+                                  files: fuelReceiptFiles,
+                                  onPick: () async {
+                                    await _pickFiles(
+                                      onPicked: (files) => setDialogState(
+                                        () => fuelReceiptFiles = files,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 14),
+                                _uploadField(
+                                  title: 'سند الكمية الفعلية',
+                                  files: actualQuantityStatementFiles,
+                                  onPick: () async {
+                                    await _pickFiles(
+                                      onPicked: (files) => setDialogState(
+                                        () => actualQuantityStatementFiles =
+                                            files,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 14),
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryBlue.withValues(
+                                      alpha: 0.04,
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: AppColors.primaryBlue.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                    ),
+                                  ),
+                                  child: SwitchListTile.adaptive(
+                                    contentPadding: EdgeInsets.zero,
+                                    value: calculateUsingActualQuantity,
+                                    onChanged: saving
+                                        ? null
+                                        : (value) {
+                                            setDialogState(() {
+                                              calculateUsingActualQuantity =
+                                                  value;
+                                              recalculateSaleValue();
+                                            });
+                                          },
+                                    title: const Text(
+                                      'اعتماد الكمية الفعلية المدخلة من السائق',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.primaryDarkBlue,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      calculateUsingActualQuantity
+                                          ? 'سيتم احتساب الأرشفة باستخدام الكمية الفعلية بدل كمية الطلب.'
+                                          : 'سيتم الاحتساب باستخدام كمية الطلب الأساسية.',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: actualSupplyQuantityController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  enabled:
+                                      calculateUsingActualQuantity && !saving,
+                                  onChanged: (_) =>
+                                      setDialogState(recalculateSaleValue),
+                                  decoration: InputDecoration(
+                                    labelText: 'الكمية الفعلية المعتمدة',
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: literPriceController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  onChanged: (_) =>
+                                      setDialogState(recalculateSaleValue),
+                                  decoration: InputDecoration(
+                                    labelText: 'سعر اللتر قبل الضريبة',
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                if (calculationQuantity > 0 &&
+                                    literPrice != null)
+                                  _pricingSummary(
+                                    quantity: _quantityTextFor(
+                                      order,
+                                      calculationQuantity,
+                                    ),
+                                    quantitySource: calculateUsingActualQuantity
+                                        ? 'الكمية الفعلية'
+                                        : 'كمية الطلب',
+                                    vatRate: vatRate,
+                                    subtotal: subtotal,
+                                    vatAmount: vatAmount,
+                                    totalAfterVat: totalAfterVat,
+                                  ),
+                                if (calculationQuantity > 0 &&
+                                    literPrice != null)
+                                  const SizedBox(height: 12),
+                                TextField(
+                                  controller: notesController,
+                                  minLines: 3,
+                                  maxLines: 5,
+                                  decoration: InputDecoration(
+                                    labelText: 'ملاحظات',
+                                    alignLabelWithHint: true,
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border(
+                              top: BorderSide(
+                                color: AppColors.primaryBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                              ),
+                            ),
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(28),
+                            ),
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              FilledButton.icon(
+                                onPressed: saving
+                                    ? null
+                                    : () =>
+                                          submit(setDialogState, dialogContext),
+                                icon: saving
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.check_circle_rounded),
+                                label: const Text('حفظ وإنهاء'),
+                              ),
+                              const SizedBox(width: 12),
+                              TextButton(
+                                onPressed: saving
+                                    ? null
+                                    : () => Navigator.of(dialogContext).pop(),
+                                child: const Text('إلغاء'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: saving
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('إلغاء'),
-                ),
-                FilledButton.icon(
-                  onPressed: saving
-                      ? null
-                      : () => submit(setDialogState, dialogContext),
-                  icon: saving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.task_alt_rounded),
-                  label: const Text('حفظ وإنهاء'),
-                ),
-              ],
-            ),
-          );
-          },
+              );
+            },
+          ),
         );
       },
     );
-
     notesController.dispose();
     actualSupplyQuantityController.dispose();
     literPriceController.dispose();
@@ -921,23 +1190,136 @@ class _MovementArchiveOrdersScreenState
             )
           else
             ...files.map(
-              (file) => Padding(
-                padding: const EdgeInsets.only(top: 6),
+              (file) {
+                final sizeText = _fileSizeText(file);
+                return Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    children: <Widget>[
+                      const Icon(Icons.insert_drive_file_outlined, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              file.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (sizeText.isNotEmpty)
+                              Text(
+                                sizeText,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.mediumGray,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _existingOrderDataCard({
+    required Order order,
+    required List<Attachment> attachments,
+  }) {
+    final driverName = (order.driverName ?? '').trim().isNotEmpty
+        ? order.driverName!.trim()
+        : 'غير محدد';
+    final stationName = (order.loadingStationName ?? '').trim().isNotEmpty
+        ? order.loadingStationName!.trim()
+        : 'غير محدد';
+    final actualQuantity = order.actualLoadedLiters;
+    final submittedAt = order.driverLoadingSubmittedAt;
+    final submittedAtText = submittedAt == null
+        ? '-'
+        : DateFormat('yyyy/MM/dd HH:mm').format(submittedAt);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: AppColors.secondaryTeal.withValues(alpha: 0.05),
+        border: Border.all(
+          color: AppColors.secondaryTeal.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Row(
+            children: <Widget>[
+              Icon(Icons.local_shipping_rounded, color: AppColors.secondaryTeal),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'بيانات السائق الحالية',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryDarkBlue,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _detailChip('السائق', driverName),
+              _detailChip(
+                'الكمية الفعلية',
+                actualQuantity == null ? '-' : _quantityTextFor(order, actualQuantity),
+              ),
+              _detailChip('محطة التحميل', stationName),
+              _detailChip('وقت الإدخال', submittedAtText),
+            ],
+          ),
+          if (attachments.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            const Text(
+              'مرفقات الطلب الحالية',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryDarkBlue,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ...attachments.map(
+              (attachment) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   children: <Widget>[
-                    const Icon(Icons.insert_drive_file_outlined, size: 18),
+                    const Icon(Icons.attach_file_rounded, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        file.name,
+                        attachment.filename,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _openAttachment(attachment),
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: const Text('تحميل'),
                     ),
                   ],
                 ),
               ),
             ),
+          ],
         ],
       ),
     );
@@ -1492,6 +1874,14 @@ class _MovementArchiveOrdersScreenState
                 'الكمية',
                 '${order.quantity ?? 0} ${order.unit ?? ''}'.trim(),
               ),
+              if (order.actualLoadedLiters != null &&
+                  order.actualLoadedLiters! > 0)
+                _detailChip(
+                  'الكمية الفعلية',
+                  _quantityTextFor(order, order.actualLoadedLiters!),
+                ),
+              if ((order.loadingStationName ?? '').trim().isNotEmpty)
+                _detailChip('محطة التحميل', order.loadingStationName!),
               _detailChip(
                 'موعد التحميل',
                 _formatSchedule(order.loadingDate, order.loadingTime),

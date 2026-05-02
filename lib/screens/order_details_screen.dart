@@ -6116,6 +6116,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final calculationSourceLabel = calculationSource == 'actual'
         ? 'الكمية الفعلية'
         : 'كمية الطلب';
+    final completedAt = DateTime.tryParse(
+      (archive['completedAt'] ?? '').toString(),
+    );
 
     final taxInvoiceDataRaw = archive['taxInvoiceData'];
     final taxInvoiceData = taxInvoiceDataRaw is Map
@@ -6163,6 +6166,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
     final detailsChildren = <Widget>[
       _buildUiDetailRow('حالة الأرشفة', 'مكتملة'),
+      if ((archive['completedByName'] ?? '').toString().trim().isNotEmpty)
+        _buildUiDetailRow(
+          'تمت الأرشفة بواسطة',
+          textOrDash(archive['completedByName']),
+        ),
+      if (completedAt != null)
+        _buildUiDetailRow(
+          'تاريخ إنهاء الأرشفة',
+          DateFormat('yyyy/MM/dd HH:mm').format(completedAt),
+        ),
       _buildUiDetailRow('مصدر الكمية', calculationSourceLabel),
       if (archive['actualSupplyQuantity'] != null)
         _buildUiDetailRow(
@@ -6466,6 +6479,48 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildDriverLoadingSections(Order order) {
+    final hasLoadingData =
+        (order.actualFuelType ?? '').trim().isNotEmpty ||
+        (order.loadingStationName ?? '').trim().isNotEmpty ||
+        (order.driverLoadingNotes ?? '').trim().isNotEmpty ||
+        order.driverLoadingSubmittedAt != null ||
+        (order.actualLoadedLiters != null && order.actualLoadedLiters! > 0);
+    if (!hasLoadingData) return const <Widget>[];
+
+    final driverName = _getDriverName(order);
+
+    return <Widget>[
+      _buildInfoSection(
+        title: 'بيانات التعبئة الفعلية',
+        icon: Icons.local_shipping_rounded,
+        color: AppColors.warningOrange,
+        children: <Widget>[
+          if (driverName != null && driverName.trim().isNotEmpty)
+            _buildUiDetailRow('أدخلها السائق', driverName),
+          if ((order.actualFuelType ?? '').trim().isNotEmpty)
+            _buildUiDetailRow('الوقود الفعلي', order.actualFuelType!),
+          if (order.actualLoadedLiters != null && order.actualLoadedLiters! > 0)
+            _buildUiDetailRow(
+              'الكمية الفعلية',
+              '${order.actualLoadedLiters!.toStringAsFixed(order.actualLoadedLiters == order.actualLoadedLiters!.roundToDouble() ? 0 : 2)} ${order.unit ?? 'لتر'}',
+            ),
+          if ((order.loadingStationName ?? '').trim().isNotEmpty)
+            _buildUiDetailRow('محطة التحميل', order.loadingStationName!),
+          if (order.driverLoadingSubmittedAt != null)
+            _buildUiDetailRow(
+              'وقت الإدخال',
+              DateFormat(
+                'yyyy/MM/dd HH:mm',
+              ).format(order.driverLoadingSubmittedAt!),
+            ),
+          if ((order.driverLoadingNotes ?? '').trim().isNotEmpty)
+            _buildUiDetailRow('ملاحظات السائق', order.driverLoadingNotes!),
+        ],
+      ),
+    ];
   }
 
   void _showLimitedEditDialog() {
@@ -7149,6 +7204,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final String requestTypeLabel = order.orderSource == 'مدمج'
         ? 'نوع طلب العميل'
         : 'نوع العملية';
+    final loadingSections = _buildDriverLoadingSections(order);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -7443,6 +7499,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
           const SizedBox(height: 16),
 
+          ...loadingSections,
+          if (loadingSections.isNotEmpty) const SizedBox(height: 16),
           ..._buildMovementArchiveSections(order, money),
 
           // المرفقات

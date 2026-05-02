@@ -426,11 +426,6 @@ Future<void> _submitCollection() async {
     return;
   }
 
-  if (bankAmount > 0 && _selectedBank == null) {
-    setState(() => _error = 'اختر الحساب البنكي للتحويل');
-    return;
-  }
-
   if (bankAmount > 0 && _collectionReferenceController.text.trim().isEmpty) {
    setState(
      () => _error = 'ادخل اسم المحول / المرجع للتحويل',
