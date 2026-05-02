@@ -4,2208 +4,1564 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام نبراس لإدارة وتتبع الطلبات | شركة البحيرة العربية</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <title>منصة إدارة النقل الذكية | شركة البحيرة العربية</title>
     <meta name="description"
-        content="نظام نبراس من شركة البحيرة العربية لإدارة وتتبع طلبات الوقود، الإشراف على العمليات، وتحسين كفاءة التوزيع في الوقت الحقيقي.">
-
+        content="منصة نبراس لإدارة الطلبات والمركبات والمحطات والفواتير والتتبع المباشر لعمليات النقل.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Hind:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;600;700&family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700;800;900&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --bg: #020918;
+            --bg-2: #06163a;
+            --panel: rgba(8, 20, 56, 0.72);
+            --panel-strong: rgba(10, 24, 66, 0.92);
+            --panel-soft: rgba(255, 255, 255, 0.045);
+            --line: rgba(116, 166, 255, 0.44);
+            --line-soft: rgba(116, 166, 255, 0.2);
+            --cyan: #27e7ff;
+            --blue: #2878ff;
+            --blue-2: #7aa7ff;
+            --purple: #8f5cff;
+            --text: #f5f8ff;
+            --muted: #aebbe0;
+            --soft: #7381a8;
+            --green: #42e8a6;
+            --gold: #ffd173;
+            --radius: 18px;
+            --shadow: 0 22px 80px rgba(0, 0, 0, 0.42);
+        }
+
         * {
-            margin: 0;
-            padding: 0;
             box-sizing: border-box;
         }
 
-        :root {
-            --primary-blue: #1a237e;
-            --dark-blue: #0d1452;
-            --light-blue: #2196f3;
-            --accent-blue: #2979ff;
-            --success-green: #4CAF50;
-            --warning-orange: #FF9800;
-            --danger-red: #F44336;
-            --text-light: #ffffff;
-            --text-gray: #e0e0e0;
-            --text-dark: #0d1452;
-            --shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-            --shadow-hover: 0 10px 40px rgba(0, 0, 0, 0.3);
+        html {
+            scroll-behavior: smooth;
         }
 
         body {
-            font-family: 'Cairo', sans-serif;
-            background: linear-gradient(135deg, var(--dark-blue) 0%, var(--primary-blue) 100%);
-            color: var(--text-light);
+            margin: 0;
             min-height: 100vh;
-            overflow-x: hidden;
-            direction: rtl;
-            line-height: 1.6;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 15px;
-        }
-
-        /* الشريط العلوي */
-        .navbar {
-            background: linear-gradient(135deg, rgba(13, 20, 82, 0.98) 0%, rgba(26, 35, 126, 0.75) 100%);
-            padding: 1rem 0;
-            position: fixed;
-            width: 100%;
-            top: 0;
-            z-index: 1000;
-            backdrop-filter: blur(15px);
-            box-shadow: var(--shadow);
-            border-bottom: 2px solid var(--accent-blue);
-        }
-
-        .nav-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-decoration: none;
-        }
-
-        .logo-image {
-            width: 42px;
-            height: 42px;
-            border-radius: 12px;
-            object-fit: cover;
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 8px 18px rgba(15, 30, 70, 0.2);
-        }
-
-        .logo-icon {
-            font-size: 1.8rem;
-            color: var(--accent-blue);
-            animation: pulse 2s infinite;
-        }
-
-        .logo-text {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .logo-main {
-            text-align: center;
-            font-size: 1.8rem;
-            font-weight: 900;
-            color: var(--heading);
-            line-height: 1.2;
-        }
-
-        .logo-sub {
-            text-align: center;
-            font-size: 1.0rem;
-            font-weight: 500;
-            color: #bbdefb;
-            margin-top: 3px;
-        }
-
-        /* قسم البطل */
-        .hero {
-            padding: 150px 0 80px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .hero-bg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0.1;
-            z-index: -1;
-            background-image: radial-gradient(circle at 10% 20%, var(--light-blue) 0%, transparent 25%),
-                radial-gradient(circle at 90% 80%, var(--accent-blue) 0%, transparent 25%),
-                radial-gradient(circle at 50% 50%, #64b5f6 0%, transparent 30%);
-            animation: rotateBg 20s infinite linear;
-        }
-
-        .hero h1 {
-            font-size: 2.2rem;
-            font-weight: 800;
-            margin-bottom: 1.2rem;
-            line-height: 1.3;
-            animation: fadeInUp 1s ease-out;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            color: #e3f2fd;
-        }
-
-        .hero-subtitle {
-            font-size: 1.1rem;
-            font-weight: 400;
-            max-width: 800px;
-            margin: 0 auto 2rem;
-            line-height: 1.7;
-            color: #bbdefb;
-            animation: fadeInUp 1s ease-out 0.2s both;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        /* الأقسام */
-        .section {
-            padding: 70px 0;
-            position: relative;
-        }
-
-        .section-alt {
-            background: rgba(0, 0, 0, 0.1);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-       .section-title {
-    text-align: center;
-    font-size: 1.8rem;
-    font-weight: 800;
-    margin: 0 auto 2.5rem auto; /* ⬅️ التوسيط الحقيقي */
-    position: relative;
-    display: block; /* ⬅️ مهم */
-    color: #e3f2fd;
-    padding-bottom: 10px;
-}
-
-
-        .section-title:after {
-            content: '';
-            position: absolute;
-            width: 100px;
-            height: 4px;
-            background: linear-gradient(to right, var(--accent-blue), var(--light-blue));
-            bottom: -5px;
-            left: 50%;
-            transform: translateX(-50%);
-            border-radius: 2px;
-            animation: widthPulse 3s infinite;
-        }
-
-        /* البطاقات */
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 25px;
-            margin-top: 30px;
-        }
-
-        .feature-card {
-            background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
-            border-radius: 15px;
-            padding: 25px;
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.4s ease;
-            position: relative;
-            overflow: hidden;
-            box-shadow: var(--shadow);
-        }
-
-        .feature-card:hover {
-            transform: translateY(-8px);
-            box-shadow: var(--shadow-hover);
-            border-color: var(--accent-blue);
-            background: linear-gradient(145deg, rgba(41, 121, 255, 0.12), rgba(33, 150, 243, 0.08));
-        }
-
-        .feature-card:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 5px;
-            height: 100%;
-            background: linear-gradient(to bottom, var(--accent-blue), var(--light-blue));
-        }
-
-        .card-icon {
-            font-size: 2rem;
-            margin-bottom: 15px;
-            color: var(--accent-blue);
-            text-align: center;
-            animation: float 6s infinite ease-in-out;
-        }
-
-        .card-title {
-            font-size: 1.3rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: #bbdefb;
-            text-align: center;
-        }
-
-        .card-text {
-            font-weight: 400;
-            color: #e0e0e0;
-            line-height: 1.7;
-            font-size: 0.75rem;
-            text-align: justify;
-            margin-bottom: 15px;
-        }
-
-        .card-stats {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .stat-item {
-            text-align: center;
-        }
-
-        .stat-number {
-            font-size: 1.6rem;
-            font-weight: 800;
-            color: var(--accent-blue);
-            display: block;
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: #bbdefb;
-            margin-top: 3px;
-        }
-
-        /* زر الدخول */
-        .login-btn-container {
-            position: fixed;
-            bottom: 30px;
-            left: 30px;
-            z-index: 1000;
-        }
-
-        .login-btn {
-            background: linear-gradient(135deg, var(--accent-blue), var(--light-blue));
-            color: white;
-            border: none;
-            padding: 16px 32px;
-            border-radius: 50px;
-            font-size: 1.1rem;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 8px 25px rgba(33, 150, 243, 0.4);
-            transition: all 0.3s ease;
-            animation: pulse 2s infinite;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .login-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 12px 30px rgba(33, 150, 243, 0.6);
-        }
-
-        .login-btn i {
-            font-size: 1.2rem;
-        }
-
-        /* الأنيميشن */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.03);
-            }
-        }
-
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0);
-            }
-
-            50% {
-                transform: translateY(-8px);
-            }
-        }
-
-        @keyframes moveRight {
-            0% {
-                transform: translateX(0);
-            }
-
-            100% {
-                transform: translateX(15px);
-            }
-        }
-
-        @keyframes rotateBg {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        @keyframes widthPulse {
-
-            0%,
-            100% {
-                width: 100px;
-            }
-
-            50% {
-                width: 120px;
-            }
-        }
-
-        /* التتبع الحي */
-        .live-tracking {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 20px;
-            padding: 35px;
-            margin-top: 30px;
-            border: 2px solid rgba(41, 121, 255, 0.3);
-            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.1);
-        }
-
-        .tracking-map {
-            height: 300px;
-            background: rgba(13, 20, 82, 0.7);
-            border-radius: 15px;
-            margin-top: 20px;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 2px solid var(--accent-blue);
-            overflow: hidden;
-            background-image:
-                linear-gradient(45deg, rgba(0, 0, 0, 0.1) 25%, transparent 25%),
-                linear-gradient(-45deg, rgba(0, 0, 0, 0.1) 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, rgba(0, 0, 0, 0.1) 75%),
-                linear-gradient(-45deg, transparent 75%, rgba(0, 0, 0, 0.1) 75%);
-            background-size: 30px 30px;
-        }
-
-        .vehicle {
-            position: absolute;
-            animation: float 4s infinite ease-in-out;
-            filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.2));
-        }
-
-        .moving-vehicle {
-            animation: moveRight 4s infinite alternate ease-in-out;
-        }
-
-        /* محطات الوقود */
-        .stations-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 25px;
-            margin-top: 30px;
-        }
-
-        .station-card {
-            background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.06));
-            border-radius: 15px;
-            padding: 22px;
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.4s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .station-card:hover {
-            transform: translateY(-6px);
-            box-shadow: var(--shadow-hover);
-            border-color: var(--accent-blue);
-        }
-
-        .station-card:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(to right, var(--accent-blue), var(--light-blue));
-        }
-
-        .station-header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .station-icon {
-            font-size: 2rem;
-            color: var(--accent-blue);
-        }
-
-        .station-info h4 {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #bbdefb;
-            margin-bottom: 5px;
-        }
-
-        .station-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-top: 15px;
-        }
-
-        .stat-box {
-            background: rgba(0, 0, 0, 0.15);
-            padding: 12px;
-            border-radius: 10px;
-            text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .stat-value {
-            font-size: 1.4rem;
-            font-weight: 800;
-            color: var(--accent-blue);
-            display: block;
-        }
-
-        .stat-name {
-            font-size: 0.8rem;
-            color: #bbdefb;
-            margin-top: 3px;
-        }
-
-        /* الأنظمة */
-        .systems-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 15px;
-            margin-top: 30px;
-        }
-
-        .system-item {
-            background: rgba(41, 121, 255, 0.12);
-            padding: 20px 12px;
-            border-radius: 12px;
-            text-align: center;
-            border: 1px solid rgba(41, 121, 255, 0.25);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .system-item:hover {
-            background: rgba(41, 121, 255, 0.2);
-            transform: translateY(-5px);
-            border-color: var(--accent-blue);
-        }
-
-        .system-item:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 100%;
-            height: 3px;
-            background: linear-gradient(to left, var(--accent-blue), var(--light-blue));
-        }
-
-        .system-icon {
-            font-size: 1.8rem;
-            color: var(--accent-blue);
-            margin-bottom: 10px;
-            display: block;
-        }
-
-        .system-name {
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: #e3f2fd;
-        }
-
-        /* شركات النقل */
-        .companies-section {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 20px;
-            padding: 35px;
-            margin-top: 30px;
-        }
-
-        .companies-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 25px;
-            margin-top: 25px;
-        }
-
-        .company-card {
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 15px;
-            padding: 22px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            transition: all 0.4s ease;
-        }
-
-        .company-card:hover {
-            background: rgba(41, 121, 255, 0.12);
-            transform: translateY(-6px);
-            border-color: var(--accent-blue);
-        }
-
-        .company-header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .company-icon {
-            font-size: 1.8rem;
-            color: var(--accent-blue);
-        }
-
-        .company-name {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #bbdefb;
-        }
-
-        .company-details {
-            line-height: 1.7;
-            color: #e0e0e0;
-            font-size: 0.9rem;
-        }
-
-        .company-details p {
-            margin: 8px 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .company-details i {
-            color: var(--accent-blue);
-            width: 16px;
-            font-size: 0.9rem;
-        }
-
-        /* القيادة */
-        .leadership-section {
-            text-align: center;
-            margin-top: 50px;
-            padding: 35px;
-            background: rgba(0, 0, 0, 0.15);
-            border-radius: 20px;
-            border: 1px solid rgba(41, 121, 255, 0.25);
-        }
-
-        .leader-card {
-            max-width: 400px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 15px;
-            padding: 30px;
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            animation: fadeInUp 1s ease-out;
-        }
-
-        .leader-avatar {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            margin: 0 auto 20px;
-            background: linear-gradient(135deg, var(--accent-blue), var(--light-blue));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 3px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
-        }
-
-        .leader-avatar i {
-            font-size: 2.5rem;
-            color: white;
-        }
-
-        .leader-name {
-            font-size: 1.6rem;
-            font-weight: 800;
-            color: #e3f2fd;
-            margin-bottom: 8px;
-        }
-
-        .leader-title {
-            font-size: 1rem;
-            color: var(--accent-blue);
-            font-weight: 600;
-            margin-bottom: 20px;
-        }
-
-        .leader-quote {
-            font-style: italic;
-            color: #bbdefb;
-            font-size: 0.75rem;
-            line-height: 1.7;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.15);
-            border-radius: 10px;
-            border-right: 3px solid var(--accent-blue);
-        }
-
-        /* الخلفية المتحركة */
-        .floating-shapes {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            pointer-events: none;
-            overflow: hidden;
-        }
-
-        .shape {
-            position: absolute;
-            background: rgba(33, 150, 243, 0.08);
-            border-radius: 50%;
-            animation: float 20s infinite linear;
-        }
-
-        .shape:nth-child(1) {
-            width: 80px;
-            height: 80px;
-            top: 10%;
-            left: 5%;
-            animation-delay: 0s;
-        }
-
-        .shape:nth-child(2) {
-            width: 120px;
-            height: 120px;
-            top: 70%;
-            left: 85%;
-            animation-delay: 5s;
-        }
-
-        .shape:nth-child(3) {
-            width: 60px;
-            height: 60px;
-            top: 85%;
-            left: 15%;
-            animation-delay: 10s;
-        }
-
-        .shape:nth-child(4) {
-            width: 100px;
-            height: 100px;
-            top: 20%;
-            left: 80%;
-            animation-delay: 15s;
-        }
-
-        /* التكيف مع الشاشات الصغيرة */
-        @media (max-width: 768px) {
-            .hero {
-                padding: 130px 0 60px;
-            }
-
-            .hero h1 {
-                font-size: 1.8rem;
-            }
-
-            .hero-subtitle {
-                font-size: 1rem;
-                padding: 15px;
-            }
-
-            .section {
-                padding: 50px 0;
-            }
-
-            .section-title {
-                font-size: 1.5rem;
-                margin-bottom: 2rem;
-            }
-
-            .features-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .login-btn {
-                padding: 14px 28px;
-                font-size: 1rem;
-                bottom: 20px;
-                left: 20px;
-            }
-
-            .systems-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .tracking-map {
-                height: 250px;
-            }
-
-            .leader-avatar {
-                width: 80px;
-                height: 80px;
-            }
-
-            .leader-avatar i {
-                font-size: 2rem;
-            }
-
-            .leader-name {
-                font-size: 1.4rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .hero h1 {
-                font-size: 1.5rem;
-            }
-
-            .hero-subtitle {
-                font-size: 0.9rem;
-            }
-
-            .logo-main {
-                font-size: 1.2rem;
-            }
-
-            .login-btn {
-                padding: 12px 24px;
-                font-size: 0.75rem;
-            }
-
-            .systems-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .company-card,
-            .station-card {
-                padding: 18px;
-            }
-        }
-
-        /* الفوتر */
-        .footer {
-            background: linear-gradient(135deg, rgba(13, 20, 82, 0.75) 0%, rgba(26, 35, 126, 0.9) 100%);
-            padding: 40px 0 25px;
-            margin-top: 60px;
-            border-top: 2px solid var(--accent-blue);
-            position: relative;
-        }
-
-        .footer:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(to right, transparent, var(--accent-blue), transparent);
-        }
-
-        .footer-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 30px;
-            text-align: right;
-            margin-bottom: 30px;
-        }
-
-        .footer-section h4 {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--accent-blue);
-            margin-bottom: 15px;
-            position: relative;
-            padding-bottom: 8px;
-        }
-
-        .footer-section h4:after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 40px;
-            height: 3px;
-            background: var(--accent-blue);
-        }
-
-        .footer-section p {
-            color: #bbdefb;
-            line-height: 1.7;
-            margin: 10px 0;
-            font-size: 0.9rem;
-        }
-
-        .footer-section a {
-            color: #bbdefb;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 8px 0;
-            transition: all 0.3s ease;
-            font-size: 0.9rem;
-        }
-
-        .footer-section a:hover {
-            color: var(--accent-blue);
-            transform: translateX(-5px);
-        }
-
-        .footer-bottom {
-            padding-top: 25px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            margin-top: 25px;
-            text-align: center;
-        }
-
-        .footer-bottom p {
-            color: #bbdefb;
-            font-size: 0.85rem;
-            line-height: 1.6;
-        }
-
-        .copyright-year {
-            color: var(--accent-blue);
-            font-weight: 800;
-        }
-
-        /* إشعار */
-        .notification {
-            position: fixed;
-            top: 15px;
-            right: 15px;
-            background: linear-gradient(135deg, rgba(41, 121, 255, 0.75), rgba(33, 150, 243, 0.9));
-            color: white;
-            padding: 15px 25px;
-            border-radius: 12px;
-            font-weight: 600;
-            box-shadow: var(--shadow-hover);
-            z-index: 1001;
-            display: none;
-            animation: fadeInUp 0.5s ease-out;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            font-size: 0.9rem;
-            max-width: 350px;
-        }
-
-        /* عدادات */
-        .counter {
-            font-size: 2.2rem;
-            font-weight: 800;
-            color: var(--accent-blue);
-            margin: 10px 0;
-            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .counter-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
-            text-align: center;
-        }
-
-        .counter-box {
-            background: rgba(255, 255, 255, 0.08);
-            padding: 20px 15px;
-            border-radius: 15px;
-            border: 1px solid rgba(41, 121, 255, 0.25);
-            transition: all 0.3s ease;
-        }
-
-        .counter-box:hover {
-            background: rgba(41, 121, 255, 0.15);
-            transform: translateY(-5px);
-            border-color: var(--accent-blue);
-        }
-
-        .counter-label {
-            font-size: 0.85rem;
-            color: #bbdefb;
-            margin-top: 5px;
-            font-weight: 500;
-        }
-
-        /* تقدم */
-        .progress-container {
-            margin: 20px 0;
-        }
-
-        .progress-bar {
-            height: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(to right, var(--accent-blue), var(--light-blue));
-            border-radius: 4px;
-            transition: width 1.5s ease-in-out;
-            position: relative;
-        }
-
-        .progress-fill:after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-            animation: shimmer 2s infinite;
-        }
-
-        @keyframes shimmer {
-            0% {
-                transform: translateX(-100%);
-            }
-
-            100% {
-                transform: translateX(100%);
-            }
-        }
-        /* Theme + Language Enhancements */
-        @property --accent-hue {
-            syntax: '<number>';
-            inherits: true;
-            initial-value: 212;
-        }
-
-        :root {
-            --primary-blue: hsl(var(--accent-hue) 65% 34%);
-            --dark-blue: hsl(var(--accent-hue) 80% 18%);
-            --light-blue: hsl(calc(var(--accent-hue) + 16) 85% 60%);
-            --accent-blue: hsl(calc(var(--accent-hue) + 6) 92% 56%);
-            --success-green: hsl(145 60% 45%);
-            --warning-orange: hsl(32 90% 55%);
-            --danger-red: hsl(4 75% 55%);
-            --text-light: #ffffff;
-            --text-gray: #dfe7f5;
-            --text-dark: #0b1b3a;
-            --page-bg: #f6f8fb;
-            --page-bg-2: rgba(15, 30, 70, 0.05);
-            --surface-bg: rgba(255, 255, 255, 0.85);
-            --surface-border: rgba(15, 30, 70, 0.1);
-            --glass-bg: rgba(255, 255, 255, 0.7);
-            --glass-border: rgba(15, 30, 70, 0.12);
-            --heading: #0b1b3a;
-            --muted: #52607a;
-            --text: #1a2745;
-            --nav-bg: rgba(255, 255, 255, 0.85);
-            --footer-bg: linear-gradient(135deg, rgba(15, 25, 65, 0.75) 0%, rgba(22, 40, 110, 0.92) 100%);
-        }
-
-        body {
-            --accent-hue: 212;
-            background: var(--page-bg);
+            font-family: 'Cairo', sans-serif;
             color: var(--text);
-            direction: inherit;
-            position: relative;
-            transition: background 0.8s ease, color 0.6s ease;
-            animation: hueFlow 18s ease-in-out infinite alternate;
+            background:
+                radial-gradient(circle at 14% 8%, rgba(95, 70, 255, 0.28), transparent 24%),
+                radial-gradient(circle at 86% 34%, rgba(39, 231, 255, 0.14), transparent 22%),
+                radial-gradient(circle at 50% 100%, rgba(40, 120, 255, 0.24), transparent 34%),
+                linear-gradient(180deg, #030817 0%, #06153a 48%, #020918 100%);
+            overflow-x: hidden;
+        }
+
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: -1;
         }
 
         body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background: radial-gradient(circle at 20% 20%, rgba(41, 121, 255, 0.18), transparent 40%),
-                radial-gradient(circle at 80% 30%, rgba(33, 150, 243, 0.18), transparent 40%),
-                linear-gradient(120deg, rgba(120, 160, 255, 0.12), rgba(0, 120, 255, 0.08));
-            background-size: 200% 200%;
-            animation: gradientShift 18s ease-in-out infinite;
-            z-index: -2;
-            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(95, 150, 255, 0.055) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(95, 150, 255, 0.055) 1px, transparent 1px);
+            background-size: 58px 58px;
+            mask-image: radial-gradient(circle at 50% 18%, black, transparent 72%);
         }
 
-        body[data-theme="light"] {
-            --accent-hue: 212;
-            --page-bg: #f6f8fb;
-            --page-bg-2: rgba(15, 30, 70, 0.05);
-            --surface-bg: rgba(255, 255, 255, 0.92);
-            --surface-border: rgba(15, 30, 70, 0.1);
-            --glass-bg: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(15, 30, 70, 0.12);
-            --heading: #0b1b3a;
-            --muted: #51607a;
-            --text: #1a2745;
-            --nav-bg: rgba(255, 255, 255, 0.9);
-            --footer-bg: linear-gradient(135deg, rgba(15, 30, 70, 0.96) 0%, rgba(28, 55, 140, 0.92) 100%);
+        body::after {
+            background:
+                linear-gradient(115deg, transparent 0 38%, rgba(39, 231, 255, 0.13) 39%, transparent 40%),
+                linear-gradient(132deg, transparent 0 58%, rgba(143, 92, 255, 0.16) 59%, transparent 60%);
+            filter: blur(1px);
         }
 
-        body[data-theme="default"] {
-            --accent-hue: 218;
-            --page-bg: linear-gradient(135deg, rgba(13, 20, 82, 1) 0%, rgba(26, 35, 126, 1) 100%);
-            --page-bg-2: rgba(0, 0, 0, 0.12);
-            --surface-bg: rgba(255, 255, 255, 0.08);
-            --surface-border: rgba(255, 255, 255, 0.12);
-            --glass-bg: rgba(255, 255, 255, 0.08);
-            --glass-border: rgba(255, 255, 255, 0.12);
-            --heading: #e3f2fd;
-            --muted: #bbdefb;
-            --text: #ffffff;
-            --nav-bg: linear-gradient(135deg, rgba(13, 20, 82, 0.98) 0%, rgba(26, 35, 126, 0.75) 100%);
-            --footer-bg: linear-gradient(135deg, rgba(13, 20, 82, 0.75) 0%, rgba(26, 35, 126, 0.9) 100%);
+        a {
+            color: inherit;
+            text-decoration: none;
         }
 
-        body[data-theme="dark"] {
-            --accent-hue: 210;
-            --page-bg: radial-gradient(circle at 20% 20%, rgba(25, 35, 80, 0.75), rgba(7, 10, 30, 1) 60%);
-            --page-bg-2: rgba(255, 255, 255, 0.03);
-            --surface-bg: rgba(255, 255, 255, 0.06);
-            --surface-border: rgba(255, 255, 255, 0.1);
-            --glass-bg: rgba(255, 255, 255, 0.06);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --heading: #e2ecff;
-            --muted: #a9c3e6;
-            --text: #f6f8ff;
-            --nav-bg: rgba(8, 12, 40, 0.9);
-            --footer-bg: linear-gradient(135deg, rgba(8, 12, 40, 0.75) 0%, rgba(14, 20, 70, 0.9) 100%);
+        .page {
+            width: min(1180px, calc(100% - 48px));
+            margin: 0 auto;
+            padding: 12px 0 26px;
         }
 
-        body.theme-transition * {
-            transition: background-color 0.7s ease, color 0.7s ease, border-color 0.7s ease, box-shadow 0.7s ease;
+        .topbar {
+            position: sticky;
+            top: 10px;
+            z-index: 50;
+            min-height: 64px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 18px;
+            padding: 8px 18px;
+            border: 1px solid rgba(116, 166, 255, 0.45);
+            border-radius: 14px;
+            background: rgba(4, 11, 32, 0.78);
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.36), inset 0 0 38px rgba(40, 120, 255, 0.08);
+            backdrop-filter: blur(18px);
         }
 
-        .navbar {
-            background: var(--nav-bg);
-            border-bottom-color: var(--accent-blue);
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .logo-main {
-            color: var(--heading);
+        .brand img {
+            width: 42px;
+            height: 42px;
+            object-fit: contain;
+            border-radius: 13px;
+            background: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 0 26px rgba(39, 231, 255, 0.18);
         }
 
-        .logo-sub {
+        .brand-title {
+            font-weight: 900;
+            line-height: 1.2;
+            font-size: 0.86rem;
+        }
+
+        .brand-sub {
             color: var(--muted);
+            font-size: 0.78rem;
+            margin-top: 2px;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: clamp(16px, 2.4vw, 38px);
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #dce7ff;
+        }
+
+        .nav a {
+            position: relative;
+            padding: 12px 0;
+            color: #d8e3ff;
+        }
+
+        .nav a.active {
+            color: var(--blue-2);
+        }
+
+        .nav a.active::after {
+            content: '';
+            position: absolute;
+            height: 2px;
+            width: 44px;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 999px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            box-shadow: 0 0 14px var(--cyan);
+        }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn {
+            height: 40px;
+            border: 1px solid rgba(180, 205, 255, 0.42);
+            border-radius: 8px;
+            padding: 0 16px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.82rem;
+            font-weight: 800;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.055);
+            transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            transform: translateY(-4px) scale(1.02);
+            border-color: rgba(39, 231, 255, 0.86);
+            box-shadow: 0 0 28px rgba(39, 231, 255, 0.22), 0 14px 30px rgba(40, 120, 255, 0.22);
+        }
+
+        .btn:hover i {
+            transform: translateX(-4px) rotate(-8deg);
+        }
+
+        .btn i {
+            transition: transform 0.28s ease;
+        }
+
+        .btn-primary {
+            border: 0;
+            background: linear-gradient(135deg, #723fff, #1874ff 54%, #2ff0ff);
+            box-shadow: 0 12px 34px rgba(40, 120, 255, 0.38);
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 0.98fr 1.02fr;
+            align-items: center;
+            gap: 30px;
+            padding: 34px 0 22px;
+        }
+
+        .hero-copy {
+            text-align: right;
         }
 
         .hero h1 {
-            color: var(--heading);
+            margin: 0;
+            font-size: clamp(2rem, 4.35vw, 3.95rem);
+            line-height: 1.2;
+            font-weight: 900;
+            letter-spacing: 0;
         }
 
-        .hero-subtitle {
+        .hero h1 span {
+            display: block;
+            color: #83adff;
+            text-shadow: 0 0 28px rgba(40, 120, 255, 0.42);
+        }
+
+        .hero p {
+            max-width: 600px;
+            margin: 18px 0 0 auto;
+            color: #d8def2;
+            font-size: clamp(0.9rem, 1.16vw, 1.08rem);
+            line-height: 1.75;
+            font-weight: 600;
+        }
+
+        .hero-actions {
+            display: flex;
+            justify-content: flex-start;
+            flex-direction: row-reverse;
+            gap: 14px;
+            margin-top: 26px;
+        }
+
+        .hero-actions .btn {
+            min-width: 190px;
+            height: 50px;
+            font-size: 0.9rem;
+            border-radius: 10px;
+        }
+
+        .visual {
+            position: relative;
+            min-height: 360px;
+            border: 1px solid rgba(108, 145, 255, 0.58);
+            border-radius: 20px;
+            overflow: hidden;
+            background:
+                linear-gradient(145deg, rgba(111, 64, 255, 0.22), rgba(5, 14, 43, 0.1) 32%),
+                radial-gradient(circle at 78% 38%, rgba(39, 231, 255, 0.16), transparent 26%),
+                rgba(5, 15, 47, 0.74);
+            box-shadow: 0 20px 70px rgba(0, 0, 0, 0.36), inset 0 0 58px rgba(40, 120, 255, 0.14);
+        }
+
+        .visual::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(86, 148, 255, 0.16) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(86, 148, 255, 0.16) 1px, transparent 1px);
+            background-size: 46px 46px;
+            transform: perspective(500px) rotateX(55deg) translateY(96px) scale(1.25);
+            transform-origin: bottom;
+            opacity: 0.7;
+        }
+
+        .map-panel {
+            position: absolute;
+            inset: 50px 138px 80px 34px;
+            border: 1px solid rgba(83, 164, 255, 0.64);
+            border-radius: 12px;
+            background:
+                radial-gradient(circle at 30% 42%, rgba(39, 231, 255, 0.2), transparent 8%),
+                linear-gradient(135deg, rgba(19, 40, 96, 0.76), rgba(4, 14, 42, 0.76));
+            box-shadow: 0 0 34px rgba(39, 231, 255, 0.16), inset 0 0 28px rgba(39, 231, 255, 0.08);
+            overflow: hidden;
+        }
+
+        .map-panel svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .truck {
+            position: absolute;
+            right: 145px;
+            bottom: 46px;
+            width: 270px;
+            height: 124px;
+            transform: translateY(0) scale(var(--truck-scale, 1));
+            transform-origin: bottom right;
+            filter: drop-shadow(0 18px 26px rgba(0, 0, 0, 0.44));
+            animation: truckFloat 4.8s ease-in-out infinite;
+        }
+
+        .truck .cab {
+            position: absolute;
+            right: 0;
+            bottom: 24px;
+            width: 88px;
+            height: 68px;
+            border-radius: 10px 22px 10px 8px;
+            background: linear-gradient(135deg, #8fb6ff, #1e5ecd 55%, #0b235b);
+            border: 1px solid rgba(210, 230, 255, 0.46);
+        }
+
+        .truck .cab::before {
+            content: '';
+            position: absolute;
+            right: 14px;
+            top: 12px;
+            width: 38px;
+            height: 22px;
+            border-radius: 5px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(39, 231, 255, 0.2));
+        }
+
+        .truck .tank {
+            position: absolute;
+            right: 74px;
+            bottom: 28px;
+            width: 176px;
+            height: 64px;
+            border-radius: 48px 26px 26px 48px;
+            background: linear-gradient(160deg, #b7cdf8, #4c78c8 45%, #122d6e 78%);
+            border: 1px solid rgba(225, 238, 255, 0.6);
+            box-shadow: inset 0 -20px 28px rgba(0, 0, 0, 0.22);
+        }
+
+        .truck .tank::after {
+            content: '';
+            position: absolute;
+            inset: 13px 20px auto auto;
+            width: 98px;
+            height: 7px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.38);
+        }
+
+        .wheel {
+            position: absolute;
+            bottom: 8px;
+            width: 31px;
+            height: 31px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #78a8ff 0 22%, #071635 24% 52%, #789fff 54% 62%, #020916 64%);
+            box-shadow: 0 0 14px rgba(39, 231, 255, 0.42);
+            animation: wheelPulse 2.6s ease-in-out infinite;
+        }
+
+        .wheel.one {
+            right: 34px;
+        }
+
+        .wheel.two {
+            right: 186px;
+        }
+
+        .metric-stack {
+            position: absolute;
+            top: 34px;
+            right: 34px;
+            display: grid;
+            gap: 12px;
+            width: 136px;
+        }
+
+        .metric {
+            padding: 12px 14px;
+            border: 1px solid rgba(116, 166, 255, 0.64);
+            border-radius: 12px;
+            background: linear-gradient(145deg, rgba(13, 32, 82, 0.78), rgba(13, 26, 66, 0.46));
+            box-shadow: inset 0 0 22px rgba(39, 231, 255, 0.08), 0 12px 26px rgba(0, 0, 0, 0.24);
+        }
+
+        .metric small {
+            display: block;
+            color: #cad6f4;
+            font-size: 0.68rem;
+            margin-bottom: 4px;
+        }
+
+        .metric strong {
+            font-size: 1.7rem;
+            line-height: 1;
+        }
+
+        .metric span {
+            float: left;
+            color: var(--green);
+            font-size: 0.68rem;
+            margin-top: 9px;
+            font-weight: 800;
+        }
+
+        .shipment {
+            position: absolute;
+            left: 30px;
+            bottom: 62px;
+            width: 158px;
+            padding: 12px;
+            border: 1px solid rgba(116, 166, 255, 0.55);
+            border-radius: 12px;
+            background: rgba(5, 15, 44, 0.78);
+        }
+
+        .shipment strong {
+            display: block;
+            font-size: 0.82rem;
+            margin-bottom: 7px;
+        }
+
+        .shipment p {
+            margin: 0;
             color: var(--muted);
-            background: var(--glass-bg);
-            border-color: var(--glass-border);
+            font-size: 0.72rem;
+            line-height: 1.7;
         }
 
-        .section-alt {
-            background: var(--page-bg-2);
+        .section-heading {
+            text-align: center;
+            margin: 12px 0 24px;
         }
 
-        .feature-card,
-        .station-card,
-        .company-card,
-        .system-item,
-        .leader-card,
-        .companies-section,
-        .live-tracking {
-            background: var(--surface-bg);
-            border-color: var(--surface-border);
+        .section-heading h2 {
+            margin: 0;
+            font-size: clamp(1.45rem, 2.45vw, 2rem);
+            line-height: 1.25;
+            font-weight: 900;
         }
 
-        .counter-box {
-            background: var(--surface-bg);
-            border-color: var(--surface-border);
-        }
-
-        .counter-box:hover {
-            background: color-mix(in srgb, var(--accent-blue), transparent 85%);
-        }
-
-        .counter-label {
+        .section-heading p {
+            margin: 8px 0 0;
             color: var(--muted);
+            font-size: 0.88rem;
+            font-weight: 600;
         }
 
-        .progress-bar {
-            background: color-mix(in srgb, var(--accent-blue), transparent 88%);
-        }
-
-        .company-details,
-        .card-text,
-        .leader-quote,
-        .footer-section p,
-        .footer-section a,
-        .tracking-map,
-        .stat-name,
-        .card-title {
-            color: var(--muted);
-        }
-
-        .card-title,
-        .company-name,
-        .station-info h4,
-        .leader-name,
-        .system-name {
-            color: var(--heading);
-        }
-
-        .section-title {
-            color: var(--heading);
-        }
-
-        .footer {
-            background: var(--footer-bg);
-        }
-
-        .footer-section h4,
-        .stat-number,
-        .stat-value,
-        .company-details i,
-        .station-icon,
-        .company-icon,
-        .system-icon {
-            color: var(--accent-blue);
-        }
-
-        .tracking-map {
-            border-color: var(--accent-blue);
-        }
-
-        .shape {
-            background: color-mix(in srgb, var(--accent-blue), transparent 85%);
-        }
-
-        .nav-content {
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 16px;
         }
 
-        .nav-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
+        .service-card,
+        .mini-system,
+        .tracking-card,
+        .stat-card,
+        .cta,
+        .footer {
+            border: 1px solid var(--line);
+            background:
+                linear-gradient(150deg, rgba(85, 54, 170, 0.18), transparent 34%),
+                linear-gradient(180deg, rgba(13, 32, 86, 0.82), rgba(4, 13, 38, 0.84));
+            box-shadow: inset 0 0 32px rgba(40, 120, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.24);
         }
 
-        .nav-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 10px;
-            border-radius: 999px;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            backdrop-filter: blur(12px);
-            box-shadow: var(--shadow);
-        }
-
-        .nav-group-label {
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--muted);
-            margin-inline: 6px 2px;
-            white-space: nowrap;
-        }
-
-        .segmented {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .segmented-btn {
-            border: 1px solid transparent;
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text);
-            padding: 6px 12px;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            white-space: nowrap;
-        }
-
-        .segmented-btn:hover {
-            border-color: var(--accent-blue);
-            transform: translateY(-1px);
-        }
-
-        .segmented-btn.active {
-            background: linear-gradient(135deg, var(--accent-blue), var(--light-blue));
-            color: #fff;
-            border-color: var(--accent-blue);
-            box-shadow: 0 6px 16px rgba(33, 150, 243, 0.35);
-        }
-
-        .hero-illustrations {
-            margin-top: 30px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 18px;
-        }
-
-        .illustration-card {
-            background: var(--surface-bg);
-            border-radius: 18px;
-            padding: 18px;
-            border: 1px solid var(--surface-border);
-            box-shadow: var(--shadow);
+        .service-card {
+            min-height: 156px;
+            border-radius: 14px;
+            padding: 18px 14px 14px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.32s ease, border-color 0.32s ease, box-shadow 0.32s ease, background 0.32s ease;
+        }
+
+        .service-card::before {
+            content: '';
+            position: absolute;
+            inset: auto -30px -45px -30px;
+            height: 90px;
+            background: radial-gradient(circle, rgba(39, 231, 255, 0.26), transparent 62%);
+            transition: opacity 0.32s ease, transform 0.32s ease;
+        }
+
+        .service-card:hover {
+            transform: translateY(-10px) scale(1.018);
+            border-color: rgba(39, 231, 255, 0.82);
+            background:
+                linear-gradient(150deg, rgba(143, 92, 255, 0.26), transparent 34%),
+                linear-gradient(180deg, rgba(18, 44, 110, 0.9), rgba(5, 18, 54, 0.92));
+            box-shadow: inset 0 0 42px rgba(40, 120, 255, 0.14), 0 24px 55px rgba(0, 0, 0, 0.34), 0 0 28px rgba(39, 231, 255, 0.12);
+        }
+
+        .service-card:hover::before {
+            opacity: 1;
+            transform: translateY(-10px) scale(1.12);
+        }
+
+        .service-card:hover i {
+            transform: translateY(-8px) scale(1.12) rotate(-4deg);
+            color: var(--cyan);
+        }
+
+        .service-card:hover .arrow {
+            transform: translateX(-6px);
+            border-color: rgba(39, 231, 255, 0.78);
+            background: rgba(39, 231, 255, 0.12);
+            color: #fff;
+        }
+
+        .service-card i {
+            font-size: 1.95rem;
+            color: #7e9fff;
+            margin-bottom: 12px;
+            text-shadow: 0 0 22px rgba(80, 140, 255, 0.75);
+            animation: iconFloat 3.8s ease-in-out infinite;
+            transition: transform 0.32s ease, color 0.32s ease, text-shadow 0.32s ease;
+        }
+
+        .service-card h3 {
+            margin: 0;
+            font-size: 0.95rem;
+            line-height: 1.35;
+        }
+
+        .service-card p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 0.72rem;
+            line-height: 1.58;
+        }
+
+        .arrow {
+            margin-top: auto;
+            width: 22px;
+            height: 22px;
+            display: grid;
+            place-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.38);
+            border-radius: 50%;
+            color: #dfe8ff;
+            font-size: 0.7rem;
+            transition: transform 0.28s ease, border-color 0.28s ease, background 0.28s ease, color 0.28s ease;
+        }
+
+        .systems {
+            margin-top: 26px;
+        }
+
+        .systems h2 {
+            margin: 0 0 14px;
+            text-align: center;
+            font-size: 1.35rem;
+        }
+
+        .systems h2 i {
+            color: var(--cyan);
+            font-size: 0.86rem;
+        }
+
+        .systems-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+            padding: 18px;
+            border: 1px solid rgba(116, 166, 255, 0.35);
+            border-radius: 14px;
+            background: rgba(4, 13, 38, 0.56);
+        }
+
+        .mini-system {
+            min-height: 42px;
+            border-radius: 8px;
+            padding: 9px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            color: #e5edff;
+            font-size: 0.76rem;
+            font-weight: 700;
+            transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
+        }
+
+        .mini-system i {
+            color: #94bbff;
+            animation: iconPulse 3.4s ease-in-out infinite;
+            transition: transform 0.28s ease, color 0.28s ease;
+        }
+
+        .mini-system:hover {
+            transform: translateY(-5px);
+            border-color: rgba(39, 231, 255, 0.76);
+            background:
+                linear-gradient(150deg, rgba(39, 231, 255, 0.12), transparent 36%),
+                linear-gradient(180deg, rgba(18, 42, 100, 0.9), rgba(5, 16, 48, 0.92));
+            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.25), 0 0 22px rgba(39, 231, 255, 0.12);
+        }
+
+        .mini-system:hover i {
+            transform: translateX(-5px) scale(1.12);
+            color: var(--cyan);
+        }
+
+        .tracking {
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: 0.36fr 0.64fr;
+            min-height: 222px;
+            overflow: hidden;
+            border-radius: 14px;
+        }
+
+        .tracking-copy {
+            padding: 30px;
+        }
+
+        .tracking-copy h2 {
+            margin: 0 0 8px;
+            font-size: 1.28rem;
+        }
+
+        .tracking-copy p {
+            color: var(--muted);
+            line-height: 1.7;
+            margin: 0 0 14px;
+            font-size: 0.82rem;
+        }
+
+        .check-list {
+            display: grid;
+            gap: 8px;
+            color: #dfe7ff;
+            font-size: 0.78rem;
+        }
+
+        .check-list i {
+            color: var(--green);
+            margin-left: 8px;
+        }
+
+        .tracking-map {
+            position: relative;
+            min-height: 222px;
+            background:
+                radial-gradient(circle at 35% 40%, rgba(39, 231, 255, 0.18), transparent 10%),
+                linear-gradient(135deg, rgba(15, 36, 86, 0.94), rgba(6, 16, 45, 0.86));
+            overflow: hidden;
+        }
+
+        .tracking-map::before {
+            content: '';
+            position: absolute;
+            inset: -20px;
+            background-image:
+                linear-gradient(rgba(83, 146, 255, 0.13) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(83, 146, 255, 0.13) 1px, transparent 1px);
+            background-size: 42px 42px;
+            transform: perspective(500px) rotateX(55deg) translateY(58px) scale(1.2);
+            transform-origin: bottom;
+        }
+
+        .route {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .route-card {
+            position: absolute;
+            left: 26px;
+            top: 28px;
+            width: 178px;
+            border: 1px solid rgba(116, 166, 255, 0.5);
+            border-radius: 12px;
+            padding: 14px;
+            background: rgba(4, 13, 38, 0.78);
+            font-size: 0.72rem;
+        }
+
+        .route-card strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .stats {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .stat-card {
+            min-height: 82px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 15px;
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-7px) scale(1.015);
+            border-color: rgba(39, 231, 255, 0.78);
+            box-shadow: inset 0 0 36px rgba(40, 120, 255, 0.12), 0 18px 42px rgba(0, 0, 0, 0.3), 0 0 22px rgba(39, 231, 255, 0.12);
+        }
+
+        .stat-card:hover i {
+            transform: translateY(-4px) rotate(-5deg) scale(1.12);
+            color: var(--cyan);
+        }
+
+        .stat-card i {
+            font-size: 1.65rem;
+            color: #6e95ff;
+            text-shadow: 0 0 18px rgba(39, 231, 255, 0.35);
+            animation: iconFloat 4.2s ease-in-out infinite;
+            transition: transform 0.3s ease, color 0.3s ease;
+        }
+
+        .stat-card strong {
+            display: block;
+            font-size: 1.58rem;
+            line-height: 1;
+        }
+
+        .stat-card span {
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .cta {
+            margin-top: 20px;
+            border-radius: 14px;
+            padding: 20px 24px;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: center;
+            gap: 28px;
+            background:
+                radial-gradient(circle at 18% 50%, rgba(143, 92, 255, 0.38), transparent 22%),
+                linear-gradient(135deg, rgba(12, 26, 70, 0.94), rgba(4, 13, 38, 0.9));
+        }
+
+        .cta h2 {
+            margin: 0;
+            font-size: 1.35rem;
+        }
+
+        .cta p {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 0.86rem;
+        }
+
+        .footer {
+            margin-top: 18px;
+            border-radius: 14px;
+            padding: 28px 28px 22px;
+            display: grid;
+            grid-template-columns: 1.2fr repeat(3, 1fr) 1.05fr;
+            gap: 24px;
+        }
+
+        .footer h3,
+        .footer h4 {
+            margin: 0 0 12px;
+            font-size: 0.95rem;
+        }
+
+        .footer p,
+        .footer a {
+            color: var(--muted);
+            font-size: 0.76rem;
+            line-height: 1.8;
+        }
+
+        .footer a {
+            display: block;
+            margin: 4px 0;
+        }
+
+        .social {
+            display: flex;
             gap: 12px;
+        }
+
+        .social a {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border: 1px solid rgba(116, 166, 255, 0.45);
+            border-radius: 50%;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.04);
+            transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+            animation: socialPulse 4.5s ease-in-out infinite;
+        }
+
+        .social a:hover {
+            transform: translateY(-3px);
+            border-color: var(--cyan);
+            box-shadow: 0 0 20px rgba(39, 231, 255, 0.2);
+        }
+
+        .copyright {
+            grid-column: 1 / -1;
+            color: var(--soft);
+            font-size: 0.72rem;
+            text-align: center;
+            border-top: 1px solid rgba(116, 166, 255, 0.18);
+            padding-top: 16px;
+        }
+
+        .footer > div:nth-child(5) {
+            order: 1;
+        }
+
+        .footer > div:nth-child(4) {
+            order: 2;
+        }
+
+        .footer > div:nth-child(3) {
+            order: 3;
+        }
+
+        .footer > div:nth-child(2) {
+            order: 4;
+        }
+
+        .footer > div:nth-child(1) {
+            order: 5;
+        }
+
+        .footer .copyright {
+            order: 6;
+        }
+
+        @keyframes iconFloat {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-6px);
+            }
+        }
+
+        @keyframes iconPulse {
+            0%, 100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 0 rgba(39, 231, 255, 0));
+            }
+            50% {
+                transform: scale(1.08);
+                filter: drop-shadow(0 0 10px rgba(39, 231, 255, 0.45));
+            }
+        }
+
+        @keyframes socialPulse {
+            0%, 100% {
+                box-shadow: 0 0 0 rgba(39, 231, 255, 0);
+            }
+            50% {
+                box-shadow: 0 0 16px rgba(39, 231, 255, 0.16);
+            }
+        }
+
+        @keyframes truckFloat {
+            0%, 100% {
+                transform: translateY(0) scale(var(--truck-scale, 1));
+            }
+            50% {
+                transform: translateY(-7px) scale(var(--truck-scale, 1));
+            }
+        }
+
+        @keyframes wheelPulse {
+            0%, 100% {
+                box-shadow: 0 0 14px rgba(39, 231, 255, 0.42);
+            }
+            50% {
+                box-shadow: 0 0 22px rgba(39, 231, 255, 0.72);
+            }
+        }
+
+        .mobile-login {
+            display: none;
+        }
+
+        .hero-service-panel {
+            min-height: 360px;
+            border: 1px solid rgba(108, 145, 255, 0.58);
+            border-radius: 20px;
+            padding: 26px;
+            background:
+                radial-gradient(circle at 18% 16%, rgba(143, 92, 255, 0.28), transparent 28%),
+                radial-gradient(circle at 82% 72%, rgba(39, 231, 255, 0.16), transparent 26%),
+                linear-gradient(180deg, rgba(13, 32, 86, 0.82), rgba(4, 13, 38, 0.9));
+            box-shadow: 0 20px 70px rgba(0, 0, 0, 0.36), inset 0 0 58px rgba(40, 120, 255, 0.14);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .hero-service-panel > .metric-stack,
+        .hero-service-panel > .map-panel,
+        .hero-service-panel > .truck,
+        .hero-service-panel > .shipment {
+            display: none;
+        }
+
+        .hero-service-panel h2 {
+            margin: 0;
+            font-size: 1.42rem;
+            line-height: 1.35;
+        }
+
+        .hero-service-panel > p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 0.84rem;
+            line-height: 1.8;
+        }
+
+        .hero-service-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .hero-service {
+            min-height: 112px;
+            padding: 16px;
+            border: 1px solid rgba(116, 166, 255, 0.38);
+            border-radius: 14px;
+            background:
+                linear-gradient(150deg, rgba(85, 54, 170, 0.18), transparent 34%),
+                rgba(255, 255, 255, 0.035);
+            transition: transform 0.32s ease, border-color 0.32s ease, box-shadow 0.32s ease, background 0.32s ease;
             position: relative;
             overflow: hidden;
         }
 
-        .illustration-card::after {
+        .hero-service::after {
             content: '';
             position: absolute;
-            inset: 0;
-            background: radial-gradient(circle at 20% 20%, rgba(41, 121, 255, 0.25), transparent 45%);
-            opacity: 0.4;
-            pointer-events: none;
+            inset: auto -22px -42px -22px;
+            height: 78px;
+            background: radial-gradient(circle, rgba(39, 231, 255, 0.18), transparent 62%);
+            transition: transform 0.32s ease, opacity 0.32s ease;
         }
 
-        .line-illustration {
-            width: 100%;
-            max-width: 220px;
-            color: var(--accent-blue);
-            filter: drop-shadow(0 8px 15px rgba(15, 30, 70, 0.2));
+        .hero-service:hover {
+            transform: translateY(-8px) scale(1.018);
+            border-color: rgba(39, 231, 255, 0.78);
+            background:
+                linear-gradient(150deg, rgba(143, 92, 255, 0.24), transparent 34%),
+                rgba(39, 231, 255, 0.06);
+            box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28), 0 0 22px rgba(39, 231, 255, 0.12);
         }
 
-        .line-illustration .draw-path {
-            stroke-dasharray: 420;
-            stroke-dashoffset: 420;
-            animation: drawLine 3.2s ease forwards;
+        .hero-service:hover::after {
+            transform: translateY(-8px) scale(1.08);
         }
 
-        .illustration-card:nth-child(2) .draw-path {
-            animation-delay: 0.4s;
+        .hero-service i {
+            font-size: 1.7rem;
+            color: #82a5ff;
+            margin-bottom: 12px;
+            text-shadow: 0 0 18px rgba(80, 140, 255, 0.68);
+            animation: iconFloat 3.8s ease-in-out infinite;
+            transition: transform 0.32s ease, color 0.32s ease;
         }
 
-        .illustration-card:nth-child(3) .draw-path {
-            animation-delay: 0.8s;
+        .hero-service:hover i {
+            color: var(--cyan);
+            transform: translateY(-6px) rotate(-5deg) scale(1.12);
         }
 
-        .illustration-caption {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--heading);
+        .hero-service h3 {
+            margin: 0;
+            font-size: 0.92rem;
+            line-height: 1.35;
         }
 
-        @keyframes drawLine {
-            to {
-                stroke-dashoffset: 0;
-            }
+        .hero-service p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 0.72rem;
+            line-height: 1.6;
         }
 
-        @keyframes hueFlow {
-            0% {
-                --accent-hue: 205;
-            }
-
-            100% {
-                --accent-hue: 235;
-            }
+        .hero-service-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
         }
 
-        @keyframes gradientShift {
-            0% {
-                background-position: 0% 20%;
-            }
-
-            50% {
-                background-position: 100% 80%;
-            }
-
-            100% {
-                background-position: 0% 20%;
-            }
+        .hero-service-stat {
+            border: 1px solid rgba(116, 166, 255, 0.3);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.035);
         }
 
-        body.lang-ar,
-        body.lang-ur {
-            font-family: 'Cairo', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', sans-serif;
+        .hero-service-stat strong {
+            display: block;
+            font-size: 1.25rem;
+            line-height: 1;
         }
 
-        body.lang-en {
-            font-family: 'Poppins', 'Cairo', sans-serif;
+        .hero-service-stat span {
+            display: block;
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 0.68rem;
         }
 
-        body.lang-bn {
-            font-family: 'Noto Sans Bengali', 'Hind', 'Cairo', sans-serif;
-        }
-
-        body.lang-hi {
-            font-family: 'Noto Sans Devanagari', 'Hind', 'Cairo', sans-serif;
-        }
-
-        html[dir="ltr"] .footer-content {
-            text-align: left;
-        }
-
-        html[dir="ltr"] .footer-section h4:after {
-            right: auto;
-            left: 0;
-        }
-
-        html[dir="ltr"] .feature-card:before {
-            right: auto;
-            left: 0;
-        }
-
-        html[dir="ltr"] .leader-quote {
-            border-right: none;
-            border-left: 3px solid var(--accent-blue);
-        }
-
-        html[dir="ltr"] .footer-section a:hover {
-            transform: translateX(5px);
-        }
-
-        html[dir="ltr"] .login-btn-container {
-            left: auto;
-            right: 30px;
-        }
-
-        @media (max-width: 768px) {
-            .nav-content {
-                flex-direction: column;
-                align-items: center;
+        @media (max-width: 1100px) {
+            .topbar {
+                grid-template-columns: 1fr;
+                justify-items: center;
             }
 
-            .nav-actions {
+            .hero {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-copy {
+                text-align: center;
+            }
+
+            .hero p {
+                margin-inline: auto;
+            }
+
+            .hero-actions {
                 justify-content: center;
             }
 
-            .nav-group {
+            .cards-grid,
+            .systems-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .stats {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .footer {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 760px) {
+            .page {
+                width: min(100% - 24px, 560px);
+                padding-top: 10px;
+            }
+
+            .topbar {
+                position: relative;
+                top: 0;
+                padding: 14px;
+            }
+
+            .nav {
                 width: 100%;
-                justify-content: center;
-                flex-wrap: wrap;
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            body {
-                animation: none;
+                overflow-x: auto;
+                justify-content: flex-start;
+                padding-bottom: 4px;
             }
 
-            .hero-bg,
-            .line-illustration .draw-path,
-            .shape {
-                animation: none !important;
+            .actions {
+                display: none;
+            }
+
+            .hero {
+                padding-top: 28px;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+            }
+
+            .hero-actions .btn {
+                width: 100%;
+            }
+
+            .visual {
+                min-height: 330px;
+            }
+
+            .hero-service-panel {
+                min-height: auto;
+                padding: 18px;
+            }
+
+            .hero-service-grid,
+            .hero-service-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .metric-stack {
+                width: 126px;
+                right: 18px;
+                top: 18px;
+                gap: 10px;
+            }
+
+            .metric {
+                padding: 10px;
+            }
+
+            .metric strong {
+                font-size: 1.45rem;
+            }
+
+            .map-panel {
+                inset: 86px 40px 92px 24px;
+            }
+
+            .truck {
+                right: 52px;
+                width: 244px;
+                --truck-scale: 0.86;
+            }
+
+            .shipment {
+                display: none;
+            }
+
+            .cards-grid,
+            .systems-grid,
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .tracking {
+                grid-template-columns: 1fr;
+            }
+
+            .cta {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .footer {
+                grid-template-columns: 1fr;
+            }
+
+            .mobile-login {
+                display: flex;
+                position: fixed;
+                left: 16px;
+                right: 16px;
+                bottom: 16px;
+                z-index: 60;
+                box-shadow: 0 14px 34px rgba(40, 120, 255, 0.5);
             }
         }
     </style>
 </head>
 
 <body>
-    <!-- أشكال عائمة في الخلفية -->
-    <div class="floating-shapes">
-        <div class="shape"></div>
-        <div class="shape"></div>
-        <div class="shape"></div>
-        <div class="shape"></div>
-    </div>
-
-    <!-- إشعار -->
-    <div class="notification" id="notification"></div>
-
-    <!-- الشريط العلوي -->
-    <nav class="navbar">
-        <div class="container nav-content">
-            <a href="#" class="logo">
-                <img class="logo-image" src="images/logo.png" alt="Nibras Logo"
-                    onerror="this.remove(); const fallback = document.querySelector('.logo-icon-fallback'); if (fallback) fallback.style.display = 'inline-flex';">
-                <i class="fas fa-satellite-dish logo-icon logo-icon-fallback" style="display: none;"></i>
-                <div class="logo-text">
-                    <div class="logo-main" data-i18n="logo.main">شركة البحيرة العربية للنقليات</div>
-                    <div class="logo-sub" data-i18n="logo.sub">نظام نبراس</div>
+    <main class="page">
+        <header class="topbar">
+            <a href="#home" class="brand">
+                <img src="images/logo.png" alt="شركة البحيرة العربية">
+                <div>
+                    <div class="brand-title">شركة البحيرة العربية<br>للنقل والتوزيع</div>
                 </div>
             </a>
-            <div class="nav-actions">
-                <div class="nav-group">
-                    <span class="nav-group-label" data-i18n="ui.language">اللغة</span>
-                    <div class="segmented" role="group" aria-label="Language switcher">
-                        <button class="segmented-btn active" data-lang="ar" aria-pressed="true">العربية</button>
-                        <button class="segmented-btn" data-lang="en" aria-pressed="false">English</button>
-                        <button class="segmented-btn" data-lang="bn" aria-pressed="false">বাংলা</button>
-                        <button class="segmented-btn" data-lang="ur" aria-pressed="false">اردو</button>
-                        <button class="segmented-btn" data-lang="hi" aria-pressed="false">हिन्दी</button>
-                    </div>
-                </div>
-                <div class="nav-group">
-                    <span class="nav-group-label" data-i18n="ui.theme">المظهر</span>
-                    <div class="segmented" role="group" aria-label="Theme switcher">
-                        <button class="segmented-btn active" data-theme="light" aria-pressed="true"
-                            data-i18n="theme.light">فاتح</button>
-                        <button class="segmented-btn" data-theme="default" aria-pressed="false"
-                            data-i18n="theme.default">افتراضي</button>
-                        <button class="segmented-btn" data-theme="dark" aria-pressed="false" data-i18n="theme.dark">داكن</button>
-                    </div>
-                </div>
+
+            <nav class="nav" aria-label="التنقل الرئيسي">
+                <a class="active" href="#home">الرئيسية</a>
+                <a href="#services">الخدمات</a>
+                <a href="#systems">الأنظمة</a>
+                <a href="#pricing">الأسعار</a>
+                <a href="#about">عن الشركة</a>
+                <a href="#contact">تواصل معنا</a>
+            </nav>
+
+            <div class="actions">
+                <button class="btn btn-primary" onclick="employeeLogin()">
+                    <i class="fa-solid fa-rocket"></i>
+                    ابدأ الآن
+                </button>
+                <button class="btn" onclick="employeeLogin()">تسجيل الدخول</button>
             </div>
-        </div>
-    </nav>
+        </header>
 
-    <!-- القسم الرئيسي -->
-    <section class="hero">
-        <div class="hero-bg"></div>
-        <div class="container">
-            <h1 data-i18n="hero.title">نظام نبراس المتكامل لإدارة النقليات</h1>
-            <p class="hero-subtitle" data-i18n="hero.subtitle">
-                نظام متطور لإدارة وتتبع جميع عمليات النقل بمختلف أنواعها، مع تركيز خاص
-                على نقل المحروقات عبر شبكة محطات "شركة البحيرة العربية" البالغة عدد من محطات موزعة
-                في جميع أنحاء المملكة. النظام يدعم 40+ نظام فرعي ويخدم 500+ شركة نقل شريكة.
-            </p>
-
-            <!-- العدادات -->
-            <div class="counter-container">
-                <div class="counter-box">
-                    <div class="counter" id="stationsCounter">30</div>
-                    <div class="counter-label" data-i18n="counter.stations">محطة وقود</div>
-                </div>
-                <div class="counter-box">
-                    <div class="counter" id="companiesCounter">500+</div>
-                    <div class="counter-label" data-i18n="counter.companies">شركة نقل</div>
-                </div>
-                <div class="counter-box">
-                    <div class="counter" id="vehiclesCounter">100+</div>
-                    <div class="counter-label" data-i18n="counter.vehicles">مركبة نشطة</div>
-                </div>
-                <div class="counter-box">
-                    <div class="counter" id="systemsCounter">40+</div>
-                    <div class="counter-label" data-i18n="counter.systems">نظام فرعي</div>
+        <section class="hero" id="home">
+            <div class="hero-copy">
+                <h1>منصة إدارة النقل الذكية <span>تحكم كامل في عملياتك</span></h1>
+                <p>
+                    حل متكامل لإدارة وتتبع الطلبات والمركبات والمحطات بأحدث التقنيات لضمان الكفاءة
+                    والشفافية في كل مرحلة.
+                </p>
+                <div class="hero-actions">
+                    <button class="btn btn-primary" onclick="employeeLogin()">
+                        <i class="fa-solid fa-rocket"></i>
+                        ابدأ التجربة الآن
+                    </button>
+                    <a class="btn" href="#services">
+                        <i class="fa-solid fa-chevron-left"></i>
+                        استعراض الخدمات
+                    </a>
                 </div>
             </div>
 
-            <div class="hero-illustrations">
-                <div class="illustration-card">
-                    <svg class="line-illustration" viewBox="0 0 220 160" fill="none" stroke="currentColor"
-                        stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path class="draw-path" d="M30 130H190"></path>
-                        <path class="draw-path" d="M50 130V60H140V130"></path>
-                        <path class="draw-path" d="M60 60L75 30H160V60"></path>
-                        <path class="draw-path" d="M85 90H105"></path>
-                        <path class="draw-path" d="M120 90H135"></path>
-                        <path class="draw-path" d="M160 130V85H190V130"></path>
-                        <path class="draw-path" d="M168 92H184"></path>
-                    </svg>
-                    <div class="illustration-caption" data-i18n="illustration.station">محطة وقود ذكية</div>
+            <div class="hero-service-panel" aria-label="خدمات رئيسية">
+                <div>
+                    <h2>خدمات تشغيلية لإدارة النقل</h2>
+                    <p>أدوات متكاملة تساعدك على تنظيم الطلبات، المركبات، المحطات والتقارير من لوحة واحدة.</p>
                 </div>
-                <div class="illustration-card">
-                    <svg class="line-illustration" viewBox="0 0 220 160" fill="none" stroke="currentColor"
-                        stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path class="draw-path" d="M70 130V30H130V130"></path>
-                        <path class="draw-path" d="M85 55H115"></path>
-                        <path class="draw-path" d="M85 75H115"></path>
-                        <path class="draw-path" d="M70 30H130"></path>
-                        <path class="draw-path" d="M130 45H155C168 45 175 52 175 65V75"></path>
-                        <path class="draw-path" d="M175 75C175 108 167 115 155 115H145"></path>
-                        <path class="draw-path" d="M90 130H110"></path>
-                    </svg>
-                    <div class="illustration-caption" data-i18n="illustration.pump">مضخة وقود متصلة</div>
+
+                <div class="hero-service-grid">
+                    <div class="hero-service">
+                        <i class="fa-solid fa-route"></i>
+                        <h3>تتبع الرحلات</h3>
+                        <p>مراقبة المسارات والتحديثات بشكل فوري.</p>
+                    </div>
+                    <div class="hero-service">
+                        <i class="fa-solid fa-clipboard-check"></i>
+                        <h3>إدارة الطلبات</h3>
+                        <p>إنشاء ومتابعة طلبات النقل حتى التسليم.</p>
+                    </div>
+                    <div class="hero-service">
+                        <i class="fa-solid fa-gas-pump"></i>
+                        <h3>محطات الوقود</h3>
+                        <p>متابعة المخزون والتزويد والاستهلاك.</p>
+                    </div>
+                    <div class="hero-service">
+                        <i class="fa-solid fa-chart-line"></i>
+                        <h3>تقارير ذكية</h3>
+                        <p>مؤشرات أداء وتقارير تدعم اتخاذ القرار.</p>
+                    </div>
                 </div>
-                <div class="illustration-card">
-                    <svg class="line-illustration" viewBox="0 0 220 160" fill="none" stroke="currentColor"
-                        stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path class="draw-path" d="M30 110H150V70H30Z"></path>
-                        <path class="draw-path" d="M150 85H190V110H150Z"></path>
-                        <path class="draw-path" d="M50 110V130"></path>
-                        <path class="draw-path" d="M130 110V130"></path>
-                        <path class="draw-path" d="M165 110V130"></path>
-                        <path class="draw-path" d="M60 70V50H120V70"></path>
+
+                <div class="hero-service-stats">
+                    <div class="hero-service-stat">
+                        <strong>24/7</strong>
+                        <span>تشغيل ومتابعة</span>
+                    </div>
+                    <div class="hero-service-stat">
+                        <strong>40+</strong>
+                        <span>نظام فرعي</span>
+                    </div>
+                    <div class="hero-service-stat">
+                        <strong>99%</strong>
+                        <span>وضوح البيانات</span>
+                    </div>
+                </div>
+
+                <div class="metric-stack">
+                    <div class="metric">
+                        <small>الطلبات اليوم</small>
+                        <strong>256</strong>
+                        <span>+12%</span>
+                    </div>
+                    <div class="metric">
+                        <small>المركبات النشطة</small>
+                        <strong>48</strong>
+                        <span>+8%</span>
+                    </div>
+                    <div class="metric">
+                        <small>نسبة الإنجاز</small>
+                        <strong>96%</strong>
+                        <span>+5%</span>
+                    </div>
+                </div>
+
+                <div class="map-panel">
+                    <svg viewBox="0 0 520 260" fill="none" aria-hidden="true">
+                        <path d="M20 204 C95 145 122 146 174 84 C220 30 276 76 324 50 C380 20 421 67 500 44"
+                            stroke="rgba(67,151,255,.28)" stroke-width="2" />
+                        <path d="M32 82 C106 104 146 114 198 142 C244 166 296 148 344 180 C390 210 430 178 492 204"
+                            stroke="rgba(67,151,255,.22)" stroke-width="2" />
+                        <path d="M98 72 L198 142 L312 92 L420 172" stroke="#27e7ff" stroke-width="5"
+                            stroke-linecap="round" />
+                        <path d="M98 72 L198 142 L312 92 L420 172" stroke="#7b5cff" stroke-width="12"
+                            stroke-linecap="round" opacity=".18" />
+                        <g fill="#27e7ff">
+                            <circle cx="98" cy="72" r="7" />
+                            <circle cx="198" cy="142" r="7" />
+                            <circle cx="312" cy="92" r="7" />
+                            <circle cx="420" cy="172" r="7" />
+                        </g>
+                        <g fill="#101d48" stroke="#86a8ff" stroke-width="4">
+                            <path d="M98 28c-17 0-31 13-31 30 0 25 31 55 31 55s31-30 31-55c0-17-14-30-31-30z" />
+                            <path d="M420 126c-17 0-31 13-31 30 0 25 31 55 31 55s31-30 31-55c0-17-14-30-31-30z" />
+                        </g>
                     </svg>
-                    <div class="illustration-caption" data-i18n="illustration.fleet">أسطول التزويد</div>
+                </div>
+
+                <div class="truck" aria-hidden="true">
+                    <div class="tank"></div>
+                    <div class="cab"></div>
+                    <div class="wheel one"></div>
+                    <div class="wheel two"></div>
+                </div>
+
+                <div class="shipment">
+                    <strong>شحنة رقم 1023</strong>
+                    <p>في الطريق<br>الرياض - الدمام<br>65 كم / ساعة</p>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- الميزات الرئيسية -->
-    <section class="section section-alt">
-        <div class="container">
-            <h3 class="section-title" style="text-align:center;" data-i18n="section.features">الميزات المتقدمة للنظام</h3>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="card-icon">
-                        <i class="fas fa-tachometer-alt"></i>
-                    </div>
-                    <h3 class="card-title">نظام الأتمتة المتكامل</h3>
-                    <p class="card-text">
-                        نظام أوتوميشن يتحكم تلقائياً في جميع عمليات الشركة من طلبات النقل،
-                        توزيع المركبات، متابعة السائقين، إدارة المخزون، والفواتير.
-                    </p>
-                    <div class="card-stats">
-                        <div class="stat-item">
-                            <span class="stat-number">100%</span>
-                            <span class="stat-label">أتمتة</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number">24/7</span>
-                            <span class="stat-label">تشغيل</span>
-                        </div>
-                    </div>
-                </div>
+        <section id="services">
+            <div class="section-heading">
+                <h2>خدماتنا المتكاملة</h2>
+                <p>مجموعة شاملة من الخدمات لإدارة جميع جوانب عمليات النقل والتوزيع</p>
+            </div>
 
-                <div class="feature-card">
-                    <div class="card-icon">
-                        <i class="fas fa-gas-pump"></i>
-                    </div>
-                    <h3 class="card-title">إدارة محطات الوقود</h3>
-                    <p class="card-text">
-                        نظام مراقبة ذكي لـ متعدد المحطات يتضمن تحليل استهلاك آني،
-                        إدارة المخزون، تقارير مالية، وأنظمة أمان متقدمة.
-                    </p>
-                    <div class="card-stats">
-                        <div class="stat-item">
-                            <span class="stat-number">30</span>
-                            <span class="stat-label">محطة</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number">75%</span>
-                            <span class="stat-label">دقة</span>
-                        </div>
-                    </div>
-                </div>
+            <div class="cards-grid">
+                <article class="service-card">
+                    <i class="fa-regular fa-clipboard"></i>
+                    <h3>إدارة الطلبات</h3>
+                    <p>إنشاء وإدارة وتتبع جميع طلبات النقل والتوزيع في الوقت الفعلي</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-truck"></i>
+                    <h3>تتبع المركبات</h3>
+                    <p>تتبع مباشر للمركبات ومراقبة المواقع والمسارات لحظة بلحظة</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-user-tie"></i>
+                    <h3>إدارة السائقين</h3>
+                    <p>إدارة بيانات السائقين، الرخص، الأداء وسجلات القيادة</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-gas-pump"></i>
+                    <h3>محطات الوقود</h3>
+                    <p>إدارة محطات الوقود والمخزون والتزويد والاستهلاك</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-regular fa-file-lines"></i>
+                    <h3>الفواتير</h3>
+                    <p>إصدار وإدارة الفواتير والمدفوعات والمستحقات المالية</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-screwdriver-wrench"></i>
+                    <h3>الصيانة</h3>
+                    <p>جدولة وإدارة أعمال الصيانة للمركبات والمعدات</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-video"></i>
+                    <h3>المراقبة</h3>
+                    <p>مراقبة العمليات والأنشطة عبر كاميرات وأنظمة ذكية</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-chart-column"></i>
+                    <h3>التقارير</h3>
+                    <p>تقارير مفصلة وتحليلات ذكية لمساعدة اتخاذ القرار</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-cube"></i>
+                    <h3>المخزون</h3>
+                    <p>إدارة المخزون وقطع الغيار والمستهلكات بكفاءة</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <h3>الأمان</h3>
+                    <p>إدارة الصلاحيات والمستخدمين وحماية بيانات النظام</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-users"></i>
+                    <h3>الموارد البشرية</h3>
+                    <p>إدارة الموظفين، الرواتب، الحضور والانصراف</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-calculator"></i>
+                    <h3>المحاسبة</h3>
+                    <p>إدارة الحسابات العامة والقيود والميزانيات المالية</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-user-group"></i>
+                    <h3>العملاء</h3>
+                    <p>إدارة بيانات العملاء والعقود وسجل التعاملات</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-truck-fast"></i>
+                    <h3>الموردين</h3>
+                    <p>إدارة الموردين والمشتريات وتقييم الأداء</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+                <article class="service-card">
+                    <i class="fa-solid fa-award"></i>
+                    <h3>الجودة</h3>
+                    <p>إدارة معايير الجودة والتفتيش وضمان الامتثال</p>
+                    <span class="arrow"><i class="fa-solid fa-arrow-left"></i></span>
+                </article>
+            </div>
+        </section>
 
-              
-                <div class="feature-card">
-                    <div class="card-icon">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <h3 class="card-title">نظام الأمان</h3>
-                    <p class="card-text">
-                        حماية متعددة الطبقات تشمل تشفير البيانات، مصادقة متعددة العوامل，
-                        أنظمة مراقبة، وتتبع المركبات عبر GPS مع إنذارات مباشرة.
-                    </p>
-                    <div class="card-stats">
-                        <div class="stat-item">
-                            <span class="stat-number">256-bit</span>
-                            <span class="stat-label">تشفير</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number">MFA</span>
-                            <span class="stat-label">مصادقة</span>
-                        </div>
-                    </div>
-                </div>
-
-                </div>
-    </section>
-
-    <!-- الأنظمة الفرعية -->
-    <section class="section">
-        <div class="container">
-            <h2 class="section-title" data-i18n="section.systems">الأنظمة الفرعية (40+ نظام)</h2>
+        <section class="systems" id="systems">
+            <h2>الأنظمة والمكونات <i class="fa-solid fa-circle-nodes"></i></h2>
             <div class="systems-grid">
-                <div class="system-item">
-                    <i class="fas fa-tasks system-icon"></i>
-                    <div class="system-name">إدارة الطلبات</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-truck system-icon"></i>
-                    <div class="system-name">تتبع المركبات</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-user-tie system-icon"></i>
-                    <div class="system-name">إدارة السائقين</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-gas-pump system-icon"></i>
-                    <div class="system-name">محطات الوقود</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-file-invoice-dollar system-icon"></i>
-                    <div class="system-name">الفواتير</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-tools system-icon"></i>
-                    <div class="system-name">الصيانة</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-video system-icon"></i>
-                    <div class="system-name">المراقبة</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-chart-bar system-icon"></i>
-                    <div class="system-name">التقارير</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-boxes system-icon"></i>
-                    <div class="system-name">المخزون</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-shield-alt system-icon"></i>
-                    <div class="system-name">الأمان</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-users system-icon"></i>
-                    <div class="system-name">الموارد البشرية</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-calculator system-icon"></i>
-                    <div class="system-name">المحاسبة</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-handshake system-icon"></i>
-                    <div class="system-name">العملاء</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-truck-loading system-icon"></i>
-                    <div class="system-name">الموردين</div>
-                </div>
-                <div class="system-item">
-                    <i class="fas fa-clipboard-check system-icon"></i>
-                    <div class="system-name">الجودة</div>
+                <div class="mini-system">نظام الفواتير <i class="fa-regular fa-file-lines"></i></div>
+                <div class="mini-system">نظام إدارة المخزون <i class="fa-solid fa-box"></i></div>
+                <div class="mini-system">نظام إدارة الأسطول <i class="fa-solid fa-truck"></i></div>
+                <div class="mini-system">نظام تتبع المركبات <i class="fa-solid fa-route"></i></div>
+                <div class="mini-system">نظام التكامل API <i class="fa-solid fa-plug"></i></div>
+                <div class="mini-system">نظام الشكاوى <i class="fa-solid fa-magnifying-glass"></i></div>
+                <div class="mini-system">نظام التقارير <i class="fa-solid fa-chart-line"></i></div>
+                <div class="mini-system">نظام المستخدمين <i class="fa-solid fa-shield"></i></div>
+                <div class="mini-system">نظام الإشعارات <i class="fa-regular fa-bell"></i></div>
+                <div class="mini-system">نظام إدارة الاحتياطي <i class="fa-solid fa-chart-simple"></i></div>
+            </div>
+        </section>
+
+        <section class="tracking-card tracking">
+            <div class="tracking-copy">
+                <h2>تتبع مباشر في الوقت الحقيقي</h2>
+                <p>راقب جميع مركباتك وشحناتك على الخريطة في الوقت الفعلي مع تحديثات مستمرة.</p>
+                <div class="check-list">
+                    <span><i class="fa-solid fa-check"></i>تحديد المواقع بدقة عالية</span>
+                    <span><i class="fa-solid fa-check"></i>تحديث تلقائي كل 30 ثانية</span>
+                    <span><i class="fa-solid fa-check"></i>تنبيهات فورية للحوادث والتأخيرات</span>
+                    <span><i class="fa-solid fa-check"></i>تقرير شامل عن المسارات والرحلات</span>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <!-- محطات الوقود -->
-    <section class="section section-alt">
-        <div class="container">
-            <h2 class="section-title" data-i18n="section.stations">شبكة محطات " شرركة البحيرة العربية "</h2>
-            <p style="text-align: center; margin-bottom: 25px; font-size: 1rem; color: var(--muted);"
-                data-i18n="stations.distribution">
-                30 محطة وقود موزعة في جميع أنحاء المملكة
-            </p>
-            <div class="stations-container">
-                <div class="station-card">
-                    <div class="station-header">
-                        <i class="fas fa-gas-pump station-icon"></i>
-                        <div class="station-info">
-                            <h4>الرياض</h4>
-                            <p><i class="fas fa-map-marker-alt"></i> طريق الملك فهد</p>
-                        </div>
-                    </div>
-                
-                        <div class="stat-box">
-                            <span class="stat-value">24/7</span>
-                            <span class="stat-name">تشغيل</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="station-card">
-                    <div class="station-header">
-                        <i class="fas fa-gas-pump station-icon"></i>
-                        <div class="station-info">
-                            <h4>حائل</h4>
-                            <p><i class="fas fa-map-marker-alt"></i> طريق المدينة</p>
-                        </div>
-                    </div>
-                   
-                        <div class="stat-box">
-                            <span class="stat-value">24/7</span>
-                            <span class="stat-name">تشغيل</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="station-card">
-                    <div class="station-header">
-                        <i class="fas fa-gas-pump station-icon"></i>
-                        <div class="station-info">
-                            <h4> القصيم</h4>
-                            <p><i class="fas fa-map-marker-alt"></i>بريدة</p>
-                        </div>
-                    </div>
-                    <div class="station-stats">
-                        <div class="stat-box">
-                            <span class="stat-value">100K</span>
-                            <span class="stat-name">سعة</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-value">75%</span>
-                            <span class="stat-name">مخزون</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-value">60+</span>
-                            <span class="stat-name">مركبة/يوم</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-value">24/7</span>
-                            <span class="stat-name">تشغيل</span>
-                        </div>
-                    </div>
+            <div class="tracking-map">
+                <svg class="route" viewBox="0 0 740 260" fill="none" aria-hidden="true">
+                    <path d="M90 170 C175 110 236 132 304 76 C370 22 430 128 498 86 C570 42 628 112 680 72"
+                        stroke="#27e7ff" stroke-width="5" stroke-linecap="round" />
+                    <path d="M90 170 C175 110 236 132 304 76 C370 22 430 128 498 86 C570 42 628 112 680 72"
+                        stroke="#735cff" stroke-width="16" opacity=".18" stroke-linecap="round" />
+                    <g fill="#27e7ff">
+                        <circle cx="90" cy="170" r="8" />
+                        <circle cx="304" cy="76" r="8" />
+                        <circle cx="498" cy="86" r="8" />
+                        <circle cx="680" cy="72" r="8" />
+                    </g>
+                    <g fill="#13245a" stroke="#9cb8ff" stroke-width="4">
+                        <path d="M92 118c-18 0-33 14-33 32 0 27 33 58 33 58s33-31 33-58c0-18-15-32-33-32z" />
+                        <path d="M500 34c-18 0-33 14-33 32 0 27 33 58 33 58s33-31 33-58c0-18-15-32-33-32z" />
+                        <path d="M680 20c-18 0-33 14-33 32 0 27 33 58 33 58s33-31 33-58c0-18-15-32-33-32z" />
+                    </g>
+                </svg>
+                <div class="route-card">
+                    <strong>شحنة رقم 1023</strong>
+                    في الطريق<br>
+                    السرعة: 65 كم / س<br>
+                    المسافة: 120 كم<br>
+                    الوقت المتوقع: 1:45 س
                 </div>
             </div>
+        </section>
 
-            <div style="text-align: center; margin-top: 25px;">
-                <p style="color: var(--muted); font-size: 0.9rem; line-height: 1.6;">
-                    <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-inline-start: 8px;"></i>
-                    <span data-i18n="stations.network_note">شبكة محطات "شركة البحيرة العربية" تغطي 13 منطقة إدارية وتخدم 1000+ مركبة يومياً</span>
-                </p>
+        <section class="stats">
+            <div class="stat-card"><i class="fa-solid fa-headset"></i><div><strong>24/7</strong><span>دعم فني</span></div></div>
+            <div class="stat-card"><i class="fa-solid fa-award"></i><div><strong>99.9%</strong><span>وقت التشغيل</span></div></div>
+            <div class="stat-card"><i class="fa-solid fa-gas-pump"></i><div><strong>100+</strong><span>مركبة نشطة</span></div></div>
+            <div class="stat-card"><i class="fa-solid fa-building"></i><div><strong>30+</strong><span>محطة وقود</span></div></div>
+            <div class="stat-card"><i class="fa-regular fa-handshake"></i><div><strong>500+</strong><span>شركة عميلة</span></div></div>
+        </section>
+
+        <section class="cta" id="pricing">
+            <button class="btn btn-primary" onclick="employeeLogin()">
+                <i class="fa-solid fa-rocket"></i>
+                ابدأ رحلتك الآن
+            </button>
+            <div>
+                <h2>جاهز للارتقاء بعمليات النقل لديك؟</h2>
+                <p>انضم إلى مئات الشركات التي تثق في منصتنا لإدارة عملياتها بكفاءة عالية.</p>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- التتبع الحي -->
-    <section class="section">
-        <div class="container">
-            <h2 class="section-title" data-i18n="section.tracking">التتبع الحي والمراقبة</h2>
-            <div class="live-tracking">
-                <p style="text-align: center; font-size: 1rem; margin-bottom: 20px; color: var(--muted);"
-                    data-i18n="tracking.summary">
-                    نظام تتبع مباشر لـ 1500+ مركبة نشطة
-                </p>
-                <div class="tracking-map">
-                    <i class="fas fa-map-marked-alt"
-                        style="font-size: 3.5rem; color: var(--accent-blue); opacity: 0.7;"></i>
-
-                    <!-- مركبات متحركة -->
-                    <div class="vehicle moving-vehicle" style="top: 30%; right: 20%;">
-                        <i class="fas fa-truck" style="font-size: 2.2rem; color: #4caf50;"></i>
-                    </div>
-                    <div class="vehicle" style="top: 60%; right: 50%; animation-delay: 1s;">
-                        <i class="fas fa-truck" style="font-size: 2.2rem; color: #ff9800;"></i>
-                    </div>
-                    <div class="vehicle moving-vehicle" style="top: 40%; right: 70%; animation-delay: 0.5s;">
-                        <i class="fas fa-gas-pump" style="font-size: 2.2rem; color: #f44336;"></i>
-                    </div>
-                    <div class="vehicle" style="top: 20%; right: 40%; animation-delay: 1.5s;">
-                        <i class="fas fa-ship" style="font-size: 1.8rem; color: #9c27b0;"></i>
-                    </div>
-
-                    <!-- نقاط على الخريطة -->
-                    <div
-                        style="position: absolute; top: 50%; right: 30%; width: 12px; height: 12px; background: #ffeb3b; border-radius: 50%; box-shadow: 0 0 15px #ffeb3b;">
-                    </div>
-                    <div
-                        style="position: absolute; top: 70%; right: 60%; width: 14px; height: 14px; background: #00bcd4; border-radius: 50%; box-shadow: 0 0 15px #00bcd4;">
-                    </div>
+        <footer class="footer" id="contact">
+            <div>
+                <div class="social">
+                    <a href="#" aria-label="LinkedIn"><i class="fa-brands fa-linkedin-in"></i></a>
+                    <a href="#" aria-label="Twitter"><i class="fa-brands fa-twitter"></i></a>
+                    <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
                 </div>
-                <div style="text-align: center; margin-top: 20px; font-size: 0.9rem;">
-                    <span style="color: #4caf50;"><i class="fas fa-circle"></i> <span
-                            data-i18n="tracking.legend.road">شحنات برية</span></span>
-                    &nbsp;&nbsp;
-                    <span style="color: #ff9800;"><i class="fas fa-circle"></i> <span
-                            data-i18n="tracking.legend.station">في المحطات</span></span>
-                    &nbsp;&nbsp;
-                    <span style="color: #f44336;"><i class="fas fa-circle"></i> <span
-                            data-i18n="tracking.legend.fuel">ناقلات وقود</span></span>
-                    &nbsp;&nbsp;
-                    <span style="color: #9c27b0;"><i class="fas fa-circle"></i> <span
-                            data-i18n="tracking.legend.sea">شحنات بحرية</span></span>
-                </div>
+                <h4 style="margin-top: 18px;">تابعنا</h4>
             </div>
-        </div>
-    </section>
-
-    <!-- شركات النقل الشريكة -->
-    <section class="section section-alt">
-        <div class="container">
-            <div class="companies-section">
-                <h2 class="section-title" data-i18n="section.companies">شبكة شركات النقل (500+ شركة)</h2>
-                <div class="companies-grid">
-                    <div class="company-card">
-                        <div class="company-header">
-                            <i class="fas fa-truck-moving company-icon"></i>
-                            <div class="company-name">النقل البري</div>
-                        </div>
-                        <div class="company-details">
-                            <p><i class="fas fa-check-circle"></i> نقل المحروقات والبتروكيماويات</p>
-                            <p><i class="fas fa-check-circle"></i> نقل المواد الخطرة</p>
-                            <p><i class="fas fa-check-circle"></i> 200+ صهريج متخصص</p>
-                            <p><i class="fas fa-check-circle"></i> تغطية جميع المناطق</p>
-                        </div>
-                    </div>
-
-                    <div class="company-card">
-                        <div class="company-header">
-                            <i class="fas fa-ship company-icon"></i>
-                            <div class="company-name">النقل البحري</div>
-                        </div>
-                        <div class="company-details">
-                            <p><i class="fas fa-check-circle"></i> نقل حاويات وبضائع</p>
-                            <p><i class="fas fa-check-circle"></i> خطوط منتظمة للخليج</p>
-                            <p><i class="fas fa-check-circle"></i> خدمات لوجستية متكاملة</p>
-                            <p><i class="fas fa-check-circle"></i> تخليص جمركي سريع</p>
-                        </div>
-                    </div>
-
-                  
-
-                <div style="text-align: center; margin-top: 25px;">
-                    <div class="progress-container">
-                        <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 8px;"
-                            data-i18n="companies.coverage_label">نسبة التغطية الجغرافية</p>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: 75%"></div>
-                        </div>
-                        <p style="color: var(--accent-blue); font-weight: 700; font-size: 1rem;"
-                            data-i18n="companies.coverage_value">75% تغطية جميع مناطق المملكة</p>
+            <div>
+                <h4>روابط سريعة</h4>
+                <a href="#home">الرئيسية</a>
+                <a href="#services">الخدمات</a>
+                <a href="#systems">الأنظمة</a>
+                <a href="#pricing">الأسعار</a>
+            </div>
+            <div>
+                <h4>الدعم والمساعدة</h4>
+                <a href="#">مركز المساعدة</a>
+                <a href="#">الأسئلة الشائعة</a>
+                <a href="#">دليل المستخدم</a>
+                <a href="#contact">تواصل معنا</a>
+            </div>
+            <div id="about">
+                <h4>عن الشركة</h4>
+                <a href="#">من نحن</a>
+                <a href="#">رؤيتنا</a>
+                <a href="#">رسالتنا</a>
+                <a href="#">شركاؤنا</a>
+            </div>
+            <div>
+                <div class="brand">
+                    <img src="images/logo.png" alt="شركة البحيرة العربية">
+                    <div>
+                        <h3>شركة البحيرة العربية</h3>
+                        <p>للنقل والتوزيع</p>
                     </div>
                 </div>
+                <p>حلول ذكية لإدارة النقل والتوزيع.</p>
             </div>
-        </div>
-    </section>
+            <div class="copyright">جميع الحقوق محفوظة © <span id="currentYear">2024</span></div>
+        </footer>
+    </main>
 
-    <!-- زر الدخول للموظفين -->
-    <div class="login-btn-container">
-        <button class="login-btn" onclick="employeeLogin()">
-            <i class="fas fa-sign-in-alt"></i>
-            <span data-i18n="ui.employee_login">دخول الموظفين</span>
-        </button>
-    </div>
-
-    <!-- الفوتر -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4 data-i18n="footer.about">عن النظام</h4>
-                    <p data-i18n="footer.about_p1">نظام نبراس هو النظام المتكامل لإدارة وتتبع طلبات النقليات التابع لشركة البحيرة العربية.</p>
-                    <p data-i18n="footer.about_p2">يدعم جميع أنواع النقل البري، البحري، .</p>
-                </div>
-
-                <div class="footer-section">
-                    <h4 data-i18n="footer.contact">معلومات الاتصال</h4>
-                    <a href="tel:+966547081118"><i class="fas fa-phone"></i>966547081118+</a>
-                    <a href="n.n.66@hotmail.com"><i class="fas fa-envelope"></i> n.n.66@hotmail.com</a>
-                    <a href="#"><i class="fas fa-map-marker-alt"></i> <span data-i18n="footer.location">حائل - السعودية</span></a>
-                    <a href="#"><i class="fas fa-building"></i> <span data-i18n="footer.company">شركة البحيرة العربية</span></a>
-                </div>
-
-                <div class="footer-section">
-                    <h4 data-i18n="footer.quick_links">روابط سريعة</h4>
-                    <a href="#"><i class="fas fa-info-circle"></i> <span data-i18n="footer.link.about">عن الشركة</span></a>
-                    <a href="#"><i class="fas fa-network-wired"></i> <span data-i18n="footer.link.stations">شبكة المحطات</span></a>
-                    <a href="#"><i class="fas fa-handshake"></i> <span data-i18n="footer.link.partners">الشركاء</span></a>
-                    <a href="#"><i class="fas fa-headset"></i> <span data-i18n="footer.link.support">الدعم الفني</span></a>
-                </div>
-            </div>
-
-            <div class="footer-bottom">
-                <p data-i18n="footer.copyright">
-                    © <span class="copyright-year" id="currentYear">2023</span> نظام نبراس - شركة البحيرة العربية
-                    للنقليات. جميع الحقوق محفوظة.
-                    <br>
-                    هذا النظام حاصل على شهادة ISO 9001:2015 وشهادة ISO 27001
-                </p>
-                <p style="margin-top: 10px; font-size: 0.8rem; color: var(--muted);">
-                    <i class="fas fa-server" style="margin-inline-end: 15px;"></i>
-                    <span data-i18n="footer.hosting">مستضاف على خوادم سحابية آمنة</span>
-                </p>
-            </div>
-        </div>
-    </footer>
+    <button class="btn btn-primary mobile-login" onclick="employeeLogin()">
+        <i class="fa-solid fa-right-to-bracket"></i>
+        دخول الموظفين
+    </button>
 
     <script>
-        const translations = {
-            ar: {
-                'meta.title': 'نظام نبراس لإدارة وتتبع الطلبات | شركة البحيرة العربية',
-                'meta.description': 'نظام نبراس من شركة البحيرة العربية لإدارة وتتبع طلبات الوقود، الإشراف على العمليات، وتحسين كفاءة التوزيع في الوقت الحقيقي.',
-                'ui.language': 'اللغة',
-                'ui.theme': 'المظهر',
-                'theme.light': 'فاتح',
-                'theme.default': 'افتراضي',
-                'theme.dark': 'داكن',
-                'logo.main': 'شركة البحيرة العربية',
-                'logo.sub': 'نظام نبراس ',
-                'hero.title': 'نظام نبراس المتكامل لإدارة النقليات',
-                'hero.subtitle': 'نظام متطور لإدارة وتتبع جميع عمليات النقل بمختلف أنواعها، مع تركيز خاص على نقل المحروقات عبر شبكة محطات "شركة البحيرة العربية" البالغة عدد من محطات موزعة في جميع أنحاء المملكة. النظام يدعم 40+ نظام فرعي ويخدم عدد كبير من شركات النقل .',
-                'counter.stations': 'محطة وقود',
-                'counter.companies': 'شركة نقل',
-                'counter.vehicles': 'مركبة نشطة',
-                'counter.systems': 'نظام فرعي',
-                'section.features': 'الميزات المتقدمة للنظام',
-                'section.systems': 'الأنظمة الفرعية (40+ نظام)',
-                'section.stations': 'شبكة محطات "شركة البحيرة العربية"',
-                'section.tracking': 'التتبع الحي والمراقبة',
-                'section.companies': 'شبكة شركات النقل',
-                'stations.distribution': 'عدد من محطات وقود موزعة في جميع أنحاء المملكة',
-                'stations.network_note': 'شبكة محطات "شركة البحيرة العربية" تغطي 13 منطقة إدارية وتخدم اكثر من مركبة يومياً',
-                'tracking.summary': 'نظام تتبع مباشر لـ لجميع المركبات النشطة',
-                'tracking.legend.road': 'شحنات برية',
-                'tracking.legend.station': 'في المحطات',
-                'tracking.legend.fuel': 'ناقلات وقود',
-                'tracking.legend.sea': 'شحنات بحرية',
-                'companies.coverage_label': 'نسبة التغطية الجغرافية',
-                'companies.coverage_value': '75% تغطية جميع مناطق المملكة',
-                'illustration.station': 'محطة وقود ذكية',
-                'illustration.pump': 'مضخة وقود متصلة',
-                'illustration.fleet': 'أسطول التزويد',
-                'ui.employee_login': 'دخول الموظفين',
-                'footer.about': 'عن النظام',
-                'footer.about_p1': 'نظام نبراس هو النظام المتكامل لإدارة وتتبع طلبات النقليات التابع لشركة البحيرة العربية.',
-                'footer.about_p2': 'يدعم جميع أنواع النقل البري، البحري، .',
-                'footer.contact': 'معلومات الاتصال',
-                'footer.quick_links': 'روابط سريعة',
-                'footer.location': 'حائل - السعودية',
-                'footer.company': 'شركة البحيرة العربية',
-                'footer.link.about': 'عن الشركة',
-                'footer.link.stations': 'شبكة المحطات',
-                'footer.link.partners': 'الشركاء',
-                'footer.link.support': 'الدعم الفني',
-                'footer.copyright': '© {year} نظام نبراس - شركة البحيرة العربية للنقليات. جميع الحقوق محفوظة.<br>هذا النظام حاصل على شهادة ISO 9001:2015 وشهادة ISO 27001',
-                'footer.hosting': 'مستضاف على خوادم سحابية آمنة',
-                'notify.auto_login': 'تم تسجيل الدخول تلقائيا',
-                'notify.login': 'تم التعرف على جلسة نشطة، جاري فتح النظام...',
-                'notify.redirect': 'جارٍ التوجيه إلى بوابة الدخول للموظفين...',
-                'notify.logout': 'تم تسجيل الخروج'
-            },
-            en: {
-                'meta.title': 'Nibras Order Tracking & Transport Management | Al-Buhaira Arabian',
-                'meta.description': 'Nibras system from Al-Buhaira Arabian to manage and track fuel orders, monitor operations, and improve distribution efficiency in real time.',
-                'ui.language': 'Language',
-                'ui.theme': 'Appearance',
-                'theme.light': 'Light',
-                'theme.default': 'Default',
-                'theme.dark': 'Dark',
-                'logo.main': 'Nibras Integrated System',
-                'logo.sub': 'Al-Buhaira Arabian Transport Co.',
-                'hero.title': 'Nibras Integrated Transport Management',
-                'hero.subtitle': 'An advanced system to manage and track all transport operations, with a special focus on fuel distribution through the "Shiryan Al-Khatt" network of 30 stations across the Kingdom. Supports 40+ sub-systems and serves 500+ partner carriers.',
-                'counter.stations': 'Fuel Stations',
-                'counter.companies': 'Transport Companies',
-                'counter.vehicles': 'Active Vehicles',
-                'counter.systems': 'Sub-systems',
-                'section.features': 'Advanced System Features',
-                'section.systems': 'Sub-Systems (40+ Systems)',
-                'section.stations': 'Shiryan Al-Khatt Stations Network',
-                'section.tracking': 'Live Tracking & Monitoring',
-                'section.companies': 'Transport Companies Network (500+)',
-                'stations.distribution': '30 fuel stations across the Kingdom',
-                'stations.network_note': 'Shiryan Al-Khatt stations cover 13 administrative regions and serve 1,000+ vehicles daily',
-                'tracking.summary': 'Live tracking for 1,500+ active vehicles',
-                'tracking.legend.road': 'Road shipments',
-                'tracking.legend.station': 'At stations',
-                'tracking.legend.fuel': 'Fuel tankers',
-                'tracking.legend.sea': 'Sea shipments',
-                'companies.coverage_label': 'Geographic Coverage',
-                'companies.coverage_value': '75% coverage across the Kingdom',
-                'illustration.station': 'Smart Fuel Station',
-                'illustration.pump': 'Connected Fuel Pump',
-                'illustration.fleet': 'Supply Fleet',
-                'ui.employee_login': 'Employee Login',
-                'footer.about': 'About the System',
-                'footer.about_p1': 'Nibras is the integrated system for managing and tracking transport orders for Al-Buhaira Arabian.',
-                'footer.about_p2': 'Supports road, sea, and air transport.',
-                'footer.contact': 'Contact Info',
-                'footer.quick_links': 'Quick Links',
-                'footer.location': 'Hail, Saudi Arabia',
-                'footer.company': 'Al-Buhaira Arabian Co.',
-                'footer.link.about': 'About the Company',
-                'footer.link.stations': 'Stations Network',
-                'footer.link.partners': 'Partners',
-                'footer.link.support': 'Technical Support',
-                'footer.copyright': '© {year} Nibras System - Al-Buhaira Arabian Transport. All rights reserved.<br>This system is ISO 9001:2015 and ISO 27001 certified',
-                'footer.hosting': 'Hosted on secure cloud servers',
-                'notify.auto_login': 'Logged in automatically',
-                'notify.login': 'Active session detected, opening the system...',
-                'notify.redirect': 'Redirecting to the employee portal...',
-                'notify.logout': 'Logged out'
-            },
-            bn: {
-                'meta.title': 'নিবরাস অর্ডার ট্র্যাকিং ও পরিবহন ব্যবস্থাপনা | আল-বুহাইরা আরবিয়ান',
-                'meta.description': 'আল-বুহাইরা আরবিয়ান-এর নিবরাস সিস্টেম: জ্বালানি অর্ডার পরিচালনা ও ট্র্যাকিং, অপারেশন মনিটরিং এবং রিয়েল-টাইমে বিতরণ দক্ষতা বৃদ্ধি।',
-                'ui.language': 'ভাষা',
-                'ui.theme': 'থিম',
-                'theme.light': 'হালকা',
-                'theme.default': 'ডিফল্ট',
-                'theme.dark': 'ডার্ক',
-                'logo.main': 'নিবরাস সমন্বিত সিস্টেম',
-                'logo.sub': 'আল-বুহাইরা আরবিয়ান ট্রান্সপোর্ট কোম্পানি',
-                'hero.title': 'নিবরাস সমন্বিত পরিবহন ব্যবস্থাপনা',
-                'hero.subtitle': 'সমস্ত পরিবহন কার্যক্রম পরিচালনা ও ট্র্যাক করার উন্নত সিস্টেম, জ্বালানি পরিবহনে বিশেষ ফোকাসসহ। "শিরিয়ান আল-খাত" নেটওয়ার্কের ৩০টি স্টেশন জুড়ে সেবা দেয়। ৪০+ সাব-সিস্টেম সমর্থন করে এবং ৫০০+ পার্টনার পরিবহন কোম্পানিকে সেবা দেয়।',
-                'counter.stations': 'জ্বালানি স্টেশন',
-                'counter.companies': 'পরিবহন কোম্পানি',
-                'counter.vehicles': 'সক্রিয় যানবাহন',
-                'counter.systems': 'সাব-সিস্টেম',
-                'section.features': 'সিস্টেমের উন্নত বৈশিষ্ট্য',
-                'section.systems': 'সাব-সিস্টেম (৪০+)',
-                'section.stations': '"শিরিয়ান আল-খাত" স্টেশন নেটওয়ার্ক',
-                'section.tracking': 'লাইভ ট্র্যাকিং ও মনিটরিং',
-                'section.companies': 'পরিবহন কোম্পানি নেটওয়ার্ক (৫০০+)',
-                'stations.distribution': 'রাজ্যজুড়ে ৩০টি জ্বালানি স্টেশন',
-                'stations.network_note': '"শিরিয়ান আল-খাত" নেটওয়ার্ক ১৩টি প্রশাসনিক অঞ্চল কভার করে এবং দৈনিক ১,০০০+ যানবাহনকে সেবা দেয়',
-                'tracking.summary': '১,৫০০+ সক্রিয় যানবাহনের লাইভ ট্র্যাকিং',
-                'tracking.legend.road': 'স্থল পরিবহন',
-                'tracking.legend.station': 'স্টেশনে',
-                'tracking.legend.fuel': 'জ্বালানি ট্যাংকার',
-                'tracking.legend.sea': 'সমুদ্র পরিবহন',
-                'companies.coverage_label': 'ভৌগোলিক কভারেজ',
-                'companies.coverage_value': 'রাজ্যজুড়ে ৯৫% কভারেজ',
-                'illustration.station': 'স্মার্ট ফুয়েল স্টেশন',
-                'illustration.pump': 'কানেক্টেড ফুয়েল পাম্প',
-                'illustration.fleet': 'সরবরাহ বহর',
-                'ui.employee_login': 'কর্মচারী লগইন',
-                'footer.about': 'সিস্টেম সম্পর্কে',
-                'footer.about_p1': 'নিবরাস হলো আল-বুহাইরা আরবিয়ান-এর পরিবহন অর্ডার ব্যবস্থাপনা ও ট্র্যাকিংয়ের সমন্বিত সিস্টেম।',
-                'footer.about_p2': 'স্থল, সমুদ্র ও আকাশ পরিবহন সমর্থন করে।',
-                'footer.contact': 'যোগাযোগ',
-                'footer.quick_links': 'দ্রুত লিঙ্ক',
-                'footer.location': 'হাইল, সৌদি আরব',
-                'footer.company': 'আল-বুহাইরা আরবিয়ান',
-                'footer.link.about': 'কোম্পানি সম্পর্কে',
-                'footer.link.stations': 'স্টেশন নেটওয়ার্ক',
-                'footer.link.partners': 'অংশীদার',
-                'footer.link.support': 'প্রযুক্তিগত সহায়তা',
-                'footer.copyright': '© {year} নিবরাস সিস্টেম - আল-বুহাইরা আরবিয়ান ট্রান্সপোর্ট। সর্বস্বত্ব সংরক্ষিত।<br>এই সিস্টেম ISO 9001:2015 এবং ISO 27001 সার্টিফাইড',
-                'footer.hosting': 'সুরক্ষিত ক্লাউড সার্ভারে হোস্টেড',
-                'notify.auto_login': 'স্বয়ংক্রিয়ভাবে লগইন হয়েছে',
-                'notify.login': 'সক্রিয় সেশন পাওয়া গেছে, সিস্টেম খুলছে...',
-                'notify.redirect': 'কর্মচারী পোর্টালে রিডাইরেক্ট করা হচ্ছে...',
-                'notify.logout': 'লগআউট হয়েছে'
-            },
-            ur: {
-                'meta.title': 'نِبراس آرڈر ٹریکنگ و ٹرانسپورٹ مینجمنٹ | البحیرہ عربین',
-                'meta.description': 'البحیرہ عربین کا نِبراس سسٹم: فیول آرڈرز کی مینجمنٹ و ٹریکنگ، آپریشنز کی نگرانی اور ریئل ٹائم میں تقسیم کی کارکردگی بہتر بنانا۔',
-                'ui.language': 'زبان',
-                'ui.theme': 'انداز',
-                'theme.light': 'ہلکا',
-                'theme.default': 'ڈیفالٹ',
-                'theme.dark': 'گہرا',
-                'logo.main': 'نِبراس جامع نظام',
-                'logo.sub': 'البحیرہ عربین ٹرانسپورٹ کمپنی',
-                'hero.title': 'نِبراس جامع ٹرانسپورٹ مینجمنٹ',
-                'hero.subtitle': 'تمام نقل و حمل کے عمل کو منظم اور ٹریک کرنے کا جدید نظام، ایندھن کی ترسیل پر خصوصی توجہ کے ساتھ۔ "شریان الخط" کے 30 اسٹیشنز کے نیٹ ورک کے ذریعے پورے مملکت میں خدمت۔ 40+ ذیلی نظاموں کی سپورٹ اور 500+ شراکتی کمپنیوں کو خدمت۔',
-                'counter.stations': 'ایندھن اسٹیشن',
-                'counter.companies': 'ٹرانسپورٹ کمپنیاں',
-                'counter.vehicles': 'فعال گاڑیاں',
-                'counter.systems': 'ذیلی نظام',
-                'section.features': 'نظام کی جدید خصوصیات',
-                'section.systems': 'ذیلی نظام (40+)',
-                'section.stations': '"شریان الخط" اسٹیشن نیٹ ورک',
-                'section.tracking': 'لائیو ٹریکنگ و مانیٹرنگ',
-                'section.companies': 'ٹرانسپورٹ کمپنی نیٹ ورک (500+)',
-                'stations.distribution': 'مملکت بھر میں 30 ایندھن اسٹیشن',
-                'stations.network_note': '"شریان الخط" نیٹ ورک 13 انتظامی علاقوں کا احاطہ کرتا ہے اور روزانہ 1000+ گاڑیوں کو سروس دیتا ہے',
-                'tracking.summary': '1500+ فعال گاڑیوں کی لائیو ٹریکنگ',
-                'tracking.legend.road': 'بری ترسیلات',
-                'tracking.legend.station': 'اسٹیشن پر',
-                'tracking.legend.fuel': 'فیول ٹینکر',
-                'tracking.legend.sea': 'بحری ترسیلات',
-                'companies.coverage_label': 'جغرافیائی کوریج',
-                'companies.coverage_value': 'مملکت بھر میں 75% کوریج',
-                'illustration.station': 'سمارٹ فیول اسٹیشن',
-                'illustration.pump': 'کنیکٹڈ فیول پمپ',
-                'illustration.fleet': 'سپلائی فلیٹ',
-                'ui.employee_login': 'ملازمین لاگ اِن',
-                'footer.about': 'نظام کے بارے میں',
-                'footer.about_p1': 'نِبراس، البحیرہ عربین کے لیے نقل و حمل آرڈرز کی مینجمنٹ اور ٹریکنگ کا جامع نظام ہے۔',
-                'footer.about_p2': 'بری، بحری اور فضائی نقل و حمل کو سپورٹ کرتا ہے۔',
-                'footer.contact': 'رابطہ معلومات',
-                'footer.quick_links': 'فوری روابط',
-                'footer.location': 'حائل، سعودی عرب',
-                'footer.company': 'البحیرہ عربین',
-                'footer.link.about': 'کمپنی کے بارے میں',
-                'footer.link.stations': 'اسٹیشن نیٹ ورک',
-                'footer.link.partners': 'شراکت دار',
-                'footer.link.support': 'ٹیکنیکل سپورٹ',
-                'footer.copyright': '© {year} نِبراس سسٹم - البحیرہ عربین ٹرانسپورٹ۔ تمام حقوق محفوظ ہیں۔<br>یہ نظام ISO 9001:2015 اور ISO 27001 سرٹیفائیڈ ہے',
-                'footer.hosting': 'محفوظ کلاؤڈ سرورز پر ہوسٹ کیا گیا',
-                'notify.auto_login': 'خودکار طور پر لاگ اِن ہوگیا',
-                'notify.login': 'فعال سیشن ملا، نظام کھولا جا رہا ہے...',
-                'notify.redirect': 'ملازمین کے پورٹل کی طرف بھیجا جا رہا ہے...',
-                'notify.logout': 'لاگ آؤٹ ہوگیا'
-            },
-            hi: {
-                'meta.title': 'निब्रास ऑर्डर ट्रैकिंग और परिवहन प्रबंधन | अल-बुहैरा अरबियन',
-                'meta.description': 'अल-बुहैरा अरबियन का निब्रास सिस्टम: ईंधन ऑर्डर का प्रबंधन व ट्रैकिंग, संचालन की निगरानी और रियल-टाइम में वितरण दक्षता में सुधार।',
-                'ui.language': 'भाषा',
-                'ui.theme': 'रूप',
-                'theme.light': 'लाइट',
-                'theme.default': 'डिफ़ॉल्ट',
-                'theme.dark': 'डार्क',
-                'logo.main': 'निब्रास समेकित प्रणाली',
-                'logo.sub': 'अल-बुहैरा अरबियन ट्रांसपोर्ट कंपनी',
-                'hero.title': 'निब्रास समेकित परिवहन प्रबंधन',
-                'hero.subtitle': 'सभी परिवहन संचालन का प्रबंधन और ट्रैकिंग करने के लिए उन्नत सिस्टम, ईंधन परिवहन पर विशेष फोकस के साथ। "शिरयान अल-खत्त" नेटवर्क की 30 स्टेशनों के माध्यम से पूरे राज्य में सेवा। 40+ उप-प्रणालियों का समर्थन और 500+ साझेदार कंपनियों की सेवा।',
-                'counter.stations': 'ईंधन स्टेशन',
-                'counter.companies': 'परिवहन कंपनियाँ',
-                'counter.vehicles': 'सक्रिय वाहन',
-                'counter.systems': 'उप-प्रणालियाँ',
-                'section.features': 'सिस्टम की उन्नत विशेषताएँ',
-                'section.systems': 'उप-प्रणालियाँ (40+)',
-                'section.stations': '"शिरयान अल-खत्त" स्टेशन नेटवर्क',
-                'section.tracking': 'लाइव ट्रैकिंग और मॉनिटरिंग',
-                'section.companies': 'परिवहन कंपनी नेटवर्क (500+)',
-                'stations.distribution': 'राज्यभर में 30 ईंधन स्टेशन',
-                'stations.network_note': '"शिरयान अल-खत्त" नेटवर्क 13 प्रशासनिक क्षेत्रों को कवर करता है और रोज़ाना 1,000+ वाहनों को सेवा देता है',
-                'tracking.summary': '1,500+ सक्रिय वाहनों की लाइव ट्रैकिंग',
-                'tracking.legend.road': 'सड़क परिवहन',
-                'tracking.legend.station': 'स्टेशनों पर',
-                'tracking.legend.fuel': 'ईंधन टैंकर',
-                'tracking.legend.sea': 'समुद्री शिपमेंट',
-                'companies.coverage_label': 'भौगोलिक कवरेज',
-                'companies.coverage_value': 'राज्यभर में 75% कवरेज',
-                'illustration.station': 'स्मार्ट ईंधन स्टेशन',
-                'illustration.pump': 'कनेक्टेड ईंधन पंप',
-                'illustration.fleet': 'आपूर्ति बेड़ा',
-                'ui.employee_login': 'कर्मचारी लॉगिन',
-                'footer.about': 'सिस्टम के बारे में',
-                'footer.about_p1': 'निब्रास अल-बुहैरा अरबियन के लिए परिवहन ऑर्डर प्रबंधन और ट्रैकिंग का समेकित सिस्टम है।',
-                'footer.about_p2': 'सड़क, समुद्री और हवाई परिवहन का समर्थन करता है।',
-                'footer.contact': 'संपर्क जानकारी',
-                'footer.quick_links': 'त्वरित लिंक',
-                'footer.location': 'हाइल, सऊदी अरब',
-                'footer.company': 'अल-बुहैरा अरबियन',
-                'footer.link.about': 'कंपनी के बारे में',
-                'footer.link.stations': 'स्टेशन नेटवर्क',
-                'footer.link.partners': 'साझेदार',
-                'footer.link.support': 'तकनीकी सहायता',
-                'footer.copyright': '© {year} निब्रास सिस्टम - अल-बुहैरा अरबियन ट्रांसपोर्ट। सर्वाधिकार सुरक्षित।<br>यह सिस्टम ISO 9001:2015 और ISO 27001 प्रमाणित है',
-                'footer.hosting': 'सुरक्षित क्लाउड सर्वरों पर होस्टेड',
-                'notify.auto_login': 'स्वचालित रूप से लॉगिन हुआ',
-                'notify.login': 'सक्रिय सत्र मिला, सिस्टम खोला जा रहा है...',
-                'notify.redirect': 'कर्मचारी पोर्टल पर भेजा जा रहा है...',
-                'notify.logout': 'लॉगआउट हो गया'
-            }
-        };
-
-        const dirMap = { ar: 'rtl', ur: 'rtl', en: 'ltr', bn: 'ltr', hi: 'ltr' };
-        let currentLang = 'ar';
-        let typewriterTimer = null;
-        let themeTimer = null;
-
         function setYear() {
             const yearEl = document.getElementById('currentYear');
             if (yearEl) {
@@ -2213,272 +1569,44 @@
             }
         }
 
-        function getI18n(key) {
-            return (translations[currentLang] && translations[currentLang][key]) ||
-                (translations.ar && translations.ar[key]) ||
-                '';
-        }
+        function hasValidToken() {
+            const token = localStorage.getItem('auth_token');
+            if (!token) return false;
 
-        function translateElement(el, lang) {
-            const key = el.getAttribute('data-i18n');
-            const text = (translations[lang] && translations[lang][key]) ||
-                (translations.ar && translations.ar[key]);
-            if (!text) return;
-
-            if (key === 'footer.copyright') {
-                const year = new Date().getFullYear();
-                el.innerHTML = text.replace('{year}', `<span class="copyright-year" id="currentYear">${year}</span>`);
-                return;
-            }
-
-            el.textContent = text;
-        }
-
-        function typeHeroTitle(text) {
-            const heroTitle = document.querySelector('.hero h1');
-            if (!heroTitle) return;
-
-            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                heroTitle.textContent = text;
-                return;
-            }
-
-            if (typewriterTimer) {
-                clearTimeout(typewriterTimer);
-            }
-
-            heroTitle.textContent = '';
-            let i = 0;
-
-            const step = () => {
-                if (i < text.length) {
-                    heroTitle.textContent += text.charAt(i);
-                    i += 1;
-                    typewriterTimer = setTimeout(step, 35);
-                }
-            };
-
-            typewriterTimer = setTimeout(step, 250);
-        }
-
-        function applyLanguage(lang, { persist = true } = {}) {
-            currentLang = lang;
-            const html = document.documentElement;
-            const dir = dirMap[lang] || 'rtl';
-
-            html.setAttribute('lang', lang);
-            html.setAttribute('dir', dir);
-
-            document.body.classList.remove('lang-ar', 'lang-en', 'lang-bn', 'lang-ur', 'lang-hi');
-            document.body.classList.add(`lang-${lang}`);
-
-            document.querySelectorAll('[data-lang]').forEach((btn) => {
-                const active = btn.dataset.lang === lang;
-                btn.classList.toggle('active', active);
-                btn.setAttribute('aria-pressed', active);
-            });
-
-            document.querySelectorAll('[data-i18n]').forEach((el) => translateElement(el, lang));
-
-            document.title = getI18n('meta.title') || document.title;
-            const metaDesc = document.querySelector('meta[name="description"]');
-            if (metaDesc) {
-                metaDesc.setAttribute('content', getI18n('meta.description') || metaDesc.getAttribute('content'));
-            }
-
-            setYear();
-
-            const heroTitle = document.querySelector('.hero h1');
-            if (heroTitle) {
-                typeHeroTitle(heroTitle.textContent);
-            }
-
-            if (persist) {
-                localStorage.setItem('lang', lang);
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.exp * 1000 > Date.now();
+            } catch (e) {
+                return false;
             }
         }
 
-        function applyTheme(theme, { persist = true } = {}) {
-            document.body.dataset.theme = theme;
-
-            document.querySelectorAll('[data-theme]').forEach((btn) => {
-                const active = btn.dataset.theme === theme;
-                btn.classList.toggle('active', active);
-                btn.setAttribute('aria-pressed', active);
-            });
-
-            document.body.classList.add('theme-transition');
-            if (themeTimer) {
-                clearTimeout(themeTimer);
-            }
-            themeTimer = setTimeout(() => {
-                document.body.classList.remove('theme-transition');
-            }, 800);
-
-            if (persist) {
-                localStorage.setItem('theme', theme);
-            }
-        }
-
-        // عرض إشعار
-        function showNotification(message) {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.style.display = 'block';
-
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 3000);
-        }
-
-        // إضافة تأثيرات حركية عند التحميل
-        document.addEventListener('DOMContentLoaded', function () {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            const savedLang = localStorage.getItem('lang') || 'ar';
-
-            applyTheme(savedTheme, { persist: false });
-            applyLanguage(savedLang, { persist: false });
-
-            document.querySelectorAll('[data-theme]').forEach((btn) => {
-                btn.addEventListener('click', () => applyTheme(btn.dataset.theme));
-            });
-
-            document.querySelectorAll('[data-lang]').forEach((btn) => {
-                btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
-            });
-
-            // تحريك المركبات
-            const vehicles = document.querySelectorAll('.vehicle');
-            vehicles.forEach((vehicle, index) => {
-                vehicle.style.animationDelay = `${index * 0.3}s`;
-            });
-
-            // تأثيرات للبطاقات عند الظهور
-            const cards = document.querySelectorAll('.feature-card, .system-item, .station-card, .company-card');
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.style.opacity = '1';
-                        entry.target.style.transform = 'translateY(0) scale(1)';
-                    }
-                });
-            }, {
-                threshold: 0.1,
-                rootMargin: '0px 0px -30px 0px'
-            });
-
-            cards.forEach(card => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px) scale(0.75)';
-                card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                observer.observe(card);
-            });
-
-            const heroTitle = document.querySelector('.hero h1');
-            if (heroTitle) {
-                typeHeroTitle(heroTitle.textContent);
-            }
-        });
-
-        // تأثير عند التمرير
-        window.addEventListener('scroll', function () {
-            const scrolled = window.pageYOffset;
-            const rate = scrolled * -0.5;
-
-            // تأثير parallax للخلفية
-            const shapes = document.querySelectorAll('.shape');
-            shapes.forEach((shape, index) => {
-                shape.style.transform = `translateY(${rate * (index + 1) * 0.03}px)`;
-            });
-        });
-    </script>
-<script>
-    /* =========================
-       🔐 TOKEN CHECK
-    ========================= */
-    function hasValidToken() {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return false;
-
-        try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            return payload.exp * 1000 > Date.now();
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function toggleLoginButton(show) {
-        const btn = document.querySelector('.login-btn-container');
-        if (!btn) return;
-        btn.style.display = show ? '' : 'none';
-    }
-
-    function updateLoginState({ notifyOnLogin = false, notifyOnLogout = false } = {}) {
-        const valid = hasValidToken();
-        if (valid) {
-            toggleLoginButton(false);
-            if (notifyOnLogin) {
-                showNotification(getI18n('notify.auto_login'));
-            }
+        function employeeLogin() {
             window.parent.postMessage('employee_login', '*');
-        } else {
-            toggleLoginButton(true);
-            if (notifyOnLogout) {
-                showNotification(getI18n('notify.logout'));
+        }
+
+        document.addEventListener('DOMContentLoaded', setYear);
+
+        window.addEventListener('load', () => {
+            if (hasValidToken()) {
+                window.parent.postMessage('employee_login', '*');
             }
-        }
-    }
-
-
-    /* =========================
-       🔑 LOGIN BUTTON
-    ========================= */
-    function employeeLogin() {
-        if (hasValidToken()) {
-            showNotification(getI18n('notify.login'));
-        } else {
-            showNotification(getI18n('notify.redirect'));
-        }
-
-        window.parent.postMessage('employee_login', '*');
-    }
-
-    /* =========================
-       🚀 AUTO LOGIN ON LOAD
-    ========================= */
-    window.addEventListener('load', () => {
-        updateLoginState({ notifyOnLogin: true });
-    });
-
-    window.addEventListener('storage', (event) => {
-        if (event.key !== 'auth_token') {
-            return;
-        }
-
-        updateLoginState({
-            notifyOnLogin: !!event.newValue,
-            notifyOnLogout: event.newValue === null,
         });
-    });
-</script>
-<script>
-    document.addEventListener('contextmenu', function (event) {
-        event.preventDefault();
-    }, { capture: true });
 
-    document.addEventListener('keydown', function (event) {
-        const isKeyboardContextMenu =
-            event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10');
-
-        if (isKeyboardContextMenu) {
+        document.addEventListener('contextmenu', function (event) {
             event.preventDefault();
-            event.stopPropagation();
-        }
-    }, { capture: true });
-</script>
+        }, { capture: true });
 
-  
+        document.addEventListener('keydown', function (event) {
+            const isKeyboardContextMenu =
+                event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10');
+
+            if (isKeyboardContextMenu) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        }, { capture: true });
+    </script>
 </body>
 
 </html>
